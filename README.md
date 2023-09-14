@@ -51,7 +51,7 @@ As expected, the CPU implementation is the slowest for large array sizes. Howeve
 
 Additionally, the work-efficient GPU scan was significantly faster than the naive GPU scan, and the Thrust scan was even faster than that.
 - The naive scan is the slowest of the three because it launches `n` threads at each step, even though a significant minority of those aren't doing any work in the last few steps. Also, it requires extra memory as it has to ping-pong between two buffers to avoid race conditions. The number of threads doing actual work (i.e. not just copying a value from one array to another) at each step is reduced (subtracted) by an increasing power of two, meaning -1, then -2, -4, -8, and so on.
-- The efficient method improves on this by actually reducing the number of threads launched by half with each step. This means each thread is doing meaningful work and there are no extraneous threads being launched.
+- The efficient method improves on this by actually reducing the number of threads launched by half with each step. Since the threads are also densely packed, this means each thread is doing meaningful work and there are no extraneous threads being launched. 
 - However, neither of my implementations use shared memory, and there are certainly other optimizations that can be made. This means the Thrust implementation, which has been significantly optimized, beats any of mine.
 
 For an array of size 100,000,000, naive GPU was ~45% faster than CPU, efficient GPU was another ~45% faster than naive GPU, and Thrust was more than 15x faster than efficient GPU.
