@@ -5,6 +5,9 @@
 #include <iostream>
 #include <string>
 #include <ctime>
+#include <functional>
+
+#define NUM_TESTS 25
 
 template<typename T>
 int cmpArrays(int n, T *a, T *b) {
@@ -72,5 +75,18 @@ void printArray(int n, int *a, bool abridged = false) {
 template<typename T>
 void printElapsedTime(T time, std::string note = "")
 {
-    std::cout << "   elapsed time: " << time << "ms    " << note << std::endl;
+    std::cout << std::fixed << "   elapsed time: " << time << " ms    " << note << std::scientific << std::endl;
+}
+
+template<typename T>
+T testMultipleTimes(std::function<void()> testFunction, std::function<T()> timeFunction)
+{
+    T totalTime = 0;
+
+    for (int i = 0; i < NUM_TESTS; ++i) {
+        testFunction();
+        totalTime += timeFunction();
+    }
+
+    return totalTime / NUM_TESTS;
 }
