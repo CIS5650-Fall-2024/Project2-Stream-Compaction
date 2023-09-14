@@ -13,13 +13,13 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 14; // feel free to change the size of array
+const int SIZE = 1 << 12; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
 int *c = new int[SIZE];
 
-int main(int argc, char* argv[]) {
+void scanTest() {
     // Scan tests
 
     printf("\n");
@@ -94,6 +94,9 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
+}
+
+void compactionTest() {
 
     printf("\n");
     printf("*****************************\n");
@@ -146,8 +149,16 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
+}
 
+void test() {
+    scanTest();
+    compactionTest();
     system("pause"); // stop Win32 console from closing on exit
+}
+
+int main(int argc, char* argv[]) {
+    test();
     delete[] a;
     delete[] b;
     delete[] c;

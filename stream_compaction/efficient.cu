@@ -131,8 +131,8 @@ namespace StreamCompaction {
 
             timer().startGpuTimer();
             scanCore(padded_n, dev_indices);
-            StreamCompaction::Common::kernScatter<<<fullBlocksPerGrid, blockSize>>>(n, dev_odata, dev_idata, dev_bools, dev_indices);
             timer().endGpuTimer();
+            StreamCompaction::Common::kernScatter<<<fullBlocksPerGrid, blockSize>>>(n, dev_odata, dev_idata, dev_bools, dev_indices);
             checkCUDAError("kernScatter failed");
 
             /* Still got problem here! */

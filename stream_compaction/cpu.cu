@@ -12,6 +12,17 @@ namespace StreamCompaction {
             return timer;
         }
 
+        void scanCore(int n, int* odata, const int* idata) {
+            //for (int i = 0; i < n; ++i) {
+            //    for (int j = 0; j < i /* exclusive prefix sum */; ++j) {
+            //        odata[i] += idata[j];
+            //    }
+            //}
+            for (int i = 1; i < n; ++i) {
+                odata[i] = odata[i - 1] + idata[i-1];
+            }
+        }
+
         /**
          * CPU scan (prefix sum).
          * For performance analysis, this is supposed to be a simple for loop.
@@ -20,11 +31,7 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
-            for (int i = 0; i < n; ++i) {
-                for (int j = 0; j < i /* exclusive prefix sum */; ++j) {
-                    odata[i] += idata[j];
-                }
-            }
+            scanCore(n, odata, idata);
             timer().endCpuTimer();
         }
 
@@ -52,6 +59,7 @@ namespace StreamCompaction {
         int compactWithScan(int n, int *odata, const int *idata) {
             int* odata_tmp = new int[n];
             timer().startCpuTimer();
+
             for (int i = 0; i < n; ++i) {
                 odata_tmp[i] = !(!idata[i]);
                 if (i) odata_tmp[i] += odata_tmp[i - 1];
