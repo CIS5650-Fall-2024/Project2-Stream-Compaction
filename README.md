@@ -36,7 +36,7 @@ First, I roughly optimized the block size for the GPU implementations using an a
 
 ![](img/graphs/block_size.png)
 
-Past 32, the block size didn't make a significant difference on performance. I decided to use a block size of 256 for further analysis.
+Past 32, the block size didn't make a significant difference with regards to performance. I decided to use a block size of 256 for further analysis.
 
 ### Array Size vs. Time
 
@@ -71,7 +71,7 @@ Here is the Nsight timeline for the Thrust scan with an array size of 2<sup>28</
 
 ![](img/thrust-timeline.png)
 
-Copying memory to and from the device takes up a vast majority (almost 99%!) of the time, while the kernel itself takes very little time in comparison. The Thrust version likely uses a number of optimizations that my implementations may not have, such as using shared memory and optimizing memory layouts. Additionally, the vast difference in time taken for memory copying versus running the kernel means that for future projects, I should probably try to avoid unnecessarily copying memory back and forth.
+Copying memory to and from the device takes up a vast majority (almost 99%!) of the time, while the kernel itself takes very little time in comparison. The Thrust version likely uses a number of optimizations that my implementations may not have, such as using shared memory and optimizing memory layouts. Additionally, the vast difference in time taken for memory copying versus running the kernel means that for future projects, I should definitely try to avoid copying large amounts of memory where possible.
 
 ### Test Output
 
