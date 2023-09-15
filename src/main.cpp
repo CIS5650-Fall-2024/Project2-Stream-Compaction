@@ -147,6 +147,24 @@ int main(int argc, char* argv[]) {
     //printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
 
+    printf("\n");
+    printf("*****************************\n");
+    printf("** RADIX SORT TESTS **\n");
+    printf("*****************************\n");
+
+    // Radixsort tests
+
+    genArray(SIZE - 1, a, 20);  // Leave a 0 at the end to test that edge case
+    printArray(SIZE, a, true);
+
+    zeroArray(SIZE, b);
+    printDesc("Radix Sort");
+    StreamCompaction::Efficient::radixSort(SIZE, b, a);
+    std::sort(a, a + SIZE);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(SIZE, a, true);
+    printCmpResult(NPOT, a, b);  
+
     system("pause"); // stop Win32 console from closing on exit
     delete[] a;
     delete[] b;

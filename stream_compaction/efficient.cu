@@ -5,7 +5,6 @@
 
 #define blockSize 256
 #define OPTIMIZED 1
-#define TIMESCAN 1
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -71,7 +70,7 @@ namespace StreamCompaction {
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
-        void scan(int n, int *odata, const int *idata) 
+        void scan(int n, int *odata, const int *idata, bool timeScan) 
         {
             int N = 1 << ilog2ceil(n);
 
@@ -89,9 +88,8 @@ namespace StreamCompaction {
             int offset = 1;
 #endif
 
-#if TIMESCAN
-            timer().startGpuTimer();
-#endif
+            if(timeScan)
+                timer().startGpuTimer();
             // TODO
 #if OPTIMIZED
             for (int d = N >> 1; d > 0; d >>= 1) 
@@ -123,9 +121,8 @@ namespace StreamCompaction {
             }
 #endif
 
-#if TIMESCAN
-            timer().endGpuTimer();
-#endif
+            if (timeScan)
+                timer().endGpuTimer();
 
             cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAErrorFn("cudaMemcpy dev_data to odata failed!");
@@ -277,7 +274,7 @@ namespace StreamCompaction {
                 // Step1: Compute e array
                 kernComputeEArray<<<fullBlocksPerGrid, blockSize>>>(n, d, dev_edata, dev_idata);
                 // Step2: Scan e
-                scan(n, dev_fdata, dev_edata);
+                scan(n, dev_fdata, dev_edata, false);
                 // Step3: Compute totalFalse
                 int e_last;
                 int f_last;
