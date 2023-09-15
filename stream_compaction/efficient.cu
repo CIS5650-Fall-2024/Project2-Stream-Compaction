@@ -4,6 +4,7 @@
 #include "efficient.h"
 /*! Block size used for CUDA kernel launch. */
 #define blockSize 128
+#define passNumber 6
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -22,7 +23,39 @@ namespace StreamCompaction {
         int* dev_indices;
         int* dev_bools;
         int* dev_nonZero;
+
+        //for radix sort (0 - 5)
+        int* dev_input;
+        int* dev_pass;
+
         dim3 threadsPerBlock(blockSize);
+
+        void initRadixSort(int N, int* odata, const int* idata)
+        {
+            //give padding the arrays with size not the power of 2
+            length = int(pow(2, ilog2ceil(N)));
+
+            cudaMalloc((void**)&dev_input, length * sizeof(int));
+            cudaMemcpy(dev_input, idata, N * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMalloc dev_input failed!", __LINE__);
+
+            cudaMalloc((void**)&dev_idata, length * sizeof(int));
+            cudaMemcpy(dev_idata, idata, N * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMalloc dev_idata failed!", __LINE__);
+
+            cudaMalloc((void**)&dev_odata, length * sizeof(int));
+            cudaMemcpy(dev_odata, idata, N * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMalloc dev_odata failed!", __LINE__);
+
+            cudaMalloc((void**)&dev_pass, length * sizeof(int));
+            checkCUDAError("cudaMalloc dev_pass failed!", __LINE__);
+
+            //to record non-zero numbers 
+            cudaMalloc((void**)&dev_nonZero, 1 * sizeof(int));
+            checkCUDAError("cudaMalloc dev_nonZero failed!", __LINE__);
+
+            cudaDeviceSynchronize();
+        }
 
         void initScan(int N, int* odata, const int* idata)
         {
@@ -70,6 +103,62 @@ namespace StreamCompaction {
             cudaFree(dev_odata);
             cudaFree(dev_nonZero);
         }
+        
+        void endRadixSort()
+        {
+            cudaFree(dev_idata);
+            cudaFree(dev_odata);
+            cudaFree(dev_pass);
+            cudaFree(dev_input);
+            cudaFree(dev_nonZero);
+        }
+
+        //n is number of elements in one pass
+        //pass is 0, 1, 2, 3, 4, 5
+        __global__ void RadixSortMapKernel(int n, int realLen, int pass, int* idata, int* odata)
+        {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index >= n)
+            {
+                return;
+            }
+            //map 0 to 1
+            odata[index] = 1 - ((idata[index] >> pass) & 1);
+            //if there are extra space mark them as 1
+            if (index >= realLen)
+            {
+                odata[index] = 0;
+            }
+        }
+
+        //here n is the number of the array without padding
+        __global__ void RadixTrueScanKernel(int n, int zeros, int* idata, int* pass, int* odata)
+        {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index >= n)
+            {
+                return;
+            }
+            if (pass[index] == 0)
+            {
+                odata[index] = index - idata[index] + zeros;
+            }
+            else
+            {
+                odata[index] = idata[index];
+            }
+        }
+
+        
+        __global__ void RadixScatterKernel(int n, int* indices, int* odata, int* input)
+        {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index >= n)
+            {
+                return;
+            }
+            odata[indices[index]] = input[index];
+        }
 
         __global__ void EfficientMapKernel(int n, int realLen, int* idata)
         {
@@ -87,7 +176,7 @@ namespace StreamCompaction {
             {
                 idata[index] = 0;
             }
-            __syncthreads();
+            //__syncthreads();
         }
 
         __global__ void InitDownSweepKernel(int n, int* idata, int* odata)
@@ -169,6 +258,69 @@ namespace StreamCompaction {
             cudaMemcpy(odata, dev_odata, sizeof(int) * n, cudaMemcpyDeviceToHost);
 
             endScan();
+        }
+
+        void printArray(int n, int* a, bool abridged = false) {
+            printf("    [ ");
+            for (int i = 0; i < n; i++) {
+                if (abridged && i + 2 == 15 && n > 16) {
+                    i = n - 2;
+                    printf("... ");
+                }
+                printf("%3d ", a[i]);
+            }
+            printf("]\n");
+        }
+
+        void radixSort(int n, int* odata, const int* idata)
+        {
+            initRadixSort(n, odata, idata);
+            dim3 fullBlocksPerGrid((length + blockSize - 1) / blockSize);
+            for (int i = 0; i < passNumber; i++)
+            {
+
+                RadixSortMapKernel << <fullBlocksPerGrid, blockSize >> > (length, n, i, dev_input, dev_odata);
+                cudaMemcpy(dev_pass, dev_odata, sizeof(int) * length, cudaMemcpyDeviceToDevice);
+                /*
+                * Scan for one pass begins
+                */
+                for (int i = 1; i < length; i = i * 2)
+                {
+                    int totalSize = length / (2 * i);
+                    dim3 BlocksPerGrid((totalSize + blockSize - 1) / blockSize);
+                    UpSweepScanKernel << <BlocksPerGrid, blockSize >> > (totalSize, i, dev_idata, dev_odata);
+                    cudaDeviceSynchronize();
+
+                    std::swap(dev_idata, dev_odata);
+                }
+                std::swap(dev_idata, dev_odata);
+                InitDownSweepKernel << <1, 1 >> > (length, dev_idata, dev_odata);
+
+                for (int i = length / 2; i > 0; i = i / 2)
+                {
+                    int totalSize = length / (2 * i);
+                    dim3 BlocksPerGrid((totalSize + blockSize - 1) / blockSize);
+                    DownSweepScanKernel << <BlocksPerGrid, blockSize >> > (totalSize, i, dev_idata, dev_odata);
+                    cudaDeviceSynchronize();
+                    std::swap(dev_idata, dev_odata);
+                }
+                /*
+                * scan for one pass ends
+                */
+                //get the total number of zero
+                int* p = (int*)malloc(1 * sizeof(int));
+                CountKernel << <1, 1 >> > (n, dev_odata, dev_pass, dev_nonZero);
+                cudaMemcpy(p, dev_nonZero, sizeof(int) * 1, cudaMemcpyDeviceToHost);
+                int zeros = p[0];
+
+                dim3 fullBlocksPerGrid1((n + blockSize - 1) / blockSize);
+                RadixTrueScanKernel << <fullBlocksPerGrid1, blockSize >> > (n, zeros, dev_odata, dev_pass, dev_idata);
+                RadixScatterKernel<< <fullBlocksPerGrid1, blockSize >> >(n, dev_idata, dev_odata, dev_input);
+                std::swap(dev_odata, dev_input);
+            }
+            //dev_input as the final result
+            cudaMemcpy(odata, dev_input, sizeof(int) * n, cudaMemcpyDeviceToHost);
+            endRadixSort();
         }
 
         /**
