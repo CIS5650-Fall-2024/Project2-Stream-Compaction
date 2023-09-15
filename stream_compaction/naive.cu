@@ -13,8 +13,9 @@ namespace StreamCompaction {
             return timer;
         }
         // TODO: __global__
-        __global__ void scanLine(int N, int offset, int* odata, const int * idata) {
+        __global__ void scanLine(int N, int offsetBase, int* odata, const int * idata) {
             int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            int offset = 1 << offsetBase;
             if (index < offset) {
                 odata[index] = idata[index];
             }
@@ -47,7 +48,7 @@ namespace StreamCompaction {
             const int blockSize = 16;
             dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
             for (int i = 1; i <= ilog2ceil(n); i++) {
-                scanLine << <fullBlocksPerGrid, blockSize >> > (n, 1 << (i - 1), dev_odata, dev_idata);
+                scanLine << <fullBlocksPerGrid, blockSize >> > (n, i - 1, dev_odata, dev_idata);
                 int* temp = dev_odata;
                 dev_odata = dev_idata;
                 dev_idata = temp;
