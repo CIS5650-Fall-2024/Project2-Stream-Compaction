@@ -4,6 +4,7 @@
 #include "efficient.h"
 
 #define blockSize 256
+#define OPTIMIZED 1
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -23,7 +24,7 @@ namespace StreamCompaction {
 
             if (k >= n || k % powerdp1) return;
 
-            data[k + powerdp1 - 1] = data[k + powerd - 1] + data[k + powerdp1 - 1];
+            data[k + powerdp1 - 1] += data[k + powerd - 1];
         }
 
         __global__ void kernDownSweep(int n, int d, int* data) 
@@ -37,7 +38,33 @@ namespace StreamCompaction {
 
             int t = data[k + powerd - 1];
             data[k + powerd - 1] = data[k + powerdp1 - 1];
-            data[k + powerdp1 - 1] = t + data[k + powerdp1 - 1];
+            data[k + powerdp1 - 1] += t;
+        }
+
+        __global__ void kernOptUpSweep(int n, int d, int offset, int* data)
+        {
+            int k = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+            if (k >= n || k >= d) return;
+
+            int i = offset * (2 * k + 1) - 1;
+            int j = offset * (2 * k + 2) - 1;
+
+            data[j] += data[i];
+        }
+
+        __global__ void kernOptDownSweep(int n, int d, int offset, int* data)
+        {
+            int k = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+            if (k >= n || k >= d) return;
+
+            int i = offset * (2 * k + 1) - 1;
+            int j = offset * (2 * k + 2) - 1;
+
+            int t = data[i];
+            data[i] = data[j];
+            data[j] += t;
         }
 
         /**
@@ -57,19 +84,41 @@ namespace StreamCompaction {
             checkCUDAErrorFn("cudaMemcpy idata to dev_data failed!");
 
             dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
+#if OPTIMIZED
+            int offset = 1;
+#endif
 
             timer().startGpuTimer();
             // TODO
+#if OPTIMIZED
+            for (int d = N >> 1; d > 0; d >>= 1) 
+            {
+                fullBlocksPerGrid = dim3((d + blockSize - 1) / blockSize);
+                kernOptUpSweep<<<fullBlocksPerGrid, blockSize>>>(N, d, offset, dev_data);
+                offset <<= 1;
+            }
+
+#else
             for (int d = 0; d < ilog2ceil(N); d++)
             {
                 kernUpSweep<<<fullBlocksPerGrid, blockSize>>>(N, d, dev_data);
             }
+#endif
 
             cudaMemset(dev_data + N - 1, 0, sizeof(int));
+#if OPTIMIZED
+            for (int d = 1; d < N; d <<= 1)
+            {
+                offset >>= 1;
+                fullBlocksPerGrid = dim3((d + blockSize - 1) / blockSize);
+                kernOptDownSweep<<<fullBlocksPerGrid, blockSize>>>(N, d, offset, dev_data);
+            }
+#else
             for (int d = ilog2ceil(N) - 1; d >= 0; d--) 
             {
                 kernDownSweep<<<fullBlocksPerGrid, blockSize>>>(N, d, dev_data);
             }
+#endif
             timer().endGpuTimer();
 
             cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
