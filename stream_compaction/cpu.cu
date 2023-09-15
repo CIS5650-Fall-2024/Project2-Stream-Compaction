@@ -64,11 +64,7 @@ namespace StreamCompaction {
                 boolmap[i] = (idata[i] != 0 ? 1 : 0);
             }
             // Step2: scan
-            odata[0] = 0;
-            for (int j = 1; j < n; j++)
-            {
-                odata[j] = odata[j - 1] + boolmap[j - 1];
-            }
+            scan(n, odata, boolmap);        
             int count = odata[n - 1];
             // Step3: scatter
             for (int k = 0; k < n; k++)
