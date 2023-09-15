@@ -28,7 +28,6 @@ namespace StreamCompaction {
             {
                 odata[k] = idata[k];
             }
-
         }
 
         /**
