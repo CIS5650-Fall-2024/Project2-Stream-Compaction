@@ -21,6 +21,7 @@ void checkCUDAErrorFn(const char *msg, const char *file = NULL, int line = -1);
 inline int ilog2(int x) {
     int lg = 0;
     while (x >>= 1) {
+        if (x <= 0) { throw std::runtime_error("Dead loop while shifting"); }
         ++lg;
     }
     return lg;
