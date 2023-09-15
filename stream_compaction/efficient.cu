@@ -260,22 +260,12 @@ namespace StreamCompaction {
             endScan();
         }
 
-        void printArray(int n, int* a, bool abridged = false) {
-            printf("    [ ");
-            for (int i = 0; i < n; i++) {
-                if (abridged && i + 2 == 15 && n > 16) {
-                    i = n - 2;
-                    printf("... ");
-                }
-                printf("%3d ", a[i]);
-            }
-            printf("]\n");
-        }
 
         void radixSort(int n, int* odata, const int* idata)
         {
             initRadixSort(n, odata, idata);
             dim3 fullBlocksPerGrid((length + blockSize - 1) / blockSize);
+            timer().startGpuTimer();
             for (int i = 0; i < passNumber; i++)
             {
 
@@ -318,6 +308,7 @@ namespace StreamCompaction {
                 RadixScatterKernel<< <fullBlocksPerGrid1, blockSize >> >(n, dev_idata, dev_odata, dev_input);
                 std::swap(dev_odata, dev_input);
             }
+            timer().endGpuTimer();
             //dev_input as the final result
             cudaMemcpy(odata, dev_input, sizeof(int) * n, cudaMemcpyDeviceToHost);
             endRadixSort();

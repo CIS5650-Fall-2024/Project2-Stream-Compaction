@@ -2,6 +2,7 @@
 #include "cpu.h"
 
 #include "common.h"
+#define passNumber 6
 
 namespace StreamCompaction {
     namespace CPU {
@@ -38,6 +39,41 @@ namespace StreamCompaction {
                 odata[i] = odata[i] + odata[i - 1];
             }
             timer().endCpuTimer();
+        }
+
+        void radixSort(int n, int* odata, int* idata)
+        {
+            int* temp = (int*)malloc(n * sizeof(int));
+            int* input = (int*)malloc(n * sizeof(int));
+            memcpy(input, idata, n * sizeof(int));
+            timer().startCpuTimer();
+            for (int i = 0; i < passNumber; i++)
+            {
+                int zero = 0;
+                for (int j = 0; j < n; j++)
+                {
+                    //if is 0
+                    if (1 - ((input[j] >> i) & 1))
+                    {
+                        temp[zero] = input[j];
+                        ++zero;
+                    }
+                }
+                for (int j = 0; j < n; j++)
+                {
+                    //if is 1
+                    if ((input[j] >> i) & 1)
+                    {
+                        temp[zero] = input[j];
+                        ++zero;
+                    }
+                }
+                std::swap(temp, input);
+            }
+            timer().endCpuTimer();
+            std::copy(input, input + n, odata);
+            free(temp);
+            free(input);
         }
 
         /**

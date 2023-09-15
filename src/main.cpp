@@ -13,7 +13,7 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 28; // feel free to change the size of array
+const int SIZE = 1 << 18; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int* a = new int[SIZE];
 int* b = new int[SIZE];
@@ -22,7 +22,7 @@ int* d = new int[SIZE];
 
 
 int main(int argc, char* argv[]) {
-    // Scan tests
+    // Radix Sort tests
 
     printf("\n");
     printf("****************\n");
@@ -33,6 +33,26 @@ int main(int argc, char* argv[]) {
     a[SIZE - 1] = 0;
     printArray(SIZE, a, true);
 
+    zeroArray(SIZE, b);
+    printDesc("cpu radix sort, power-of-two");
+    StreamCompaction::CPU::radixSort(SIZE, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(SIZE, b, true);
+
+    zeroArray(SIZE, c);
+    printDesc("work-efficient radix sort, power-of-two");
+    StreamCompaction::Efficient::radixSort(SIZE, c, a);
+    printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(SIZE, c, true);
+
+    // Scan tests
+
+    printf("\n");
+    printf("****************\n");
+    printf("** SCAN TESTS **\n");
+    printf("****************\n");
+
+    
     // initialize b using StreamCompaction::CPU::scan you implement
     // We use b for further comparison. Make sure your StreamCompaction::CPU::scan is correct.
     // At first all cases passed because b && c are all zeroes.
@@ -61,7 +81,7 @@ int main(int argc, char* argv[]) {
     printDesc("1s array for finding bugs");
     StreamCompaction::Naive::scan(SIZE, c, a);
     printArray(SIZE, c, true); */
-
+    
     zeroArray(SIZE, c);
     printDesc("naive scan, non-power-of-two");
     StreamCompaction::Naive::scan(NPOT, c, a);
