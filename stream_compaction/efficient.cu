@@ -5,6 +5,7 @@
 
 #define blockSize 256
 #define OPTIMIZED 1
+#define TIMESCAN 1
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -88,7 +89,9 @@ namespace StreamCompaction {
             int offset = 1;
 #endif
 
+#if TIMESCAN
             timer().startGpuTimer();
+#endif
             // TODO
 #if OPTIMIZED
             for (int d = N >> 1; d > 0; d >>= 1) 
@@ -119,7 +122,10 @@ namespace StreamCompaction {
                 kernDownSweep<<<fullBlocksPerGrid, blockSize>>>(N, d, dev_data);
             }
 #endif
+
+#if TIMESCAN
             timer().endGpuTimer();
+#endif
 
             cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAErrorFn("cudaMemcpy dev_data to odata failed!");
@@ -200,6 +206,109 @@ namespace StreamCompaction {
             checkCUDAErrorFn("cudaFree dev_odata failed!");
 
             return count;
+        }
+
+        __global__ void kernComputeEArray(int n, int bit, int* edata, const int* idata)
+        {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index >= n) return;
+
+            edata[index] = !((idata[index] >> bit) & 1);
+        }
+
+        __global__ void kernComputeTArray(int n, int totalFalses, int* tdata, const int* fdata)
+        {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index >= n) return;
+
+            tdata[index] = index - fdata[index] + totalFalses;
+        }
+
+        __global__ void kernComputeDArray(int n, int* ddata, const int* edata, const int* tdata, const int* fdata)
+        {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index >= n) return;
+
+            ddata[index] = edata[index] ? fdata[index] : tdata[index];
+        }
+
+        __global__ void kernScatter(int n, int* ddata, int* odata, int* idata) 
+        {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index >= n) return;
+
+            odata[ddata[index]] = idata[index];
+        }
+
+        void radixSort(int n, int* odata, const int* idata)
+        {
+            int* dev_edata;
+            int* dev_fdata;
+            int* dev_tdata;
+            int* dev_ddata;
+
+            int* dev_idata;
+            int* dev_odata;
+
+            cudaMalloc((void**)&dev_edata, n * sizeof(int));
+            checkCUDAErrorFn("cudaMalloc dev_edata failed!");
+            cudaMalloc((void**)&dev_fdata, n * sizeof(int));
+            checkCUDAErrorFn("cudaMalloc dev_fdata failed!");
+            cudaMalloc((void**)&dev_tdata, n * sizeof(int));
+            checkCUDAErrorFn("cudaMalloc dev_tdata failed!");
+            cudaMalloc((void**)&dev_ddata, n * sizeof(int));
+            checkCUDAErrorFn("cudaMalloc dev_ddata failed!");
+
+            cudaMalloc((void**)&dev_idata, n * sizeof(int));
+            checkCUDAErrorFn("cudaMalloc dev_idata failed!");
+            cudaMalloc((void**)&dev_odata, n * sizeof(int));
+            checkCUDAErrorFn("cudaMalloc dev_odata failed!");
+
+            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAErrorFn("cudaMempcy idata to dev_idata failed!");
+
+            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+
+            int bnum = ilog2ceil(*(std::max_element(idata, idata + n)));
+            
+            timer().startGpuTimer();
+            for (int d = 0; d < bnum; d++) 
+            {
+                // Step1: Compute e array
+                kernComputeEArray<<<fullBlocksPerGrid, blockSize>>>(n, d, dev_edata, dev_idata);
+                // Step2: Scan e
+                scan(n, dev_fdata, dev_edata);
+                // Step3: Compute totalFalse
+                int e_last;
+                int f_last;
+                cudaMemcpy(&e_last, dev_edata + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+                cudaMemcpy(&f_last, dev_fdata + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+                int totalFalses = e_last + f_last;
+                // Step4: Compute t
+                kernComputeTArray<<<fullBlocksPerGrid, blockSize>>>(n, totalFalses, dev_tdata, dev_fdata);
+                // Step5: scatter
+                kernComputeDArray<<<fullBlocksPerGrid, blockSize>>>(n, dev_ddata, dev_edata, dev_tdata, dev_fdata);
+                kernScatter<<<fullBlocksPerGrid, blockSize>>>(n, dev_ddata, dev_odata, dev_idata);
+                cudaMemcpy(dev_idata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToDevice);
+                checkCUDAErrorFn("cudaMempcy dev_odata to dev_idata failed!");
+            }
+            timer().endGpuTimer();
+
+            cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAErrorFn("cudaMempcy dev_odata to odata failed!");
+
+            cudaFree(dev_edata);
+            checkCUDAErrorFn("cudaFree dev_edata failed!");
+            cudaFree(dev_fdata);
+            checkCUDAErrorFn("cudaFree dev_fdata failed!");
+            cudaFree(dev_tdata);
+            checkCUDAErrorFn("cudaFree dev_tdata failed!");
+            cudaFree(dev_ddata);
+            checkCUDAErrorFn("cudaFree dev_ddata failed!");
+            cudaFree(dev_idata);
+            checkCUDAErrorFn("cudaFree dev_idata failed!");
+            cudaFree(dev_odata);
+            checkCUDAErrorFn("cudaFree dev_odata failed!");
         }
     }
 }
