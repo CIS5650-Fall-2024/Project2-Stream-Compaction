@@ -3,6 +3,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/scan.h>
+#include <vector>
 #include "common.h"
 #include "thrust.h"
 
@@ -21,19 +22,13 @@ namespace StreamCompaction {
             // TODO use `thrust::exclusive_scan`
             // example: for device_vectors dv_in and dv_out:
             // thrust::exclusive_scan(dv_in.begin(), dv_in.end(), dv_out.begin());
-            int* dev1, * dev2;
-            cudaMalloc((void**)&dev1, n * sizeof(int));
-            cudaMalloc((void**)&dev2, n * sizeof(int));
-            cudaMemcpy(dev1, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
-            thrust::device_ptr<int> dv_in(dev1), dv_out(dev2);
+            thrust::device_vector<int> in_vec(idata, idata + n);
+            thrust::device_vector<int> out_vec(n);
             cudaDeviceSynchronize();
             timer().startGpuTimer();
-            thrust::exclusive_scan(dv_in, dv_in + n, dv_out);
+            thrust::exclusive_scan(in_vec.begin(), in_vec.end(), out_vec.begin());
             timer().endGpuTimer();
-            cudaDeviceSynchronize();
-            cudaMemcpy(odata, dev2, sizeof(int) * n, cudaMemcpyDeviceToHost);
-            cudaFree(dev1);
-            cudaFree(dev2);
+            thrust::copy(out_vec.begin(), out_vec.end(), odata);
         }
     }
 }
