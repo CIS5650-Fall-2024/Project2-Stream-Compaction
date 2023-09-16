@@ -25,9 +25,11 @@ namespace StreamCompaction {
             thrust::device_vector<int> in_vec(idata, idata + n);
             thrust::device_vector<int> out_vec(n);
             cudaDeviceSynchronize();
+            nvtxRangePushA("Thrust scan");
             timer().startGpuTimer();
             thrust::exclusive_scan(in_vec.begin(), in_vec.end(), out_vec.begin());
             timer().endGpuTimer();
+            nvtxRangePop();
             thrust::copy(out_vec.begin(), out_vec.end(), odata);
         }
     }

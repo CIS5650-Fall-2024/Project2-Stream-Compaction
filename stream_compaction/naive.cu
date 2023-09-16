@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include "common.h"
 #include "naive.h"
+
 #define BLOCK_SIZE 128
 namespace StreamCompaction {
     namespace Naive {
@@ -35,6 +36,7 @@ namespace StreamCompaction {
             cudaMalloc((void**)&dev1, n * sizeof(int));
             cudaMalloc((void**)&dev2, n * sizeof(int));
             cudaMemcpy(dev1, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            nvtxRangePushA("Naive scan");
             timer().startGpuTimer();
             int mxd = ilog2ceil(n);
             for (int d = 1; d <= mxd; d++)
@@ -44,6 +46,7 @@ namespace StreamCompaction {
             }
             kernNaiveShift << <(n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE >> > (n, dev1, dev2);
             timer().endGpuTimer();
+            nvtxRangePop();
             cudaMemcpy(odata, dev2, n * sizeof(int), cudaMemcpyDeviceToHost);
             cudaFree(dev1);
             cudaFree(dev2);

@@ -2,7 +2,7 @@
 #include <cuda_runtime.h>
 #include "common.h"
 #include "efficient.h"
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 1024
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
@@ -54,7 +54,9 @@ namespace StreamCompaction {
             cudaMemset(dev1, 0, N * sizeof(int));
             cudaMemcpy(dev1, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             cudaDeviceSynchronize();
+            nvtxRangePushA("Work efficient scan");
             timer().startGpuTimer();
+            
             for (int d = 0; d <= log2n - 1; d++)
             {
                 size_t two_d_plus_1 = ((size_t)1 << (d + 1));
@@ -76,6 +78,7 @@ namespace StreamCompaction {
                     kernDownSweep << <1, numThreads >> > (numThreads, dev1, two_d_plus_1);
             }
             timer().endGpuTimer();
+            nvtxRangePop();
             cudaMemcpy(odata, dev1, sizeof(int) * n, cudaMemcpyDeviceToHost);
             cudaFree(dev1);
 
@@ -101,6 +104,7 @@ namespace StreamCompaction {
             cudaMemset(dev2, 0, N * sizeof(int));
             cudaMemcpy(dev1, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             cudaMalloc((void**)&dev3, n * sizeof(int));
+            nvtxRangePushA("Work efficient compact");
             timer().startGpuTimer();
             Common::kernMapToBoolean << <(n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE >> > (n, dev2, dev1);
             for (int d = 0; d <= log2n - 1; d++)
@@ -119,6 +123,7 @@ namespace StreamCompaction {
             }
             kernCompact << <(n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE >> > (n, dev2, dev1, dev3);
             timer().endGpuTimer();
+            nvtxRangePop();
             int excnt;
             cudaMemcpy(&excnt, dev2 + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
             int cnt = excnt + !!(idata[n - 1]);
