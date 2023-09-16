@@ -25,6 +25,7 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int* odata, const int* idata) {
+            int dMax = ilog2ceil(n);
             int* dev_idata, * dev_odata;
             cudaMalloc((void**)&dev_idata, n * sizeof(int));
             cudaMalloc((void**)&dev_odata, n * sizeof(int));
@@ -32,7 +33,7 @@ namespace StreamCompaction {
             dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
             timer().startGpuTimer();
             // DONE
-            for (int i = 1; i <= ilog2ceil(n); i++)
+            for (int i = 1; i <= dMax; i++)
             {
                 kernNaiveScan << <fullBlocksPerGrid, blockSize >> > (n, 1 << (i - 1), dev_odata, dev_idata);
                 std::swap(dev_odata, dev_idata);
