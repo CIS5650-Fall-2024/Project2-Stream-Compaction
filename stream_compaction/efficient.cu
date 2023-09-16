@@ -12,29 +12,20 @@ namespace StreamCompaction {
             return timer;
         }
 
-        __global__ void kernUpSweep(int* data, int n, int d) {
+        __global__ void kernUpSweep(int* data, int n, int offset) {
             int index = blockIdx.x * blockDim.x + threadIdx.x;
-            int shift = 1 << d, shift2 = shift << 1;
-            if (index > n || index + shift2 > n || index + shift > n)
-                return;
-            if ((index & (shift2 - 1)) == 0)
-                data[index + shift2 - 1] += data[index + shift - 1];
+            int offset2 = offset << 1;
+            if (index + offset2 <= n && (index & (offset2 - 1)) == 0)
+                data[index + offset2 - 1] += data[index + offset - 1];
         }
 
-        __global__ void kernDownSweep(int* data, int n, int d, bool isStart) {
+        __global__ void kernDownSweep(int* data, int n, int offset) {
             int index = blockIdx.x * blockDim.x + threadIdx.x;
-            int shift = 1 << d, shift2 = shift << 1;
-            if (isStart)
-            {
-                data[shift - 1] = 0;
-                return;
-            }
-            if (index > n || index + shift2 > n || index + shift > n)
-                return;
-            if ((index & (shift2 - 1)) == 0) {
-                int t = data[index + shift2 - 1];
-                data[index + shift2 - 1] += data[index + shift - 1];
-                data[index + shift - 1] = t;
+            int offset2 = offset << 1;
+            if (index + offset2 <= n && (index & (offset2 - 1)) == 0) {
+                int t = data[index + offset2 - 1];
+                data[index + offset2 - 1] += data[index + offset - 1];
+                data[index + offset - 1] = t;
             }
         }
         /**
@@ -50,13 +41,14 @@ namespace StreamCompaction {
             dim3 fullBlocksPerGrid((extended_n + blockSize - 1) / blockSize);
             timer().startGpuTimer();
             // TODO
-            for (int i = 0; i < dMax; i++)
+            for (int i = 0; i < dMax - 1; i++)
             {
-                kernUpSweep << <fullBlocksPerGrid, blockSize >> > (dev_data, extended_n, i);
+                kernUpSweep << <fullBlocksPerGrid, blockSize >> > (dev_data, extended_n, 1 << i);
             }
-            for (int i = dMax; i >= 0; i--)
+            cudaMemset(&dev_data[extended_n - 1], 0, sizeof(int));
+            for (int i = dMax - 1; i >= 0; i--)
             {
-                kernDownSweep << <fullBlocksPerGrid, blockSize >> > (dev_data, extended_n, i, i == dMax);
+                kernDownSweep << <fullBlocksPerGrid, blockSize >> > (dev_data, extended_n, 1 << i);
             }
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_data, sizeof(int) * n, cudaMemcpyDeviceToHost);
