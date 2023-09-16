@@ -12,43 +12,44 @@ namespace StreamCompaction {
             return timer;
         }
 
-        __global__ void kernUpSweep(int* data, int n, int offset) {
-            int index = blockIdx.x * blockDim.x + threadIdx.x;
-            int offset2 = offset << 1;
-            if (index + offset2 <= n && (index & (offset2 - 1)) == 0)
-                data[index + offset2 - 1] += data[index + offset - 1];
+        __global__ void kernUpSweep(int* data, int n, int stride) {
+            int index = blockIdx.x * blockDim.x + threadIdx.x + 1;
+            if (index > n)return;
+            int real_i = index * stride * 2 - 1;
+            data[real_i] += data[real_i - stride];
         }
 
-        __global__ void kernDownSweep(int* data, int n, int offset) {
-            int index = blockIdx.x * blockDim.x + threadIdx.x;
-            int offset2 = offset << 1;
-            if (index + offset2 <= n && (index & (offset2 - 1)) == 0) {
-                int t = data[index + offset2 - 1];
-                data[index + offset2 - 1] += data[index + offset - 1];
-                data[index + offset - 1] = t;
-            }
+        __global__ void kernDownSweep(int* data, int n, int stride) {
+            int index = blockIdx.x * blockDim.x + threadIdx.x + 1;
+            if (index > n)return;
+            int real_i = index * stride * 2 - 1;
+            int t = data[real_i];
+            data[real_i] += data[real_i - stride];
+            data[real_i - stride] = t;
         }
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int* odata, const int* idata) {
-            int dMax = ilog2ceil(n);
+            int dMax = ilog2ceil(n), strideMax = 1 << (dMax - 1);
             int extended_n = 1 << dMax;
             int* dev_data;
             cudaMalloc((void**)&dev_data, sizeof(int) * extended_n);
             cudaMemset(dev_data, 0, sizeof(int) * extended_n);
             cudaMemcpy(dev_data, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
-            dim3 fullBlocksPerGrid((extended_n + blockSize - 1) / blockSize);
             timer().startGpuTimer();
+            dim3 fullBlocksPerGrid;
             // TODO
-            for (int i = 0; i < dMax - 1; i++)
+            for (int i = 1, int n = strideMax; i < strideMax; i <<= 1, n >>= 1)
             {
-                kernUpSweep << <fullBlocksPerGrid, blockSize >> > (dev_data, extended_n, 1 << i);
+                fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+                kernUpSweep << <fullBlocksPerGrid, blockSize >> > (dev_data, n, i);
             }
             cudaMemset(&dev_data[extended_n - 1], 0, sizeof(int));
-            for (int i = dMax - 1; i >= 0; i--)
+            for (int i = strideMax, int n = 1; i >= 1; i >>= 1, n <<= 1)
             {
-                kernDownSweep << <fullBlocksPerGrid, blockSize >> > (dev_data, extended_n, 1 << i);
+                fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+                kernDownSweep << <fullBlocksPerGrid, blockSize >> > (dev_data, n, i);
             }
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_data, sizeof(int) * n, cudaMemcpyDeviceToHost);
