@@ -41,7 +41,7 @@ namespace StreamCompaction {
             
             int* dev_in;
             int* dev_out;
-            int blockSize = 32;
+            
             dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
             int layerCnt = ilog2ceil(n);
             int offset = 1;

@@ -3,6 +3,7 @@
 #include "common.h"
 #include "efficient.h"
 
+
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
@@ -52,7 +53,6 @@ namespace StreamCompaction {
             int* dev_data;
             int layerCnt = ilog2ceil(n);
             int N = 1 << layerCnt;
-            int blockSize = 32;
             dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
             cudaMalloc((void**)&dev_data, N * sizeof(int));
             checkCUDAError("cudaMalloc dev_data failed!");
@@ -95,14 +95,14 @@ namespace StreamCompaction {
             checkCUDAError("cudaMalloc dev_indices failed!");
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
             
-            int blockSize = 32;
+            
             dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
-            StreamCompaction::Common::kernMapToBoolean <<<fullBlocksPerGrid,blockSize>>>(n, dev_bools, dev_idata);
+            StreamCompaction::Common::kernMapToBoolean <<<fullBlocksPerGrid,blockSize>>>(N, dev_bools, dev_idata);
             
             cudaMemcpy(dev_indices, dev_bools, N * sizeof(int), cudaMemcpyDeviceToDevice);
             devScan(dev_indices, layerCnt, fullBlocksPerGrid, blockSize);
             
-            StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_indices);
+            StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (N, dev_odata, dev_idata, dev_bools, dev_indices);
             
             //read GPU
             int ans = 0;

@@ -24,7 +24,7 @@ namespace StreamCompaction {
             // thrust::exclusive_scan(dv_in.begin(), dv_in.end(), dv_out.begin());
             thrust::host_vector<int> thrust_host_data(idata, idata + n);
             thrust::device_vector<int> thrust_dev_idata = thrust_host_data;
-            thrust::device_vector<int> thrust_dev_odata(n * sizeof(int));
+            thrust::device_vector<int> thrust_dev_odata(n);
 
             thrust::exclusive_scan(thrust_dev_idata.begin(), thrust_dev_idata.end(), thrust_dev_odata.begin());
 
