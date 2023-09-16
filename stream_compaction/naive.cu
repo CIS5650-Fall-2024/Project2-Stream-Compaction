@@ -12,14 +12,65 @@ namespace StreamCompaction {
             return timer;
         }
         // TODO: __global__
+        __global__ void kernNaiveScan(int n, int d, int *odata, const int *idata) {
+            int index = threadIdx.x + blockDim.x * blockIdx.x;
+
+            if (index >= n) {
+                return;
+            }
+
+            if (index >= (1 << (d - 1))) {
+                odata[index] = idata[index - (1 << (d - 1))] + idata[index];
+            }
+            else {
+                odata[index] = idata[index];
+            }
+        }
 
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
+            int* dev_in;
+            int* dev_out;
+
+            const int blockSize = 128;
+            dim3 fullBlockSize = (n + blockSize - 1) / blockSize;
+
+            // allocate memory
+            cudaMalloc((void**)&dev_in, n * sizeof(int));
+            checkCUDAErrorFn("malloc dev_in failed!");
+            cudaMalloc((void**)&dev_out, n * sizeof(int));
+            checkCUDAErrorFn("malloc dev_out failed!");
+
+            // populate dev_in
+            cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAErrorFn("copy to dev_in failed!");
+
             timer().startGpuTimer();
             // TODO
+            for (int d = 1; d <= ilog2ceil(n); ++d) {
+                kernNaiveScan << <fullBlockSize, blockSize >> > (n, d, dev_out, dev_in);
+                checkCUDAErrorFn("kernNaiveScan failed!");
+
+                std::swap(dev_in, dev_out);
+            }
             timer().endGpuTimer();
+
+            // shift to exclusive
+            int zero = 0;
+            cudaMemcpy(&dev_out[0], &zero, 1 * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(&dev_out[1], dev_in, (n - 1) * sizeof(int), cudaMemcpyDeviceToDevice);
+            checkCUDAErrorFn("shift failed!");
+
+            cudaMemcpy(odata, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAErrorFn("cudaMemcpy to odata failed!");
+
+            // free cuda memory
+            cudaFree(dev_in);
+            cudaFree(dev_out);
+
+            cudaDeviceSynchronize();
         }
     }
 }
