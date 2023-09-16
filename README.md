@@ -149,3 +149,158 @@ CUDA Stream Compaction
    elapsed time: 1105.18ms    (std::chrono Measured)
     [   3   1   2   1   2   3   3   3   3   2   2   3   1 ...   3   3 ]
     passed
+
+5. non-power-of-2: arr size = 1 << 8 + 1
+
+****************
+** SCAN TESTS **
+****************
+    [  41  33   3   5  39  13  38   3  21   7  22  40  18 ...   5   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 0.0004ms    (std::chrono Measured)
+    [   0  41  74  77  82 121 134 172 175 196 203 225 265 ... 12372 12377 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 0.0004ms    (std::chrono Measured)
+    [   0  41  74  77  82 121 134 172 175 196 203 225 265 ... 12294 12324 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 0.04096ms    (CUDA Measured)
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 0.06144ms    (CUDA Measured)
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   3   3   3   3   1   3   0   3   3   3   2   0   0 ...   3   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 0.0016ms    (std::chrono Measured)
+    [   3   3   3   3   1   3   3   3   3   2   1   1   3 ...   2   3 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 0.0019ms    (std::chrono Measured)
+    [   3   3   3   3   1   3   3   3   3   2   1   1   3 ...   2   2 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 0.002ms    (std::chrono Measured)
+    [   3   3   3   3   1   3   3   3   3   2   1   1   3 ...   2   3 ]
+    passed
+
+6. non-power-of-2: arr size = 10,000
+
+****************
+** SCAN TESTS **
+****************
+    [  22  38  29  17  26  43  48  36  14  45  13  30  28 ...   8   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 0.0064ms    (std::chrono Measured)
+    [   0  22  60  89 106 132 175 223 259 273 318 331 361 ... 244061 244069 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 0.0043ms    (std::chrono Measured)
+    [   0  22  60  89 106 132 175 223 259 273 318 331 361 ... 243956 243991 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 0.162816ms    (CUDA Measured)
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 0.161792ms    (CUDA Measured)
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   0   0   1   1   0   1   0   0   2   3   3   0   0 ...   0   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 0.0254ms    (std::chrono Measured)
+    [   1   1   1   2   3   3   2   2   1   1   3   2   2 ...   1   2 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 0.0278ms    (std::chrono Measured)
+    [   1   1   1   2   3   3   2   2   1   1   3   2   2 ...   1   2 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 0.0428ms    (std::chrono Measured)
+    [   1   1   1   2   3   3   2   2   1   1   3   2   2 ...   1   2 ]
+    passed
+
+7. non-power-of-2: arr size = 1,000,000
+
+****************
+** SCAN TESTS **
+****************
+    [  11  46  46  35  44  22  32  39  13  39  12  22  14 ...   5   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 0.4483ms    (std::chrono Measured)
+    [   0  11  57 103 138 182 204 236 275 288 327 339 361 ... 24484977 24484982 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 0.4603ms    (std::chrono Measured)
+    [   0  11  57 103 138 182 204 236 275 288 327 339 361 ... 24484907 24484925 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 0.56752ms    (CUDA Measured)
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 1.10698ms    (CUDA Measured)
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   1   0   2   3   2   2   2   3   1   3   2   2   2 ...   1   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 2.5808ms    (std::chrono Measured)
+    [   1   2   3   2   2   2   3   1   3   2   2   2   3 ...   2   1 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 2.3386ms    (std::chrono Measured)
+    [   1   2   3   2   2   2   3   1   3   2   2   2   3 ...   3   2 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 3.7589ms    (std::chrono Measured)
+    [   1   2   3   2   2   2   3   1   3   2   2   2   3 ...   2   1 ]
+    passed
+
+
+8. GPU work-efficient scan: arr size = 1 << 8
+
+****************
+** SCAN TESTS **
+****************
+    [  44  45  47   1  26  14  41  13  30  19  12  45  18 ...   7   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 0.0004ms    (std::chrono Measured)
+    [   0  44  89 136 137 163 177 218 231 261 280 292 337 ... 6600 6607 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 0.0002ms    (std::chrono Measured)
+    [   0  44  89 136 137 163 177 218 231 261 280 292 337 ... 6528 6561 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 0.054272ms    (CUDA Measured)
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 0.034816ms    (CUDA Measured)
+    passed
+==== work-efficient scan, power-of-two ====
+   elapsed time: 5.25005ms    (CUDA Measured)
+    passed
+==== work-efficient scan, non-power-of-two ====
+   elapsed time: 0.325696ms    (CUDA Measured)
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   2   3   3   3   0   0   3   3   2   1   2   1   0 ...   1   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 0.0074ms    (std::chrono Measured)
+    [   2   3   3   3   3   3   2   1   2   1   1   1   2 ...   3   1 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 0.0007ms    (std::chrono Measured)
+    [   2   3   3   3   3   3   2   1   2   1   1   1   2 ...   3   3 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 0.0009ms    (std::chrono Measured)
+    [   2   3   3   3   3   3   2   1   2   1   1   1   2 ...   3   1 ]
+    passed
