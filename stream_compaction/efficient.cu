@@ -19,7 +19,7 @@ namespace StreamCompaction {
 			}
 
             int k = index * offset;
-            x[k + offset - 1] += x[k + offset / 2 - 1];
+            x[k + offset - 1] += x[k + (offset >> 1) - 1];
         }
 
         __global__ void kernDownSweep(int n, int offset, int* x) {
@@ -28,10 +28,12 @@ namespace StreamCompaction {
                 return;
             }
 
-            int k = index * offset;
-            int t = x[k + offset / 2 - 1];
-            x[k + offset / 2 - 1] = x[k + offset - 1];
-            x[k + offset - 1] += t;
+            int left = (1 + (index << 1)) * offset - 1,
+                right = left + offset;
+
+            int t = x[left];
+            x[left] = x[right];
+            x[right] += t;
         }
 
         /**
@@ -40,7 +42,7 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             // memory operation
             int max_d = ilog2ceil(n);
-            int next_power_of_two = pow(2, max_d);
+            int next_power_of_two = 1 << max_d;
 
             int* x;
             cudaMalloc((void**)&x, next_power_of_two * sizeof(int));
@@ -49,25 +51,30 @@ namespace StreamCompaction {
             timer().startGpuTimer();
 
             // TODO
-            int blockSize = 64;
+            int blockSize = 64, step = 1, threadCount = next_power_of_two;
 
             // up-sweep
             for (int d = 0; d < max_d; ++d) {
-                int step = pow(2, d + 1);
-                int threadCount = next_power_of_two / step;
-                dim3 fullBlocksPerGrid((threadCount + blockSize - 1) / blockSize);
+                step <<= 1;
+                threadCount >>= 1;
 
-				kernUpSweep<<<fullBlocksPerGrid, blockSize >>>(threadCount, step, x);
+                int curBlockSize = std::min(threadCount, blockSize);
+                dim3 fullBlocksPerGrid((threadCount + curBlockSize - 1) / curBlockSize);
+
+				kernUpSweep<<<fullBlocksPerGrid, curBlockSize >>>(threadCount, step, x);
 			}
 
             // down-sweep
             cudaMemset(x + next_power_of_two - 1, 0, sizeof(int));
-            for (int d = max_d - 1; d >= 0; --d) {
-				int step = pow(2, d + 1);
-                int threadCount = next_power_of_two / step;
-				dim3 fullBlocksPerGrid((threadCount + blockSize - 1) / blockSize);
 
-                kernDownSweep<<<fullBlocksPerGrid, blockSize >>>(threadCount, step, x);
+            for (int d = max_d - 1; d >= 0; --d) {
+                step >>= 1;
+                
+                int curBlockSize = std::min(threadCount, blockSize);
+                dim3 fullBlocksPerGrid((threadCount + curBlockSize - 1) / curBlockSize);
+
+                kernDownSweep<<<fullBlocksPerGrid, curBlockSize >>>(threadCount, step, x);
+                threadCount <<= 1;
             }
 
             timer().endGpuTimer();
