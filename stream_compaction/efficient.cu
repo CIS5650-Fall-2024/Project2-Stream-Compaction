@@ -3,6 +3,10 @@
 #include "common.h"
 #include "efficient.h"
 
+#define NUM_BANKS 16 
+#define LOG_NUM_BANKS 4 
+#define CONFLICT_FREE_OFFSET(n) ((n) >> NUM_BANKS + (n) >> (2 * LOG_NUM_BANKS)) 
+
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
@@ -34,6 +38,84 @@ namespace StreamCompaction {
             int t = x[left];
             x[left] = x[right];
             x[right] += t;
+        }
+
+        __global__ void kernPreScan(int n, int* odata, const int* idata) {
+            extern __shared__ int temp[];
+
+			int index = threadIdx.x + (blockIdx.x * blockDim.x);
+            if (index >= n) {
+				return;
+			}
+
+            int offset = 1, ai = index, bi = index + n << 1,
+                bankOffsetA = CONFLICT_FREE_OFFSET(ai), bankOffsetB = CONFLICT_FREE_OFFSET(bi);
+
+            temp[ai + bankOffsetA] = idata[ai];
+            temp[bi + bankOffsetB] = idata[bi];
+
+            // up sweep
+            for (int d = n >> 1; d > 0; d >>= 1) {
+	        	__syncthreads();
+   
+                if (index < d) {
+                    int ai = ((index << 1) + 1) * offset - 1;
+                    int bi = ai + offset;
+
+                    ai += CONFLICT_FREE_OFFSET(ai);
+                    bi += CONFLICT_FREE_OFFSET(bi);
+
+                    temp[bi] += temp[ai];
+	       	    }
+           
+	       	    offset <<= 1;
+	        }
+   
+            // clear the last element before down sweep
+            if (index == 0) {
+	 	        temp[n - 1 + CONFLICT_FREE_OFFSET(n - 1)] = 0;
+	        }
+   
+            // down sweep
+            for (int d = 1; d < n; d <<= 1) {
+                offset >>= 1;
+      
+                __syncthreads();
+                if (index < d) {
+                    int ai = ((index << 1) + 1) * offset - 1;
+                    int bi = ai + offset;
+
+                    ai += CONFLICT_FREE_OFFSET(ai);
+                    bi += CONFLICT_FREE_OFFSET(bi);
+      
+                    int t = temp[ai];
+                    temp[ai] = temp[bi];
+                    temp[bi] += t;
+                }
+            }
+   
+            __syncthreads();
+   
+            odata[ai] = temp[ai + bankOffsetA];
+            odata[bi] = temp[bi + bankOffsetB];
+		}
+
+        void scanShared(int n, int* odata, const int* idata) {
+            int max_d = ilog2ceil(n);
+            int next_power_of_two = 1 << max_d;
+
+            int* in, int* out;
+            cudaMalloc((void**)&in, next_power_of_two * sizeof(int));
+            cudaMalloc((void**)&out, n * sizeof(int));
+            cudaMemcpy(in, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+
+            timer().startGpuTimer();
+            kernPreScan<<<1, next_power_of_two << 1, next_power_of_two * sizeof(int) >> >(next_power_of_two, out, in);
+            timer().endGpuTimer();
+
+            cudaMemcpy(odata, out, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaFree(in);
+            cudaFree(out);
         }
 
         /**
