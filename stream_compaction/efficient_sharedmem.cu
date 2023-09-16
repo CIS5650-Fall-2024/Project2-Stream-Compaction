@@ -4,6 +4,7 @@
 #include "efficient_sharedmem.h"
 #define BLOCK_THREAD_SIZE 1024
 #define BLOCK_ARRAY_SIZE (BLOCK_THREAD_SIZE<<1)
+#define SHUFFLE_ADDR 1
 namespace StreamCompaction {
     namespace EfficientSharedMem {
         using StreamCompaction::Common::PerformanceTimer;
@@ -11,6 +12,11 @@ namespace StreamCompaction {
         {
             static PerformanceTimer timer;
             return timer;
+        }
+        //Map [0,block_array_size-1] to [0,block_array_size-1]
+        __device__ inline int shuffleAddr(int x, int block_array_size)
+        {
+            return (x ^ (x >> 3 + 5)) & (block_array_size - 1);
         }
 
         //Assume N >= 2 and N is power of 2 and every element of input is greater or equal to zero
@@ -22,8 +28,13 @@ namespace StreamCompaction {
             extern __shared__ int localArr[];
             int tid = threadIdx.x, d_plus_1 = 1;
             int idx1 = blockStartIdx + (tid << 1), idx2 = blockStartIdx + (tid << 1) + 1;
+#if SHUFFLE_ADDR
+            localArr[shuffleAddr(tid << 1, block_array_size)] = idx1 < N ? input[idx1] : 0;
+            localArr[shuffleAddr(1 + (tid << 1), block_array_size)] = idx2 < N ? input[idx2] : 0;
+#else // !SHUFFLE_ADDR
             localArr[tid << 1] = idx1 < N ? input[idx1] : 0;
             localArr[1 + (tid << 1)] = idx2 < N ? input[idx2] : 0;
+#endif
             __syncthreads();
             for (int numActiveThreads = block_thread_size; numActiveThreads > 0; numActiveThreads >>= 1, d_plus_1++)
             {
@@ -31,15 +42,25 @@ namespace StreamCompaction {
                 {
                     int two_d_plus_1 = 1 << d_plus_1;
                     int two_d = two_d_plus_1 >> 1;
+#if SHUFFLE_ADDR
+                    localArr[shuffleAddr(tid * two_d_plus_1 + two_d_plus_1 - 1, block_array_size)] += localArr[shuffleAddr(tid * two_d_plus_1 + two_d - 1, block_array_size)];
+#else
                     localArr[tid * two_d_plus_1 + two_d_plus_1 - 1] += localArr[tid * two_d_plus_1 + two_d - 1];
+#endif 
                 }
                 __syncthreads();
             }
             if (tid == 0)
             {
+#if SHUFFLE_ADDR
+                if (blockOffset)
+                    blockOffset[blockIdx.x] = localArr[shuffleAddr(block_array_size - 1, block_array_size)];
+                localArr[shuffleAddr(block_array_size - 1, block_array_size)] = 0;
+#else
                 if(blockOffset)
                     blockOffset[blockIdx.x] = localArr[block_array_size - 1];
                 localArr[block_array_size - 1] = 0;
+#endif
             }
             __syncthreads();
             for (int numActiveThreads = 1; numActiveThreads <= block_thread_size; numActiveThreads <<= 1)
@@ -49,15 +70,26 @@ namespace StreamCompaction {
                 {
                     int two_d_plus_1 = 1 << d_plus_1;
                     int two_d = two_d_plus_1 >> 1;
+#if SHUFFLE_ADDR
+                    int tmp = localArr[shuffleAddr(tid * two_d_plus_1 + two_d - 1, block_array_size)];
+                    localArr[shuffleAddr(tid * two_d_plus_1 + two_d - 1, block_array_size)] = localArr[shuffleAddr(tid * two_d_plus_1 + two_d_plus_1 - 1, block_array_size)];
+                    localArr[shuffleAddr(tid * two_d_plus_1 + two_d_plus_1 - 1, block_array_size)] += tmp;
+#else
                     int tmp = localArr[tid * two_d_plus_1 + two_d - 1];
                     localArr[tid * two_d_plus_1 + two_d - 1] = localArr[tid * two_d_plus_1 + two_d_plus_1 - 1];
                     localArr[tid * two_d_plus_1 + two_d_plus_1 - 1] += tmp;
+#endif
                 }
                 __syncthreads();
             }
             if (idx1 >= N || idx2 >= N) return;
+#if SHUFFLE_ADDR
+            output[idx1] = localArr[shuffleAddr(tid << 1, block_array_size)];
+            output[idx2] = localArr[shuffleAddr(1 + (tid << 1), block_array_size)];
+#else
             output[idx1] = localArr[tid << 1];
             output[idx2] = localArr[1 + (tid << 1)];
+#endif
         }
 
         __global__ void kernAddBlockPrefix(int N, int* output, int* blockOffset, int* blockOffsetPrefix)
@@ -97,6 +129,7 @@ namespace StreamCompaction {
                 cudaMalloc((void**)&dev4, numBlocksNumBlocks * sizeof(int));
                 cudaMalloc((void**)&dev5, numBlocksNumBlocks * sizeof(int));
             }
+            nvtxRangePushA("Work efficient shared mem scan");
             timer().startGpuTimer();
             kernScanBlock << <numBlocks, BLOCK_THREAD_SIZE, BLOCK_ARRAY_SIZE * sizeof(int) >> > (N, dev1, dev1, dev2);
             cudaDeviceSynchronize();
@@ -126,6 +159,7 @@ namespace StreamCompaction {
                 checkCUDAError("kernAddBlockPrefix error");
             }
             timer().endGpuTimer();
+            nvtxRangePop();
             cudaMemcpy(odata, dev1, sizeof(int) * n, cudaMemcpyDeviceToHost);
             cudaFree(dev1);
             if (numBlocks > 1)
