@@ -3,6 +3,7 @@
 #include "common.h"
 #include "efficient.h"
 #include <iostream>
+#include "common.cu"
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -45,7 +46,6 @@ namespace StreamCompaction {
             }
         }
 
-       
 
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
@@ -53,9 +53,8 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             
             const int blockSize = 32;
-            const int max = ((n - 1) / blockSize + 1) * blockSize;
-
-            std::cout << "n = " << n << ", max = " << max << std::endl;
+            const int max = 1 << (ilog2ceil(n - 1) + 1);
+            // std::cout << "n = " << n << ", max = " << max << std::endl;
 
             int* dev_data;
             cudaMalloc((void**)&dev_data, max * sizeof(int));
@@ -100,6 +99,8 @@ namespace StreamCompaction {
             checkCUDAError("cudaFree failed!");
         }
 
+
+
         /**
          * Performs stream compaction on idata, storing the result into odata.
          * All zeroes are discarded.
@@ -110,10 +111,76 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
+
+            const int blockSize = 32;
+            int* dev_idata;
+            int* dev_odata;
+            int* dev_bool;
+            int* dev_sum;
+            const int max = 1 << (ilog2ceil(n - 1) + 1);
+            cudaMalloc((void**)&dev_idata, max * sizeof(int));
+            checkCUDAError("cudaMalloc dev_data failed!");
+            cudaMalloc((void**)&dev_odata, n * sizeof(int));
+            checkCUDAError("cudaMalloc dev_odata failed!");
+            cudaMalloc((void**)&dev_bool, max * sizeof(int));
+            checkCUDAError("cudaMalloc dev_bool failed!");
+            cudaMalloc((void**)&dev_sum, max * sizeof(int));
+            checkCUDAError("cudaMalloc dev_sum failed!");
+            cudaMemcpy(dev_idata, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy idata -> dev_data failed!");
+
+            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+
+            // cudaMemcpy(dev_data, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
+            // checkCUDAError("cudaMemcpy idata -> dev_data failed!");
+
             timer().startGpuTimer();
-            // TODO
+            
+            Common::kernMapToBoolean << < fullBlocksPerGrid, blockSize >> > (max, dev_bool, dev_idata);
+            cudaMemcpy(dev_sum, dev_bool, sizeof(int) * max, cudaMemcpyDeviceToDevice);
+            checkCUDAError("cudaMemcpy idata -> dev_data failed!");
+
+            // up sweep
+            
+            int addTimes = max / 2;
+            for (int i = 0; i < ilog2ceil(max); i++) {
+                dim3 upFullBlocksPerGrid((addTimes + blockSize) / blockSize);
+                upSweep << <upFullBlocksPerGrid, blockSize >> > (max, i, dev_sum);
+                addTimes /= 2;
+            }
+
+            // down sweep
+            int swapTime = 1;
+            changeNum << <1, 1 >> > (max - 1, 0, dev_sum);
+
+            for (int i = ilog2ceil(max) - 1; i >= 0; i--) {
+                dim3 downFullBlocksPerGrid((swapTime + blockSize) / blockSize);
+                downSweep << <downFullBlocksPerGrid, blockSize >> > (max, i, dev_sum);
+                swapTime *= 2;
+            }
+
+            Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_bool, dev_sum);
+
             timer().endGpuTimer();
-            return -1;
+
+            cudaMemcpy(odata, dev_odata, sizeof(int) * n, cudaMemcpyDeviceToHost);
+            checkCUDAError("cudaMemcpy dev_odata -> odata failed!");
+
+            int res_n = -1;
+            int last_bool = 0;
+            cudaMemcpy(&res_n, dev_sum + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAError("cudaMemcpy dev_odata_last -> res_n failed!");
+            cudaMemcpy(&last_bool, dev_bool + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAError("cudaMemcpy dev_bool_last -> last_bool failed!");
+            res_n += last_bool;
+
+            cudaFree(dev_idata);
+            cudaFree(dev_odata);
+            cudaFree(dev_bool);
+            cudaFree(dev_sum);
+            checkCUDAError("cudaFree failed!");
+
+            return res_n;
         }
     }
 }
