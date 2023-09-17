@@ -3,6 +3,7 @@
 #include "common.h"
 #include "efficient.h"
 
+static int blockSize = 256;
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -129,6 +130,87 @@ namespace StreamCompaction {
             cudaFree(dev_indices);
             timer().endCpuTimer();
             return ans;
+        }
+
+        __global__ void kernMapToBoolean(int n, int* bools, const int* idata, int mask, bool recordZero) {
+            // TODO
+            int id = blockDim.x * blockIdx.x + threadIdx.x;
+            if (id >= n)return;
+            bools[id] = (idata[id] & mask) == 0 ? recordZero : (!recordZero);
+        }
+
+        __global__ void kernSortScatter(int n, int* odata,
+            const int* idata, const int* isOneBools, 
+            const int* indices_0,const int* indices_1,int zeroCnt) {
+            // TODO
+            int id = blockDim.x * blockIdx.x + threadIdx.x;
+            if (id >= n)return;
+            if (isOneBools[id] == 1) {
+                int idx = indices_1[id] + zeroCnt;
+                odata[idx] = idata[id];
+            }
+            else {
+                int idx = indices_0[id];
+                odata[idx] = idata[id];
+            }
+        }
+
+        void sort(int n, int* odata, const int* idata) {
+            timer().startCpuTimer();
+            // TODO
+            int layerCnt = ilog2ceil(n);
+            int N = 1 << layerCnt;
+            int* dev_idata;
+            int* dev_odata;
+            int* dev_bools;
+            int* dev_indices_1;
+            int* dev_indices_0;
+            cudaMalloc((void**)&dev_idata, N * sizeof(int));
+            checkCUDAError("cudaMalloc dev_idata failed!");
+            cudaMalloc((void**)&dev_bools, N * sizeof(int));
+            checkCUDAError("cudaMalloc dev_bools failed!");
+            cudaMalloc((void**)&dev_odata, N * sizeof(int));
+            checkCUDAError("cudaMalloc dev_odata failed!");
+            cudaMalloc((void**)&dev_indices_1, N * sizeof(int));
+            checkCUDAError("cudaMalloc dev_indices failed!");
+            cudaMalloc((void**)&dev_indices_0, N * sizeof(int));
+            checkCUDAError("cudaMalloc dev_indices failed!");
+            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemset(dev_idata + n, INT_MAX, (N - n)*sizeof(int));//to make non-power-of-two right
+
+            dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
+            int mask = 1;
+            for (int i = 0;i < 32;++i) {
+                //map 0
+                kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (N, dev_bools, dev_idata,mask,true);
+                cudaMemcpy(dev_indices_0, dev_bools, N * sizeof(int), cudaMemcpyDeviceToDevice);
+                devScan(dev_indices_0, layerCnt, blockSize);
+                int zeroCnt = 0;
+                int lastBool = 0;
+                cudaMemcpy(&zeroCnt, dev_indices_0 + (N - 1), sizeof(int), cudaMemcpyDeviceToHost);
+                cudaMemcpy(&lastBool, dev_bools + (N - 1), sizeof(int), cudaMemcpyDeviceToHost);
+                zeroCnt += lastBool;
+
+                //map1
+                kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (N, dev_bools, dev_idata, mask, false);
+                cudaMemcpy(dev_indices_1, dev_bools, N * sizeof(int), cudaMemcpyDeviceToDevice);
+                devScan(dev_indices_1, layerCnt, blockSize);
+                kernSortScatter << <fullBlocksPerGrid, blockSize >> > (N, 
+                    dev_odata, dev_idata, dev_bools, dev_indices_0, dev_indices_1,zeroCnt);
+                mask <<= 1;
+                std::swap(dev_odata, dev_idata);
+            }
+
+            //read GPU
+            cudaMemcpy(odata, dev_idata, sizeof(int) * n, cudaMemcpyDeviceToHost);
+
+            //free GPU
+            cudaFree(dev_idata);
+            cudaFree(dev_bools);
+            cudaFree(dev_odata);
+            cudaFree(dev_indices_0);
+            cudaFree(dev_indices_1);
+            timer().endCpuTimer();
         }
     }
 }

@@ -3,6 +3,8 @@
 #include "common.h"
 #include "naive.h"
 
+static int blockSize = 256;
+
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;

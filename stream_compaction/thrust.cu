@@ -3,6 +3,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/scan.h>
+#include <thrust/sort.h>
 #include "common.h"
 #include "thrust.h"
 
@@ -30,6 +31,17 @@ namespace StreamCompaction {
 
             thrust::copy(thrust_dev_odata.begin(), thrust_dev_odata.end(), odata);
 
+
+            timer().endGpuTimer();
+        }
+
+        void sort(int n, int* odata, const int* idata) {
+            timer().startGpuTimer();
+            thrust::host_vector<int> thrust_host_data(idata, idata + n);
+            thrust::device_vector<int> thrust_dev_data = thrust_host_data;
+
+            thrust::sort(thrust_dev_data.begin(), thrust_dev_data.end());
+            thrust::copy(thrust_dev_data.begin(), thrust_dev_data.end(), odata);
 
             timer().endGpuTimer();
         }
