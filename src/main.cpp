@@ -7,18 +7,23 @@
  */
 
 #include <cstdio>
+#include <vector>
+#include <numeric>
 #include <stream_compaction/cpu.h>
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 10; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
-int *a = new int[SIZE];
-int *b = new int[SIZE];
-int *c = new int[SIZE];
+int* a = new int[SIZE];
+int* b = new int[SIZE];
+int* c = new int[SIZE];
 
+#define ANAYLSIS 0
+
+#if ANAYLSIS
 int main(int argc, char* argv[]) {
     // Scan tests
 
@@ -152,3 +157,100 @@ int main(int argc, char* argv[]) {
     delete[] b;
     delete[] c;
 }
+
+#else
+const int NUM_TESTS = 10;
+
+double computeAverage(double* arr, int size) {
+    double sum = 0.0;
+    for (int i = 0; i < size; ++i) {
+        sum += arr[i];
+    }
+    return sum / size;
+}
+
+void testScan() {
+    // Scan tests
+
+    printf("\n");
+    printf("****************\n");
+    printf("** SCAN TESTS **\n");
+    printf("****************\n");
+
+    double* cpuScanTimes = new double[NUM_TESTS];
+    double* naiveScanTimes = new double[NUM_TESTS];
+    double* workEfficientScanTimes = new double[NUM_TESTS];
+    double* thrustScanTimes = new double[NUM_TESTS];
+
+    for (int i = 0; i < NUM_TESTS; ++i) {
+        genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
+        a[SIZE - 1] = 0;
+
+        zeroArray(SIZE, b);
+        StreamCompaction::CPU::scan(SIZE, b, a);
+        cpuScanTimes[i] = StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+        
+        zeroArray(SIZE, c);
+        StreamCompaction::CPU::scan(NPOT, c, a);
+        evalCmpResult(NPOT, b, c);
+
+        zeroArray(SIZE, c);
+        StreamCompaction::Naive::scan(SIZE, c, a);
+        naiveScanTimes[i] = StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation();
+        evalCmpResult(SIZE, b, c);
+
+        zeroArray(SIZE, c);
+        StreamCompaction::Naive::scan(NPOT, c, a);
+        evalCmpResult(NPOT, b, c);
+
+        zeroArray(SIZE, c);
+        StreamCompaction::Efficient::scan(SIZE, c, a);
+        workEfficientScanTimes[i] = StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+        evalCmpResult(SIZE, b, c);
+
+        zeroArray(SIZE, c);
+        StreamCompaction::Efficient::scan(NPOT, c, a);
+        evalCmpResult(NPOT, b, c);
+
+        zeroArray(SIZE, c);
+        StreamCompaction::Thrust::scan(SIZE, c, a);
+        thrustScanTimes[i] = StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation();
+        evalCmpResult(SIZE, b, c);
+
+        zeroArray(SIZE, c);
+        StreamCompaction::Thrust::scan(NPOT, c, a);
+        evalCmpResult(NPOT, b, c);
+    }
+
+    printDesc("cpu scan, power-of-two");
+    printDoubleArray(NUM_TESTS, cpuScanTimes, true);
+    printf("%5f \n", computeAverage(cpuScanTimes, NUM_TESTS));
+
+    printDesc("naive scan,power-of-two");
+    printDoubleArray(NUM_TESTS, naiveScanTimes, true);
+    printf("%5f \n", computeAverage(naiveScanTimes, NUM_TESTS));
+
+    printDesc("work-efficient scan, power-of-two");
+    printDoubleArray(NUM_TESTS, workEfficientScanTimes, true);
+    printf("%5f \n", computeAverage(workEfficientScanTimes, NUM_TESTS));
+
+    printDesc("thrust scan, power-of-two");
+    printDoubleArray(NUM_TESTS, thrustScanTimes, true);
+    printf("%5f \n", computeAverage(thrustScanTimes, NUM_TESTS));
+
+   
+    delete[] cpuScanTimes;
+    delete[] naiveScanTimes;
+    delete[] workEfficientScanTimes;
+    delete[] thrustScanTimes;
+}
+
+int main(int argc, char* argv[]) {
+    testScan();
+
+    system("pause"); // stop Win32 console from closing on exit
+    delete[] a;
+    delete[] b;
+    delete[] c;
+}
+#endif

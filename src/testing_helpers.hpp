@@ -28,6 +28,13 @@ void printCmpResult(int n, T *a, T *b) {
 }
 
 template<typename T>
+void evalCmpResult(int n, T *a, T *b) {
+    if (cmpArrays(n, a, b)) {
+        printf(" % s \n", "FAIL VALUE");
+    }
+}
+
+template<typename T>
 void printCmpLenResult(int n, int expN, T *a, T *b) {
     if (n != expN) {
         printf("    expected %d elements, got %d\n", expN, n);
@@ -65,6 +72,18 @@ void printArray(int n, int *a, bool abridged = false) {
             printf("... ");
         }
         printf("%3d ", a[i]);
+    }
+    printf("]\n");
+}
+
+void printDoubleArray(int n, double* a, bool abridged = false) {
+    printf("    [ ");
+    for (int i = 0; i < n; i++) {
+        if (abridged && i + 2 == 15 && n > 16) {
+            i = n - 2;
+            printf("... ");
+        }
+        printf("%5f ", a[i]);
     }
     printf("]\n");
 }

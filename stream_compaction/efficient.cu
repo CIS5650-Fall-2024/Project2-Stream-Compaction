@@ -4,6 +4,7 @@
 #include "efficient.h"
 
 #define blockSize 128
+#define EFFICIENT 1
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -14,21 +15,29 @@ namespace StreamCompaction {
             return timer;
         }
 
-        __global__ void kernUpSweep(int n, int d, int *odata) {
+        __global__ void kernUpSweep(int n, int d, int* odata) {
+#if EFFICIENT
+            int index = (blockIdx.x * blockDim.x + threadIdx.x) * (2 << d);
+#else
             int index = (blockIdx.x * blockDim.x + threadIdx.x) * (1 << (d + 1));
+#endif
 
             if (index < n) {
                 odata[index + (1 << (d + 1)) - 1] += odata[index + (1 << d) - 1];
             }
         }
 
+
         __global__ void kernSetLastElementToZero(int n, int* odata) {
             odata[n - 1] = 0;
         }
 
-
-        __global__ void kernDownSweep(int n, int d, int *odata) {
-            int index = (threadIdx.x + blockDim.x * blockIdx.x) * (1 << (d + 1));
+        __global__ void kernDownSweep(int n, int d, int* odata) {
+#if EFFICIENT
+            int index = (blockIdx.x * blockDim.x + threadIdx.x) * (2 << d);
+#else
+            int index = (blockIdx.x * blockDim.x + threadIdx.x) * (1 << (d + 1));
+#endif
 
             if (index < n) {
                 // preserve the left child value
@@ -56,7 +65,12 @@ namespace StreamCompaction {
             timer().startGpuTimer();
             // up sweep 
             for (int d = 0; d <= log2ceil - 1; ++d) {
-                dim3 gridSize = (fullSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
+#if EFFICIENT   
+                // Adjust the grid size based on the depth of the sweep
+                dim3 gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
+#else
+                dim3 gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
+#endif
 
                 kernUpSweep << <gridSize, blockSize >> > (fullSize, d, dev_out);
                 checkCUDAErrorFn("up sweep failed!");
@@ -68,7 +82,12 @@ namespace StreamCompaction {
 
             // down sweep
             for (int d = log2ceil - 1; d >= 0; --d) {
-                dim3 gridSize = (fullSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
+#if EFFICIENT   
+                // Adjust the grid size based on the depth of the sweep
+                dim3 gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
+#else
+                dim3 gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
+#endif
 
                 kernDownSweep << <gridSize, blockSize >> > (fullSize, d, dev_out);
                 checkCUDAErrorFn("down sweep failed");
@@ -135,7 +154,12 @@ namespace StreamCompaction {
 
             // up sweep
             for (int d = 0; d <= log2ceil - 1; ++d) {
-                dim3 gridSize = (fullSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
+#if EFFICIENT   
+                // Adjust the grid size based on the depth of the sweep
+                dim3 gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
+#else
+                dim3 gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
+#endif
 
                 kernUpSweep << <gridSize, blockSize >> > (fullSize, d, dev_scan);
                 checkCUDAErrorFn("up sweep failed!");
@@ -146,7 +170,12 @@ namespace StreamCompaction {
 
             // down sweep
             for (int d = log2ceil - 1; d >= 0; --d) {
-                dim3 gridSize = (fullSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
+#if EFFICIENT   
+                // Adjust the grid size based on the depth of the sweep
+                dim3 gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
+#else
+                dim3 gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
+#endif
 
                 kernDownSweep << <gridSize, blockSize >> > (fullSize, d, dev_scan);
                 checkCUDAErrorFn("down sweep failed");
