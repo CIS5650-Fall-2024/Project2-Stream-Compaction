@@ -135,14 +135,14 @@ namespace StreamCompaction {
             cudaFree(dev_data);
         }
 
-        void scanShared_(int n, int* dev_data, int* dev_blockSum, int blockSize) {
+        void scanSharedNaive_(int n, int* dev_data, int* dev_blockSum, int blockSize) {
             dim3 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
             kernPrescanInplace << <fullBlocksPerGrid, blockSize, blockSize * sizeof(int) >> > (n, dev_data, dev_blockSum);
             scanInplace(n / blockSize, dev_blockSum);
             kernAddBlockSum << <n / blockSize, blockSize >> > (dev_data, dev_blockSum, n);
         }
 
-        void scanShared(int n, int* odata, const int* idata) {
+        void scanSharedNaive(int n, int* odata, const int* idata) {
             int dMax = ilog2ceil(n);
             int extended_n = 1 << dMax;
             int blockSize = 256;
@@ -157,11 +157,35 @@ namespace StreamCompaction {
             cudaMemset(dev_data, 0, sizeof(int) * extended_n);
             cudaMemcpy(dev_data, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             timer().startGpuTimer();
-            scanShared_(extended_n, dev_data, dev_blockSum, blockSize);
+            scanSharedNaive_(extended_n, dev_data, dev_blockSum, blockSize);
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_data, sizeof(int) * n, cudaMemcpyDeviceToHost);
             cudaFree(dev_data);
             cudaFree(dev_blockSum);
+        }
+
+        void scanShared(int n, int* odata, const int* idata) {
+            int dMax = ilog2ceil(n);
+            int extended_n = 1 << dMax;
+            int blockSize = 128;
+            if (extended_n < blockSize) {
+                scan(n, odata, idata);
+                return;
+            }
+            devDataBuffer buffer(extended_n, blockSize, 1);
+            cudaMemcpy(buffer.data(), idata, sizeof(int) * n, cudaMemcpyHostToDevice);
+            timer().startGpuTimer();
+            int i = 0;
+            for (i = 0; i < buffer.size()-1; i++) {
+                kernPrescanInplace << <buffer.sizeAt(i) / blockSize, blockSize, blockSize * sizeof(int) >> > (buffer.sizeAt(i), buffer[i], buffer[i + 1]);
+            }
+            //scanInplace(buffer.sizeAt(i), buffer[i]);
+            cudaMemset(buffer[i], 0, sizeof(int));
+            for (int i = buffer.size()-1; i >= 1; i--) {
+                kernAddBlockSum << <buffer.sizeAt(i-1) / blockSize, blockSize >> > (buffer[i - 1], buffer[i], buffer.sizeAt(i-1));
+            }
+            timer().endGpuTimer();
+            cudaMemcpy(odata, buffer.data(), sizeof(int) * n, cudaMemcpyDeviceToHost);
         }
 
         __global__ void kernMapToBoolean(int n, int* bools, const int* idata) {
