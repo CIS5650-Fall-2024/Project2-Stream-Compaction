@@ -1,7 +1,7 @@
 #include <cstdio>
 #include "cpu.h"
-
 #include "common.h"
+#include <vector>
 
 namespace StreamCompaction {
     namespace CPU {
@@ -19,7 +19,11 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int sum = 0;
+            for (int i = 0; i < n; i++) {
+                odata[i] = sum;
+                sum += idata[i];
+            }
             timer().endCpuTimer();
         }
 
@@ -30,9 +34,15 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int left = 0;
+            for (int i = 0; i < n; i++) {
+                if (idata[i] > 0) {
+                    odata[left] = idata[i];
+                    ++left;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return left;
         }
 
         /**
@@ -42,9 +52,36 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int* zo = new int[n];
+            for (int i = 0; i < n; i++) {
+                zo[i] = (idata[i] > 0);
+            }
+            int sum = 0;
+            int* s = new int[n];
+            for (int i = 0; i < n; i++) {
+                s[i] = sum;
+                sum += zo[i];
+            }
+            int count = s[n - 1] + (zo[n - 1] > 0);
+            for (int i = 0; i < n; i++) {
+                if (zo[i] > 0) {
+                    odata[s[i]] = idata[i];
+                }
+                
+            }
+            delete[] zo;
+            delete[] s;
             timer().endCpuTimer();
-            return -1;
+            return count;
+        }
+
+        void sort(int n, int* odata, int* idata) {
+            timer().startCpuTimer();
+            // std::vector<int> vec();
+            std::sort(idata, idata + n);
+            memcpy(odata, idata, sizeof(int) * n);
+            
+            timer().endCpuTimer();
         }
     }
 }
