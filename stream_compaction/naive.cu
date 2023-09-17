@@ -19,12 +19,7 @@ namespace StreamCompaction {
                 return;
             }
             int offset = 1 << (d - 1);
-            if (index >= offset) {
-                odata[index] = idata[index - offset] + idata[index];
-            }
-            else {
-                odata[index] = idata[index];
-            }
+            odata[index] = index < offset ? idata[index] : (idata[index - offset] + idata[index]);
         }
 
         __global__ void kernIncToExc(int n, int* odata, int* idata) {
@@ -32,12 +27,7 @@ namespace StreamCompaction {
             if (index >= n) {
                 return;
             }
-            if (index == 0) {
-                odata[0] = 0;
-            }
-            else {
-                odata[index] = idata[index - 1];
-            }
+            odata[index] = index == 0 ? 0 : idata[index - 1];
         }
 
         /**
