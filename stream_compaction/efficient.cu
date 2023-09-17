@@ -12,13 +12,74 @@ namespace StreamCompaction {
             return timer;
         }
 
+        __global__ void kernelUpSweep(int n, int* idata, int d)
+        {
+            int index = (blockDim.x * blockIdx.x) + threadIdx.x;
+            if (index >= n)
+            {
+                return; // invalid index
+            }
+            
+            int _d = 1 << d;            // 2^d
+            int _d1 = 1 << (d + 1);      // 2^(d+1)
+            if (index % _d1 == 0)    // TODO: avoid this? do this on the CPU?
+            {
+                idata[index + _d1 - 1] += idata[index + _d - 1];
+            }
+        }
+
+        __global__ void kernelDownSweep(int n, int* idata, int d)
+        {
+            int index = (blockDim.x * blockIdx.x) + threadIdx.x;
+            if (index >= n - 1)
+            {
+                return; // invalid index
+            }
+
+            int _d = 1 << d;            // 2^d
+            int _d1 = 1 << (d + 1);      // 2^(d+1)
+            if (index % _d1 == 0)
+            {
+                int left = idata[index + _d - 1];
+                idata[index + _d - 1] = idata[index + _d1 - 1];
+                idata[index + _d1 - 1] += left;
+            }
+        }
+
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
+            int* dev_idata;
+            cudaMalloc((void**)&dev_idata, sizeof(int) * n);
+            checkCUDAError("cudaMalloc dev_idata failed");
+            cudaMemcpy(dev_idata, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy dev_idata failed");
+
+            int totalBlocks = (n + blockSize - 1) / blockSize;
+
             timer().startGpuTimer();
             // TODO
+            // upsweep
+            int max = ilog2ceil(n);
+            for (int d = 0; d < max; d++)
+            {
+                kernelUpSweep<<<totalBlocks, blockSize>>>(n, dev_idata, d);
+            }
+
+            cudaMemset(dev_idata + n - 1, 0, sizeof(int));
+
+            // downsweep
+            for (int d = max - 1; d >= 0; d--)
+            {
+                kernelDownSweep<<<totalBlocks, blockSize>>>(n, dev_idata, d);
+            }
             timer().endGpuTimer();
+
+            cudaMemcpy(odata, dev_idata, sizeof(int) * n, cudaMemcpyDeviceToHost);
+            checkCUDAError("cudaMemcpy dev_idata to odata failed");
+            cudaFree(dev_idata);
+            checkCUDAError("cudaFree dev_idata failed");
         }
 
         /**
