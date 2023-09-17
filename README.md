@@ -47,7 +47,7 @@ For each level of scan, if the current array size is less or equal to 2*blocksiz
 
 After implemented shared memory optimization, another problem becomes important: bank conflict.
 
-![](./img/bank conflict.png)
+![](./img/bank-conflict.png)
 
 This is because the shared memory is divided into 32 banks (continuous address falls into banks for every four byte word), and in each clock cycle, one bank can only allow one write to the bank. In this case, memory access (especially writes) with a stride greater than 1(two's powers) will suffer from bank write conflicts.
 
