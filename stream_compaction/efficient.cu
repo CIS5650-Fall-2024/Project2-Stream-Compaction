@@ -7,6 +7,14 @@
 #define LOG_NUM_BANKS 4 
 #define CONFLICT_FREE_OFFSET(n) ((n) >> NUM_BANKS + (n) >> (2 * LOG_NUM_BANKS)) 
 
+#define ELEMENTS_PER_BLOCK 128
+#define TWICE_ELEMENTS_PER_BLOCK 256
+
+#define checkCUDAErrorWithLine(msg) checkCUDAError(msg, __LINE__)
+
+// sum aux arrays
+int** sumArr;
+
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
@@ -40,65 +48,87 @@ namespace StreamCompaction {
             x[right] += t;
         }
 
-        __global__ void kernPreScan(int n, int* odata, const int* idata) {
+        __global__ void kernPreScan(int n, int* sums, int* odata, int* idata) {
             extern __shared__ int temp[];
 
-			int index = threadIdx.x + (blockIdx.x * blockDim.x);
-            if (index >= n) {
-				return;
-			}
+            int curBlockSize = n < TWICE_ELEMENTS_PER_BLOCK ? n : TWICE_ELEMENTS_PER_BLOCK;
 
-            int offset = 1, ai = index, bi = index + n << 1,
+            int tid = threadIdx.x,
+                index = tid + blockIdx.x * TWICE_ELEMENTS_PER_BLOCK;
+
+            int offset = 1, ai = tid, bi = tid + ELEMENTS_PER_BLOCK,
                 bankOffsetA = CONFLICT_FREE_OFFSET(ai), bankOffsetB = CONFLICT_FREE_OFFSET(bi);
 
-            temp[ai + bankOffsetA] = idata[ai];
-            temp[bi + bankOffsetB] = idata[bi];
+            temp[ai + bankOffsetA] = index < n ? idata[index] : 0;
+            temp[bi + bankOffsetB] = (index < n - ELEMENTS_PER_BLOCK) ? idata[index + ELEMENTS_PER_BLOCK] : 0;
 
             // up sweep
-            for (int d = n >> 1; d > 0; d >>= 1) {
-	        	__syncthreads();
-   
-                if (index < d) {
-                    int ai = ((index << 1) + 1) * offset - 1;
+            for (int d = curBlockSize >> 1; d > 0; d >>= 1) {
+                __syncthreads();
+
+                if (tid < d) {
+                    int ai = ((tid << 1) + 1) * offset - 1;
                     int bi = ai + offset;
 
                     ai += CONFLICT_FREE_OFFSET(ai);
                     bi += CONFLICT_FREE_OFFSET(bi);
 
                     temp[bi] += temp[ai];
-	       	    }
-           
-	       	    offset <<= 1;
-	        }
-   
-            // clear the last element before down sweep
-            if (index == 0) {
-	 	        temp[n - 1 + CONFLICT_FREE_OFFSET(n - 1)] = 0;
-	        }
-   
+                }
+
+                offset <<= 1;
+            }
+
+            if (tid == 0) {
+                sums[blockIdx.x] = temp[curBlockSize - 1 + CONFLICT_FREE_OFFSET(curBlockSize - 1)];
+                temp[curBlockSize - 1 + CONFLICT_FREE_OFFSET(curBlockSize - 1)] = 0;
+            }
+
             // down sweep
-            for (int d = 1; d < n; d <<= 1) {
+           for (int d = 1; d < curBlockSize; d <<= 1) {
                 offset >>= 1;
-      
                 __syncthreads();
-                if (index < d) {
-                    int ai = ((index << 1) + 1) * offset - 1;
+
+                if (tid < d) {
+                    int ai = ((tid << 1) + 1) * offset - 1;
                     int bi = ai + offset;
 
                     ai += CONFLICT_FREE_OFFSET(ai);
                     bi += CONFLICT_FREE_OFFSET(bi);
-      
+
                     int t = temp[ai];
                     temp[ai] = temp[bi];
                     temp[bi] += t;
                 }
             }
-   
-            __syncthreads();
-   
-            odata[ai] = temp[ai + bankOffsetA];
-            odata[bi] = temp[bi + bankOffsetB];
+
+           __syncthreads();
+
+            odata[index] = index < n ? temp[ai + bankOffsetA] : 0;
+            odata[index + ELEMENTS_PER_BLOCK] = (index < n - ELEMENTS_PER_BLOCK) ? temp[bi + bankOffsetB] : 0;
 		}
+
+        __global__ void kernAdd(int n, int* odata, const int* idata) {
+            int index = blockIdx.x * TWICE_ELEMENTS_PER_BLOCK + threadIdx.x;
+            if (index >= n) {
+                return;
+            }
+
+            odata[index] += idata[blockIdx.x];
+            if (index < n - ELEMENTS_PER_BLOCK) {
+                odata[index + ELEMENTS_PER_BLOCK] += idata[blockIdx.x];
+            }
+        }
+
+        void preScanHelper(int n, int depth, int* odata, int* idata) {
+            int blockCnt = (int)ceil((float)n / (float)TWICE_ELEMENTS_PER_BLOCK);
+
+            kernPreScan << <blockCnt, ELEMENTS_PER_BLOCK, TWICE_ELEMENTS_PER_BLOCK * sizeof(int) >> > (n, sumArr[depth], odata, idata);
+            if (blockCnt > 1) {
+                preScanHelper(blockCnt, depth + 1, sumArr[depth], sumArr[depth]);
+				kernAdd << <blockCnt, ELEMENTS_PER_BLOCK >> > (n, odata, sumArr[depth]);
+            }
+        }
 
         void scanShared(int n, int* odata, const int* idata) {
             int max_d = ilog2ceil(n);
@@ -109,13 +139,29 @@ namespace StreamCompaction {
             cudaMalloc((void**)&out, n * sizeof(int));
             cudaMemcpy(in, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
+            sumArr = (int**)malloc(sizeof(int*) * max_d);
+
+            int blockCnt = (int)ceil((float)next_power_of_two / (float)TWICE_ELEMENTS_PER_BLOCK);
+            for (int i = 0; i < max_d; ++i) {
+				cudaMalloc((void**)&(sumArr[i]), blockCnt * sizeof(int));
+                blockCnt = (int)ceil((float)blockCnt / (float)TWICE_ELEMENTS_PER_BLOCK);
+			}
+
             timer().startGpuTimer();
-            kernPreScan<<<1, next_power_of_two << 1, next_power_of_two * sizeof(int) >> >(next_power_of_two, out, in);
+
+            preScanHelper(next_power_of_two, 0, out, in);
+
             timer().endGpuTimer();
 
             cudaMemcpy(odata, out, n * sizeof(int), cudaMemcpyDeviceToHost);
             cudaFree(in);
             cudaFree(out);
+
+            for (int i = 0; i < max_d; ++i) {
+				cudaFree(sumArr[i]);
+			}
+
+            free(sumArr);
         }
 
         /**
