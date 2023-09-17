@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include "common.h"
 #include "efficient.h"
+#define REDUCE_BANK_CONFLICT 1
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -10,6 +11,14 @@ namespace StreamCompaction {
         {
             static PerformanceTimer timer;
             return timer;
+        }
+
+        __device__ __forceinline__ int computeIndex(int idx) {
+#if REDUCE_BANK_CONFLICT
+            return idx + (idx >> 6);
+#else
+            return idx;
+#endif
         }
 
         __global__ void kernUpSweep(const int n, int* data, const int stride) {
@@ -39,9 +48,9 @@ namespace StreamCompaction {
                 return;
 
             int offset = 1;
-            temp[thid] = data[index];
+            temp[computeIndex(thid)] = data[index];
             if (thid == blockDim.x - 1)
-                last = temp[blockDim.x - 1];
+                last = temp[computeIndex(blockDim.x - 1)];
             __syncthreads();
 
             // build sum in place up the tree 
@@ -52,12 +61,13 @@ namespace StreamCompaction {
                 {
                     int ai = offset * (2 * thid + 1) - 1;
                     int bi = ai + offset;
-                    temp[bi] += temp[ai];
+                    temp[computeIndex(bi)] += temp[computeIndex(ai)];
                 }
                 offset *= 2;
             }
             // clear the last element
-            if (thid == 0) { temp[blockDim.x - 1] = 0; }
+            if (thid == 0) { temp[computeIndex(blockDim.x - 1)] = 0; }
+            __syncthreads();
             // traverse down tree & build scan 
             for (int d = 1; d < blockDim.x; d *= 2)
             {
@@ -67,15 +77,15 @@ namespace StreamCompaction {
                 {
                     int ai = offset * (2 * thid + 1) - 1;
                     int bi = ai + offset;
-                    int t = temp[ai];
-                    temp[ai] = temp[bi];
-                    temp[bi] += t;
+                    int t = temp[computeIndex(ai)];
+                    temp[computeIndex(ai)] = temp[computeIndex(bi)];
+                    temp[computeIndex(bi)] += t;
                 }
                 __syncthreads();
             }
-            data[index] = temp[thid];
+            data[index] = temp[computeIndex(thid)];
             if (thid == 0) {
-                blockSum[blockIdx.x] = last + temp[blockDim.x - 1];
+                blockSum[blockIdx.x] = last + temp[computeIndex(blockDim.x - 1)];
             }
         }
 
@@ -125,6 +135,13 @@ namespace StreamCompaction {
             cudaFree(dev_data);
         }
 
+        void scanShared_(int n, int* dev_data, int* dev_blockSum, int blockSize) {
+            dim3 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+            kernPrescanInplace << <fullBlocksPerGrid, blockSize, blockSize * sizeof(int) >> > (n, dev_data, dev_blockSum);
+            scanInplace(n / blockSize, dev_blockSum);
+            kernAddBlockSum << <n / blockSize, blockSize >> > (dev_data, dev_blockSum, n);
+        }
+
         void scanShared(int n, int* odata, const int* idata) {
             int dMax = ilog2ceil(n);
             int extended_n = 1 << dMax;
@@ -133,8 +150,6 @@ namespace StreamCompaction {
                 scan(n, odata, idata);
                 return;
             }
-            dim3 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
-
             int* dev_data;
             int* dev_blockSum;
             cudaMalloc((void**)&dev_data, sizeof(int) * extended_n);
@@ -142,9 +157,7 @@ namespace StreamCompaction {
             cudaMemset(dev_data, 0, sizeof(int) * extended_n);
             cudaMemcpy(dev_data, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             timer().startGpuTimer();
-            kernPrescanInplace << <fullBlocksPerGrid, blockSize, blockSize * sizeof(int) >> > (extended_n, dev_data, dev_blockSum);
-            scanInplace(extended_n / blockSize, dev_blockSum);
-            kernAddBlockSum << <extended_n / blockSize, blockSize >> > (dev_data, dev_blockSum, n);
+            scanShared_(extended_n, dev_data, dev_blockSum, blockSize);
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_data, sizeof(int) * n, cudaMemcpyDeviceToHost);
             cudaFree(dev_data);
