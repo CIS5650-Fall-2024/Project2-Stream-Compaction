@@ -176,20 +176,29 @@ namespace StreamCompaction {
             cudaMalloc((void**)&x, next_power_of_two * sizeof(int));
             cudaMemcpy(x, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
+            // optimize block size
+            // block size should be multiple of warp size and less than max threads per block
+            // grid size should be multiple of number of SMs
+            cudaDeviceProp prop;
+            cudaGetDeviceProperties(&prop, 0);
+
+            int minBlockSize = prop.warpSize, maxBlockSize = prop.maxThreadsPerBlock, sms = prop.multiProcessorCount;
+
             timer().startGpuTimer();
 
             // TODO
-            int blockSize = 64, step = 1, threadCount = next_power_of_two;
+            int step = 1, threadCount = next_power_of_two;
 
             // up-sweep
             for (int d = 0; d < max_d; ++d) {
                 step <<= 1;
                 threadCount >>= 1;
 
-                int curBlockSize = std::min(threadCount, blockSize);
-                dim3 fullBlocksPerGrid((threadCount + curBlockSize - 1) / curBlockSize);
+                int curBlockSize = std::max(minBlockSize, std::min(threadCount, maxBlockSize));
+                int curGridSize = (threadCount + curBlockSize - 1) / curBlockSize;
+                curGridSize = std::ceil(curGridSize / (float)sms) * sms;
 
-				kernUpSweep<<<fullBlocksPerGrid, curBlockSize >>>(threadCount, step, x);
+				kernUpSweep<<<curGridSize, curBlockSize >>>(threadCount, step, x);
 			}
 
             // down-sweep
@@ -198,10 +207,12 @@ namespace StreamCompaction {
             for (int d = max_d - 1; d >= 0; --d) {
                 step >>= 1;
                 
-                int curBlockSize = std::min(threadCount, blockSize);
-                dim3 fullBlocksPerGrid((threadCount + curBlockSize - 1) / curBlockSize);
+                int smMultiple = 1 << ((int)std::ceil(threadCount / (float)sms));
+                int curBlockSize = std::max(minBlockSize, std::min(threadCount, std::min(smMultiple, maxBlockSize)));
+                int curGridSize = (threadCount + curBlockSize - 1) / curBlockSize;
+                curGridSize = std::ceil(curGridSize / (float)sms) * sms;
 
-                kernDownSweep<<<fullBlocksPerGrid, curBlockSize >>>(threadCount, step, x);
+                kernDownSweep<<<curGridSize, curBlockSize >>>(threadCount, step, x);
                 threadCount <<= 1;
             }
 
@@ -233,17 +244,21 @@ namespace StreamCompaction {
             //timer().startGpuTimer();
             
             // TODO
-            int blockSize = 64;
-            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+            cudaDeviceProp prop;
+            cudaGetDeviceProperties(&prop, 0);
+
+            int minBlockSize = prop.warpSize, maxBlockSize = prop.maxThreadsPerBlock, sms = prop.multiProcessorCount;
+            int curBlockSize = std::max(minBlockSize, std::min(n, maxBlockSize));
+            int gridSize = (n + curBlockSize - 1) / curBlockSize;
 
             // Step 1: Compute temporary array of 0s and 1s
-            StreamCompaction::Common::kernMapToBoolean<<<fullBlocksPerGrid, blockSize >>>(n, bools, in);
+            StreamCompaction::Common::kernMapToBoolean<<<gridSize, curBlockSize >>>(n, bools, in);
 
             // Step2: Run exclusive scan on tempArr
             scan(n, scanArr, bools);
 
             // Step 3: Scatter
-            StreamCompaction::Common::kernScatter<<<fullBlocksPerGrid, blockSize >>>(n, out, in, bools, scanArr);
+            StreamCompaction::Common::kernScatter<<<gridSize, curBlockSize >>>(n, out, in, bools, scanArr);
 
             //timer().endGpuTimer();
 

@@ -3,6 +3,8 @@
 #include "common.h"
 #include "naive.h"
 
+#include <iostream>
+
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;
@@ -45,19 +47,23 @@ namespace StreamCompaction {
             cudaMalloc((void**)&last, n * sizeof(int));
             cudaMemcpy(last, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
-            timer().startGpuTimer();
+            cudaDeviceProp prop;
+            cudaGetDeviceProperties(&prop, 0);
 
-            int blockSize = 64;
-            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+            int minBlockSize = prop.warpSize, maxBlockSize = prop.maxThreadsPerBlock, sms = prop.multiProcessorCount;
+            int curBlockSize = std::max(minBlockSize, std::min(n, maxBlockSize));
+            int gridSize = (int)ceil((float)(n + curBlockSize - 1) / curBlockSize);
+
+            timer().startGpuTimer();
 
             int max_d = ilog2ceil(n);
             // TODO
             for (int d = 1; d <= max_d; ++d) {
-                kernNaiveScan<<<fullBlocksPerGrid, blockSize >>>(n, pow(2, d - 1), x, last);
+                kernNaiveScan<<<gridSize, curBlockSize >>>(n, pow(2, d - 1), x, last);
 				std::swap(x, last);
 			}
 
-            kernShift<<<fullBlocksPerGrid, blockSize >>>(n, x, last);
+            kernShift<<<gridSize, curBlockSize >>>(n, x, last);
 
             timer().endGpuTimer();
 
