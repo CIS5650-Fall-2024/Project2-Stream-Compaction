@@ -27,6 +27,68 @@ namespace StreamCompaction {
             data[real_i] += data[real_i - stride];
             data[real_i - stride] = t;
         }
+
+        __global__ void kernPrescanInplace(int n, int* data, int* blockSum) {
+            // allocated on invocation 
+            extern __shared__ int temp[];
+            extern __shared__ int last;
+            int thid = threadIdx.x;
+            int blockOffset = blockIdx.x * blockDim.x;
+            int index = blockOffset + thid;
+            if (index > n)
+                return;
+
+            int offset = 1;
+            temp[thid] = data[index];
+            if (thid == blockDim.x - 1)
+                last = temp[blockDim.x - 1];
+            __syncthreads();
+
+            // build sum in place up the tree 
+            for (int d = blockDim.x >> 1; d > 0; d >>= 1)
+            {
+                __syncthreads();
+                if (thid < d)
+                {
+                    int ai = offset * (2 * thid + 1) - 1;
+                    int bi = ai + offset;
+                    temp[bi] += temp[ai];
+                }
+                offset *= 2;
+            }
+            // clear the last element
+            if (thid == 0) { temp[blockDim.x - 1] = 0; }
+            // traverse down tree & build scan 
+            for (int d = 1; d < blockDim.x; d *= 2)
+            {
+                offset >>= 1;
+                __syncthreads();
+                if (thid < d)
+                {
+                    int ai = offset * (2 * thid + 1) - 1;
+                    int bi = ai + offset;
+                    int t = temp[ai];
+                    temp[ai] = temp[bi];
+                    temp[bi] += t;
+                }
+                __syncthreads();
+            }
+            data[index] = temp[thid];
+            if (thid == 0) {
+                blockSum[blockIdx.x] = last + temp[blockDim.x - 1];
+            }
+        }
+
+        __global__ void kernAddBlockSum(int* data, const int* blockSum, int n) {
+            extern __shared__ int sum;
+            int index = blockIdx.x * blockDim.x + threadIdx.x;
+            if (index >= n)return;
+            if (threadIdx.x == 0)
+                sum = blockSum[blockIdx.x];
+            __syncthreads();
+            data[index] += sum;
+        }
+
         void scanInplace(int n, int* dev_data) {
             if (n != 1 << ilog2ceil(n))
                 throw std::runtime_error("n is not pow of 2");
@@ -61,6 +123,32 @@ namespace StreamCompaction {
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_data, sizeof(int) * n, cudaMemcpyDeviceToHost);
             cudaFree(dev_data);
+        }
+
+        void scanShared(int n, int* odata, const int* idata) {
+            int dMax = ilog2ceil(n);
+            int extended_n = 1 << dMax;
+            int blockSize = 256;
+            if (extended_n < blockSize) {
+                scan(n, odata, idata);
+                return;
+            }
+            dim3 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+
+            int* dev_data;
+            int* dev_blockSum;
+            cudaMalloc((void**)&dev_data, sizeof(int) * extended_n);
+            cudaMalloc((void**)&dev_blockSum, sizeof(int) * extended_n);
+            cudaMemset(dev_data, 0, sizeof(int) * extended_n);
+            cudaMemcpy(dev_data, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
+            timer().startGpuTimer();
+            kernPrescanInplace << <fullBlocksPerGrid, blockSize, blockSize * sizeof(int) >> > (extended_n, dev_data, dev_blockSum);
+            scanInplace(extended_n / blockSize, dev_blockSum);
+            kernAddBlockSum << <extended_n / blockSize, blockSize >> > (dev_data, dev_blockSum, n);
+            timer().endGpuTimer();
+            cudaMemcpy(odata, dev_data, sizeof(int) * n, cudaMemcpyDeviceToHost);
+            cudaFree(dev_data);
+            cudaFree(dev_blockSum);
         }
 
         __global__ void kernMapToBoolean(int n, int* bools, const int* idata) {
