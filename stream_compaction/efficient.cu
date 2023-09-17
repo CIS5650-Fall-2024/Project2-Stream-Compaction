@@ -3,6 +3,8 @@
 #include "common.h"
 #include "efficient.h"
 
+#define blockSize 128
+
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
@@ -12,7 +14,7 @@ namespace StreamCompaction {
             return timer;
         }
 
-        __global__ void kernUpSweep(int n, int d, int* odata) {
+        __global__ void kernUpSweep(int n, int d, int *odata) {
             int index = (blockIdx.x * blockDim.x + threadIdx.x) * (1 << (d + 1));
 
             if (index < n) {
@@ -20,8 +22,13 @@ namespace StreamCompaction {
             }
         }
 
+        __global__ void kernSetLastElementToZero(int n, int* odata) {
+            odata[n - 1] = 0;
+        }
+
+
         __global__ void kernDownSweep(int n, int d, int *odata) {
-            int index = (threadIdx.x + blockDim.x * blockIdx.x) + (1 << (d + 1));
+            int index = (threadIdx.x + blockDim.x * blockIdx.x) * (1 << (d + 1));
 
             if (index < n) {
                 // preserve the left child value
@@ -29,7 +36,7 @@ namespace StreamCompaction {
                 // left child copies the parent value
                 odata[index + (1 << d) - 1] = odata[index + (1 << (d + 1)) - 1];
                 // right child addes the parent value and the preserved left child value
-                odata[index + (1 << (d + 1)) - 1] = temp + odata[index + (1 << (d + 1)) - 1];
+                odata[index + (1 << (d + 1)) - 1] += temp;
             }
         }
 
@@ -39,41 +46,31 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             int* dev_out;
 
-            const int blockSize = 128;
+            const int log2ceil = ilog2ceil(n);
+            const int fullSize = 1 << log2ceil;
 
-            cudaMalloc((void**)&dev_out, n * sizeof(int));
-
+            cudaMalloc((void**)&dev_out, fullSize * sizeof(int));
+            cudaMemset(dev_out, 0, fullSize * sizeof(int));
             cudaMemcpy(dev_out, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
             timer().startGpuTimer();
-            // TODO
             // up sweep 
-            for (int d = 0; d <= ilog2ceil(n) - 1; ++d) {
-                int gridSize = (n / (1 << (d + 1)) + blockSize - 1) / blockSize;
-                if (gridSize < 1) gridSize = 1;
+            for (int d = 0; d <= log2ceil - 1; ++d) {
+                dim3 gridSize = (fullSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
 
-                kernUpSweep << <gridSize, blockSize >> > (n, d, dev_out);
+                kernUpSweep << <gridSize, blockSize >> > (fullSize, d, dev_out);
                 checkCUDAErrorFn("up sweep failed!");
             }
 
-            /*int* upSweepData = new int[n];
-            cudaMemcpy(upSweepData, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
-
-            for (int i = 0; i < n; ++i) {
-                printf("%d ", upSweepData[i]);
-            }
-            */
-
-            // make the last value to 0
-            int zero = 0;
-            cudaMemcpy(&dev_out[n - 1], &zero, sizeof(int), cudaMemcpyHostToDevice);
+            // set the last value to 0
+            kernSetLastElementToZero << <1, 1 >> > (fullSize, dev_out);
+            checkCUDAErrorFn("set last element to zero failed!");
 
             // down sweep
-            for (int d = ilog2ceil(n) - 1; d >= 0; --d) {
-                int gridSize = (n / (1 << (d + 1)) + blockSize - 1) / blockSize;
-                if (gridSize < 1) gridSize = 1;
+            for (int d = log2ceil - 1; d >= 0; --d) {
+                dim3 gridSize = (fullSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
 
-                kernDownSweep << <gridSize, blockSize >> > (n, d, dev_out);
+                kernDownSweep << <gridSize, blockSize >> > (fullSize, d, dev_out);
                 checkCUDAErrorFn("down sweep failed");
             }
 
@@ -83,9 +80,8 @@ namespace StreamCompaction {
 
             // free memory
             cudaFree(dev_out);
-
-            cudaDeviceSynchronize();
         }
+
 
         /**
          * Performs stream compaction on idata, storing the result into odata.
@@ -97,15 +93,85 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
+            int* dev_in;
+            int* dev_out;
+
+            int* dev_bools;
+            int* dev_scan;
+
+            int boolLastVal, scanLastVal;
+
+            const int log2ceil = ilog2ceil(n);
+            const int fullSize = 1 << log2ceil;
+
+            dim3 gridSize = (n + blockSize - 1) / blockSize;
+
+            cudaMalloc((void**)&dev_bools, n * sizeof(int));
+            checkCUDAErrorFn("malloc dev_bools failed!");
+
+            cudaMalloc((void**)&dev_scan, fullSize * sizeof(int));
+            cudaMemset(dev_scan, 0, fullSize * sizeof(int));
+            checkCUDAErrorFn("malloc dev_scan failed!");
+
+            cudaMalloc((void**)&dev_in, n * sizeof(int));
+            checkCUDAErrorFn("malloc dev_in failed!");
+            cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAErrorFn("copy idata to dev_in failed!");
             
+            cudaMalloc((void**)&dev_out, n * sizeof(int));
+            checkCUDAErrorFn("malloc dev_out failed!");
 
             timer().startGpuTimer();
-            // TODO
-            
+            // map the bool array
+            StreamCompaction::Common::kernMapToBoolean << <gridSize, blockSize >> > (n, dev_bools, dev_in);
+            checkCUDAErrorFn("map bool array failed!");
 
+            // store the last value of the bool array
+            cudaMemcpy(&boolLastVal, dev_bools + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAErrorFn("copy last bool value to host failed!");
+
+            // scan the bool array
+            cudaMemcpy(dev_scan, dev_bools, n * sizeof(int), cudaMemcpyDeviceToDevice);
+
+            // up sweep
+            for (int d = 0; d <= log2ceil - 1; ++d) {
+                dim3 gridSize = (fullSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
+
+                kernUpSweep << <gridSize, blockSize >> > (fullSize, d, dev_scan);
+                checkCUDAErrorFn("up sweep failed!");
+            }
+
+            // set the last value to 0
+            kernSetLastElementToZero << <1, 1 >> > (fullSize, dev_scan);
+
+            // down sweep
+            for (int d = log2ceil - 1; d >= 0; --d) {
+                dim3 gridSize = (fullSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
+
+                kernDownSweep << <gridSize, blockSize >> > (fullSize, d, dev_scan);
+                checkCUDAErrorFn("down sweep failed");
+            }
+
+            // store the last value of the scan results
+            cudaMemcpy(&scanLastVal, dev_scan + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAErrorFn("copy last bool value to host failed!");
+
+            // scatter
+            StreamCompaction::Common::kernScatter << <gridSize, blockSize >> > (n, dev_out, dev_in, dev_bools, dev_scan);
+            checkCUDAErrorFn("scatter failed!");
 
             timer().endGpuTimer();
-            return -1;
+
+            cudaMemcpy(odata, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAErrorFn("copy dev_out to odata failed!");
+
+            // free memory
+            cudaFree(dev_in);
+            cudaFree(dev_out);
+            cudaFree(dev_bools);
+            cudaFree(dev_scan);
+
+            return scanLastVal + boolLastVal;
         }
     }
 }

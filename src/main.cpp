@@ -55,10 +55,10 @@ int main(int argc, char* argv[]) {
     printCmpResult(SIZE, b, c);
 
     // For bug-finding only: Array of 1s to help find bugs in stream compaction or scan
-   /* onesArray(SIZE, c);
+    onesArray(SIZE, c);
     printDesc("1s array for finding bugs");
     StreamCompaction::Naive::scan(SIZE, c, a);
-    printArray(SIZE, c, true);*/
+    printArray(SIZE, c, true);
 
     zeroArray(SIZE, c);
     printDesc("naive scan, non-power-of-two");
@@ -137,14 +137,14 @@ int main(int argc, char* argv[]) {
     printDesc("work-efficient compact, power-of-two");
     count = StreamCompaction::Efficient::compact(SIZE, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    //printArray(count, c, true);
+    printArray(count, c, true);
     printCmpLenResult(count, expectedCount, b, c);
 
     zeroArray(SIZE, c);
     printDesc("work-efficient compact, non-power-of-two");
     count = StreamCompaction::Efficient::compact(NPOT, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    //printArray(count, c, true);
+    printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
 
     system("pause"); // stop Win32 console from closing on exit
