@@ -18,14 +18,20 @@ namespace StreamCompaction {
          */
 
         __global__ void kernelUpSweep(int n, int offset, int* i_odata) {
-            int id = threadIdx.x + blockDim.x * blockIdx.x;
-            if (id >= n || (id + 1) % (offset * 2) != 0)return;
+            //int id = threadIdx.x + blockDim.x * blockIdx.x;
+            //if (id >= n || (id + 1) % (offset * 2) != 0)return;
+            int threadId = threadIdx.x + blockDim.x * blockIdx.x + 1;
+            int id = offset * 2 * threadId - 1;
+            if (id >= n)return;
             i_odata[id] = i_odata[id] + i_odata[id - offset];
         }
 
         __global__ void kernelDownSweep(int n, int offset, int* i_odata) {
-            int id = threadIdx.x + blockDim.x * blockIdx.x;
-            if (id >= n || (id+1)%(offset*2)!=0)return;
+            //int id = threadIdx.x + blockDim.x * blockIdx.x;
+            //if (id >= n || (id + 1) % (offset * 2)!=0)return;
+            int threadId = threadIdx.x + blockDim.x * blockIdx.x + 1;
+            int id = offset * 2 * threadId - 1;
+            if (id >= n)return;
             //change 2
             int prevIdx = id - offset;
             int prevNum = i_odata[prevIdx];
@@ -33,17 +39,22 @@ namespace StreamCompaction {
             i_odata[id] += prevNum;
         }
 
-        void devScan(int* dev_data, int layerCnt, const dim3& fullBlocksPerGrid, int blockSize) {
+        void devScan(int* dev_data, int layerCnt, int blockSize) {
             int N = 1 << layerCnt;
             int offset = 1;
+            int needN = N;
             for (int i = 0;i < layerCnt;++i) {
-                kernelUpSweep << <fullBlocksPerGrid, blockSize >> > (N, offset, dev_data);
+                dim3 blockPerGrid((needN + blockSize - 1) / blockSize);
+                kernelUpSweep << <blockPerGrid, blockSize >> > (N, offset, dev_data);
                 offset *= 2;
+                needN /= 2;
             }
             cudaMemset(dev_data + offset - 1,0,sizeof(int));
             for (int i = 0;i < layerCnt;++i) {
                 offset /= 2;
-                kernelDownSweep << <fullBlocksPerGrid, blockSize >> > (N, offset, dev_data);
+                dim3 blockPerGrid((needN + blockSize - 1) / blockSize);
+                kernelDownSweep << <blockPerGrid, blockSize >> > (N, offset, dev_data);
+                needN *= 2;
             }
         }
 
@@ -53,12 +64,11 @@ namespace StreamCompaction {
             int* dev_data;
             int layerCnt = ilog2ceil(n);
             int N = 1 << layerCnt;
-            dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
             cudaMalloc((void**)&dev_data, N * sizeof(int));
             checkCUDAError("cudaMalloc dev_data failed!");
             cudaMemcpy(dev_data, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
 
-            devScan(dev_data, layerCnt,fullBlocksPerGrid, blockSize);
+            devScan(dev_data, layerCnt, blockSize);
 
             //exclusive scan
             cudaMemcpy(odata, dev_data, sizeof(int) * n, cudaMemcpyDeviceToHost);
@@ -100,7 +110,7 @@ namespace StreamCompaction {
             StreamCompaction::Common::kernMapToBoolean <<<fullBlocksPerGrid,blockSize>>>(N, dev_bools, dev_idata);
             
             cudaMemcpy(dev_indices, dev_bools, N * sizeof(int), cudaMemcpyDeviceToDevice);
-            devScan(dev_indices, layerCnt, fullBlocksPerGrid, blockSize);
+            devScan(dev_indices, layerCnt,blockSize);
             
             StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (N, dev_odata, dev_idata, dev_bools, dev_indices);
             
