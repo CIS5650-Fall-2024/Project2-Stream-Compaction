@@ -17,9 +17,14 @@ namespace StreamCompaction {
          * For performance analysis, this is supposed to be a simple for loop.
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
          */
+        //cited Lecture slide
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            odata[0] = 0;
+            for (int k = 1; k < n; ++k) {
+                odata[k] = odata[k - 1] + idata[k-1];
+            }
             timer().endCpuTimer();
         }
 
@@ -31,8 +36,15 @@ namespace StreamCompaction {
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int j = 0;
+            for (int k = 0; k < n; k++) {
+                if (idata[k] != 0) {
+                    odata[j] = idata[k];
+                    j++;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return j;
         }
 
         /**
@@ -43,8 +55,42 @@ namespace StreamCompaction {
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int* temp = new int[n];
+            int* scan = new int[n];
+            int k = 0;
+            int j = 1;
+            int oindex = 0;
+            for (int i = 0; i < n; i++) {
+                if (idata[i] == 0) {
+                    temp[i] = 0;
+                }
+                else {
+                    temp[i] = 1;
+                }
+
+            }
+
+            for (int i = 0; i < n; i++) {
+                scan[i] = k;
+                if (temp[i] == 1) {
+                    k++;
+                }
+                
+                
+            }
+
+
+
+            for (int i = 0; i < n; i++) {
+                if (scan[i] == j) {
+                    odata[oindex] = idata[i - 1];
+                    oindex += 1;
+                    j += 1;
+                }
+            }
+            delete[] temp;
             timer().endCpuTimer();
-            return -1;
+            return oindex;
         }
     }
 }
