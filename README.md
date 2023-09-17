@@ -17,6 +17,44 @@ CUDA Stream Compaction
 
 `efficient_sharedmem.cu, efficient_sharedmem.h`: CUDA source files for work efficient parallel scan with shared memory optimazition
 
+### Extra Credits
+
+**Part 5: Launch Least Number of Threads**
+
+Use different number of blocks and different block size to launch kernel at each loop depth
+
+**Part 6: Radix Sort**
+
+![](./img/radix-s.png)
+
+Based on part7 (optimized work efficient scan). Deal with one bit a time, use parallel scan to put numbers with zeros before numbers with ones. Generate prefix scan with zero array. If current bit is zero, then this bit's position is indicated by the scaned array. If current bit is one, then this bit's position equals to zeros and ones ahead of it.
+
+The result of GPU radix sort is compared with std::sort on CPU.
+
+**Part 7: Optimized Work Efficient Scan**
+
+Use shared memory per thread block to reduce global memory access. Every thread loads two elements from global memory, thus shared memory size is the twice of block size. Zip the CPU loop in part 3 into GPU code.
+
+![](./img/wes-up.png)
+
+In up sweep, for each level there is only a certain number of threads that actual do work. Use threadIdx.x to identify these threads, and perform addition on shared memory. This process is similar for down sweep. Don't forget to set shared array's last element to zero. And don't forget to synchronize threads at each tree level.
+
+Process above can only deal with array size less than 2048 (Maximum number of threads in a block is 1024, each thread can process two array elements). For array with arbitrary size, we need to scan each block separately, then merge them. This will create a hierarchy of scan.
+
+![](./img/wes-as.png)
+
+For each level of scan, if the current array size is less or equal to 2*blocksize, then this can be done in one block, otherwise, a new level of scan should be created. To handle memory allocation swiftly and elegantly, I choose to implement a RAII class that can help the scan process. So creating a instance of this class will automatically allocate all the space we need for the whole scan hierarchy, and the malloced space will be automatically freed when the instance dies out.
+
+After implemented shared memory optimization, another problem becomes important: bank conflict.
+
+![](./img/bank conflict.png)
+
+This is because the shared memory is divided into 32 banks (continuous address falls into banks for every four byte word), and in each clock cycle, one bank can only allow one write to the bank. In this case, memory access (especially writes) with a stride greater than 1(two's powers) will suffer from bank write conflicts.
+
+Here I chose to use a xor and bit shift operation `x ^ (x >> 3)` to shuffle the address, in order to reduce conflicts. It can be proven that this function can map [0,2^n] to [0,2^n], and it is bijective. So we don't need to worry about illegal memory access (buffer overflow) after using it.
+
+After shuffling the address, the performance of work efficient scan is improved a bit.
+
 ### Answers to questions:
 
 1. **Roughly optimize the block sizes of each of your implementations for minimal run time on your GPU.**
@@ -47,6 +85,8 @@ CUDA Stream Compaction
 
    Results when n=1<<26:
 
+   ***Optimized Work Efficient Performance running time = Thrust Implementation Running Time x 1.5***
+   
    ```
    ****************
    ** SCAN TESTS **
@@ -130,5 +170,5 @@ CUDA Stream Compaction
       elapsed time: 313.52ms    (CUDA Measured)
        passed
    ```
-
+   
    
