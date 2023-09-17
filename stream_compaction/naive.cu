@@ -39,18 +39,19 @@ namespace StreamCompaction {
 
             size_t arrSize = n * sizeof(int);
             cudaMalloc((void**)&dev_buf1, arrSize);
-            checkCUDAError("cudaMalloc dev_input failed!");
+            checkCUDAError("cudaMalloc dev_buf1 failed!");
             cudaMalloc((void**)&dev_buf2, arrSize);
-            checkCUDAError("cudaMalloc dev_output failed!");
+            checkCUDAError("cudaMalloc dev_buf2 failed!");
 
             cudaMemcpy(dev_buf1, idata, arrSize, cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy idata to dev_buf1 failed!");
 
             timer().startGpuTimer();
-            // TODO
             for (int d = 1; d <= ilog2ceil(n); ++d) {
                 int offset = 1 << (d - 1);
                 kernNaiveScan <<<blocksPerGrid, blockSize>>> (n, offset, dev_buf2, dev_buf1);
-                
+                checkCUDAError("kernNaiveScan failed!");
+
                 // ping-pong buffer to avoid race conditions
                 int* tmp = dev_buf1;
                 dev_buf1 = dev_buf2;
@@ -61,6 +62,7 @@ namespace StreamCompaction {
             // shift inclusive to exclusive scan for compaction
             odata[0] = 0;
             cudaMemcpy(odata + 1, dev_buf1, arrSize, cudaMemcpyDeviceToHost);
+            checkCUDAError("cudaMemcpy odata failed!");
 
             // free memory
             cudaFree(dev_buf2);

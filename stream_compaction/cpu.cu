@@ -19,7 +19,6 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
             int sum = 0;
             for (int i = 0; i < n; ++i) {
                 odata[i] = sum;
@@ -38,7 +37,6 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
             int count = 0;
             for (int i = 0; i < n; ++i) {
                 int val = idata[i];
@@ -59,7 +57,6 @@ namespace StreamCompaction {
             int* temp = new int[n];
 
             timer().startCpuTimer();
-            // TODO
             // Step 1: map
             // map original data array (integer, Light Ray, etc) to a bool array
             for (int i = 0; i < n; ++i) {

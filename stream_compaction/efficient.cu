@@ -12,6 +12,7 @@ namespace StreamCompaction {
             return timer;
         }
 
+        // Performs ONE iteration of up sweep
         __global__ void kernUpSweep(int n, int d, int* data) {
             int index = blockIdx.x * blockDim.x + threadIdx.x;
             if (index >= n) {
@@ -26,6 +27,7 @@ namespace StreamCompaction {
             }
         }
 
+        // Performs ONE iteration of down sweep
         __global__ void kernDownSweep(int n, int d, int *data) {
             int index = blockIdx.x * blockDim.x + threadIdx.x;
             if (index >= n) {
@@ -49,29 +51,40 @@ namespace StreamCompaction {
             int* dev_buf;
 
             int power2 = ilog2ceil(n);
-            int chunkSize = 1 << power2;
+            int chunk = 1 << power2;
 
-            dim3 blocksPerGrid((chunkSize + blockSize - 1) / blockSize);
-            size_t arrSize = chunkSize * sizeof(int);
+            dim3 blocksPerGrid((chunk + blockSize - 1) / blockSize);
+            size_t arrSize = n * sizeof(int);
 
-            cudaMalloc((void**)&dev_buf, arrSize);
+            cudaMalloc((void**)&dev_buf, chunk * sizeof(int));
+            //checkCUDAError("cudaMalloc dev_buf failed!");
+
             cudaMemcpy(dev_buf, idata, arrSize, cudaMemcpyHostToDevice);
+            //checkCUDAError("cudaMemcpy idata to dev_buf failed!");
+            if (chunk > n) {
+                cudaMemset(dev_buf + n, 0, (chunk - n) * sizeof(int));
+                //checkCUDAError("cudaMemset dev_buf[n] failed!");
+            }
 
             timer().startGpuTimer();
-            // TODO
             // Up Sweep
             for (int d = 0; d <= power2-1; ++d) {
-                kernUpSweep <<<blocksPerGrid, blockSize>>> (chunkSize, d, dev_buf);
+                kernUpSweep <<<blocksPerGrid, blockSize>>> (chunk, d, dev_buf);
+                //checkCUDAError("kernUpSweep failed!");
             }
             
             // Down Sweep
-            cudaMemset(dev_buf + chunkSize - 1, 0, sizeof(int)); // set root to zero
+            cudaMemset(dev_buf + chunk - 1, 0, sizeof(int)); // set root to zero
+            //checkCUDAError("cudaMemset dev_buf[chunk-1] failed!");
+
             for (int d = power2-1; d >= 0; --d) {
-                kernDownSweep <<<blocksPerGrid, blockSize>>> (chunkSize, d, dev_buf);
+                kernDownSweep <<<blocksPerGrid, blockSize>>> (chunk, d, dev_buf);
+                //checkCUDAError("kernDownSweep failed!");
             }
             timer().endGpuTimer();
 
             cudaMemcpy(odata, dev_buf, arrSize, cudaMemcpyDeviceToHost);
+            //checkCUDAError("cudaMemcpy odata failed!");
             cudaFree(dev_buf);
         }
 
@@ -84,11 +97,69 @@ namespace StreamCompaction {
          * @param idata  The array of elements to compact.
          * @returns      The number of elements remaining after compaction.
          */
-        int compact(int n, int *odata, const int *idata) {
+        int compact(int n, int *odata, const int *idata) {            
+            int* dev_idata;
+            int* dev_odata;
+            int* dev_bools;
+            int* dev_indices;
+            int count = 0;
+
+            int power2 = ilog2ceil(n);
+            int chunk = 1 << power2;
+
+            dim3 chunkBlocksPerGrid((chunk + blockSize - 1) / blockSize);
+            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+
+            size_t arrSize = n * sizeof(int);
+            cudaMalloc((void**)&dev_idata, arrSize);
+            cudaMalloc((void**)&dev_odata, arrSize);
+            cudaMalloc((void**)&dev_bools, arrSize);
+            cudaMalloc((void**)&dev_indices, chunk * sizeof(int));
+
+            // copy original data to GPU
+            cudaMemcpy(dev_idata, idata, arrSize, cudaMemcpyHostToDevice);
+
             timer().startGpuTimer();
-            // TODO
+            // Step 1: Map
+            Common::kernMapToBoolean << < fullBlocksPerGrid, blockSize >> > (n, dev_bools, dev_idata);
+
+            // Step 2: Scan
+            // copy bool array to index array for in-place operation, still need original bool array later for scatter
+            cudaMemcpy(dev_indices, dev_bools, arrSize, cudaMemcpyDeviceToDevice);
+            if (chunk > n) {
+                cudaMemset(dev_indices + n, 0, (chunk - n) * sizeof(int));
+            }
+
+            // Up Sweep
+            for (int d = 0; d <= power2 - 1; ++d) {
+                kernUpSweep << <chunkBlocksPerGrid, blockSize >> > (chunk, d, dev_indices);
+            }
+
+            // set root to zero
+            cudaMemset(dev_indices + chunk - 1, 0, sizeof(int)); 
+            
+            // Down Sweep
+            for (int d = power2 - 1; d >= 0; --d) {
+                kernDownSweep << <chunkBlocksPerGrid, blockSize >> > (chunk, d, dev_indices);
+            }
+
+            // Step 3: Scatter
+            Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n,
+                    dev_odata, dev_idata, dev_bools, dev_indices);
             timer().endGpuTimer();
-            return -1;
+            
+            // Copy over last elements from GPU to local to return
+            cudaMemcpy(&count, dev_indices + (n - 1), sizeof(int), cudaMemcpyDeviceToHost);
+            count += (int)(idata[n - 1] != 0);
+            cudaMemcpy(odata, dev_odata, arrSize, cudaMemcpyDeviceToHost);
+
+            // free memory
+            cudaFree(dev_idata);
+            cudaFree(dev_odata);
+            cudaFree(dev_bools);
+            cudaFree(dev_indices);
+
+            return count;
         }
     }
 }
