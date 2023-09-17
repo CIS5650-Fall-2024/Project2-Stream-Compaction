@@ -28,15 +28,16 @@ namespace StreamCompaction {
             data[real_i - stride] = t;
         }
         void scanInplace(int n, int* dev_data) {
-            int dMax = ilog2ceil(n), strideMax = 1 << (dMax - 1);
-            int extended_n = 1 << dMax;
+            if (n != 1 << ilog2ceil(n))
+                throw std::runtime_error("n is not pow of 2");
+            int strideMax = n >> 1;
             dim3 fullBlocksPerGrid;
             for (int i = 1, int n = strideMax; i < strideMax; i <<= 1, n >>= 1)
             {
                 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
                 kernUpSweep << <fullBlocksPerGrid, blockSize >> > (n, dev_data, i);
             }
-            cudaMemset(&dev_data[extended_n - 1], 0, sizeof(int));
+            cudaMemset(&dev_data[n - 1], 0, sizeof(int));
             for (int i = strideMax, int n = 1; i >= 1; i >>= 1, n <<= 1)
             {
                 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
@@ -56,7 +57,7 @@ namespace StreamCompaction {
             cudaMemcpy(dev_data, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             timer().startGpuTimer();
             // DONE
-            scanInplace(n, dev_data);
+            scanInplace(extended_n, dev_data);
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_data, sizeof(int) * n, cudaMemcpyDeviceToHost);
             cudaFree(dev_data);
