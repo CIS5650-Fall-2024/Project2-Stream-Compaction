@@ -52,7 +52,7 @@ The efficient GPU implementation ran faster than the CPU version, which is as ex
 
 The thrust implementation was significantly faster than any of the other implementations. This is likely due to the use of local shared memory rather than global memory combined with other optimizations by NVIDIA.
 
-## Stream Compaction
+### Stream Compaction
 
 The stream compaction algorithms(CPU with and without scan, GPU work efficient) were compared in a similar manner, by varying the array sizes. For powers of 2 array sizes, the following data was obtained:
 
@@ -64,7 +64,7 @@ And once again for non power of 2 array sizes(2^x - 3), this was the resulting g
 
 These results were as expected, with the CPU with scan performing the worst, then CPU with scan, then the GPU version. The CPU with scan performs additional operations in creating a filter map, running a scan, then constructing the final result. This requires about 3 passes over an array of size `n` In contrast, the CPU version without scan directly tracks the index while filtering through the input array in a single pass, which only requires a single pass. The GPU work-efficient version does still construct the filter map and performs a scan, as otherwise individual GPU threads cannot communicate about the resulting array index of the elements. However, the parallelization of the GPU significantly speeds up each step, which results in an overall reduced runtime. The CPU variants, bottlenecked by the CPU clock speed in its serial execution, hence performs worse.
 
-## Thrust Nsight Analysis
+### Thrust Nsight Analysis
 
 The following Nsight trace was run on a thrust function call on an array of size 2^28. All other tests were disabled to isolate this test case
 
