@@ -3,7 +3,7 @@
 #include "common.h"
 #include "naive.h"
 
-#define BLOCK_SIZE 128
+#define BLOCK_SIZE 32
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;

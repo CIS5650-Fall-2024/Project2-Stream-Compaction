@@ -2,7 +2,7 @@
 #include <cuda_runtime.h>
 #include "common.h"
 #include "efficient.h"
-#define BLOCK_SIZE 1024
+#define BLOCK_SIZE 512
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
@@ -30,16 +30,6 @@ namespace StreamCompaction {
             int tmp = array[k + two_d - 1];
             array[k + two_d - 1] = array[k + two_d_plus_1 - 1];
             array[k + two_d_plus_1 - 1] += tmp;
-        }
-
-        __global__ void kernCompact(int N, int* prefix, int* input, int* output)
-        {
-            int index = blockIdx.x * blockDim.x + threadIdx.x;
-            if (index >= N) return;
-            if (input[index])
-            {
-                output[prefix[index]] = input[index];
-            }
         }
 
         /**
@@ -121,7 +111,7 @@ namespace StreamCompaction {
                 int numBlocks = (numThreads + BLOCK_SIZE - 1) / BLOCK_SIZE;
                 kernDownSweep << <numBlocks, BLOCK_SIZE >> > (numThreads, dev2, two_d_plus_1);
             }
-            kernCompact << <(n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE >> > (n, dev2, dev1, dev3);
+            Common::kernScatter << <(n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE >> > (n, dev2, dev1, dev3, true);
             timer().endGpuTimer();
             nvtxRangePop();
             int excnt;
