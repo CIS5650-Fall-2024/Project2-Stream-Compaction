@@ -1,7 +1,7 @@
 #include <cstdio>
 #include "cpu.h"
-
 #include "common.h"
+#include <vector>
 
 namespace StreamCompaction {
     namespace CPU {
@@ -73,6 +73,15 @@ namespace StreamCompaction {
             delete[] s;
             timer().endCpuTimer();
             return count;
+        }
+
+        void sort(int n, int* odata, int* idata) {
+            timer().startCpuTimer();
+            // std::vector<int> vec();
+            std::sort(idata, idata + n);
+            memcpy(odata, idata, sizeof(int) * n);
+            
+            timer().endCpuTimer();
         }
     }
 }

@@ -30,6 +30,17 @@ namespace StreamCompaction {
         }
 
         /**
+         * Maps an array to an array according to ith bit value for stream compaction.
+         */
+        __global__ void kernMapBitToBoolean(int n, int i, int *bools, int* ebools, const int *idata) {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index < n) {
+                bools[index] = ((idata[index] >> i) & 1);
+                ebools[index] = !((idata[index] >> i) & 1);
+            }
+        }
+
+        /**
          * Performs scatter on an array. That is, for each element in idata,
          * if bools[idx] == 1, it copies idata[idx] to odata[indices[idx]].
          */
@@ -41,5 +52,28 @@ namespace StreamCompaction {
             }
         }
 
+        __global__ void kernFixedScatter(int n, int* odata,
+            const int* idata,  const int* indices) {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index < n) {
+                odata[indices[index]] = idata[index];
+            }
+        }
+
+        //__global__ void kernReverseBoolean(int n, int* ebools, const int* bools)
+        //{
+        //    int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+        //    if (index < n) {
+        //        ebools[index] = (bools[index] == 0);
+        //    }
+        //}
+
+        __global__ void kernOrderCheck(int n, const int* data, int* sign)
+        {
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index < n - 1 && data[index] > data[index + 1]) {
+                sign[0] = -1;
+            }
+        }
     }
 }

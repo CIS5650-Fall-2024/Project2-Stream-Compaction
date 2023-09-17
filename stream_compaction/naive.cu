@@ -31,6 +31,8 @@ namespace StreamCompaction {
             }
         }
 
+        const int blockSize = 64;
+
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
@@ -45,7 +47,6 @@ namespace StreamCompaction {
             checkCUDAError("cudaMemcpy idata -> dev_idata failed!");
 
             timer().startGpuTimer();
-            const int blockSize = 16;
             dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
             for (int i = 1; i <= ilog2ceil(n); i++) {
                 scanLine << <fullBlocksPerGrid, blockSize >> > (n, i - 1, dev_odata, dev_idata);
