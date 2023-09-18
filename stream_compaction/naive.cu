@@ -3,10 +3,11 @@
 #include "common.h"
 #include "naive.h"
 
-static int blockSize = 256;
+static int blockSize = 128;
 
 namespace StreamCompaction {
     namespace Naive {
+        
         using StreamCompaction::Common::PerformanceTimer;
         PerformanceTimer& timer()
         {
@@ -30,7 +31,7 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
+            
             // TODO
             //initialize
             int* dev_ping;
@@ -47,6 +48,9 @@ namespace StreamCompaction {
             dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
             int layerCnt = ilog2ceil(n);
             int offset = 1;
+
+            timer().startGpuTimer();
+
             for (int i = 0;i < layerCnt;++i) {
                 if (i % 2 == 0) {
                     dev_in = dev_ping;
@@ -59,6 +63,8 @@ namespace StreamCompaction {
                 offset *= 2;
             }
 
+            timer().endGpuTimer();
+
             //exclusive scan
             cudaMemcpy(odata + 1, dev_out, sizeof(int) * (n-1), cudaMemcpyDeviceToHost);
             if(n>0)odata[0] = 0;
@@ -66,7 +72,7 @@ namespace StreamCompaction {
             cudaFree(dev_ping);
             cudaFree(dev_pong);
 
-            timer().endGpuTimer();
+            
         }
     }
 }

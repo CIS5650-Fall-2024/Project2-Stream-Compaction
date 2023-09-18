@@ -28,8 +28,10 @@ namespace StreamCompaction {
         }
 
         void sort(int n, int* odata, const int* idata) {
-            timer().startCpuTimer();
+            
             memcpy(odata, idata, sizeof(int) * n);
+
+            timer().startCpuTimer();
             std::sort(odata, odata + n);
             timer().endCpuTimer();
         }
