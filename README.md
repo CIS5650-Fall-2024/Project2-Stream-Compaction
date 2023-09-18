@@ -125,28 +125,28 @@ Note for work-efficient compact, there is still some malloc and free calculated 
       [   0  27  62  97 137 157 163 176 210 246 261 308 312 ... -2015767115 -2015767102 ]
       passed
   ==== naive scan, power-of-two ====
-    elapsed time: 351.297ms    (CUDA Measured)
+    elapsed time: 280.021ms    (CUDA Measured)
       passed
   ==== naive scan, non-power-of-two ====
-    elapsed time: 354.929ms    (CUDA Measured)
+    elapsed time: 280.801ms    (CUDA Measured)
       passed
   ==== work-efficient scan, power-of-two ====
-    elapsed time: 114.791ms    (CUDA Measured)
+    elapsed time: 94.5782ms    (CUDA Measured)
       passed
   ==== work-efficient scan, non-power-of-two ====
-    elapsed time: 115.623ms    (CUDA Measured)
+    elapsed time: 94.4707ms    (CUDA Measured)
       passed
   ==== thrust scan, power-of-two ====
-    elapsed time: 13.0284ms    (CUDA Measured)
+    elapsed time: 11.0101ms    (CUDA Measured)
       passed
   ==== thrust scan, non-power-of-two ====
-    elapsed time: 13.8476ms    (CUDA Measured)
+    elapsed time: 10.5656ms    (CUDA Measured)
       passed
   ==== work-efficient scan with shared memory, power-of-two ====
-    elapsed time: 24.5953ms    (CUDA Measured)
+    elapsed time: 18.8852ms    (CUDA Measured)
       passed
   ==== work-efficient scan with shared memory, non-power-of-two ====
-    elapsed time: 20.9521ms    (CUDA Measured)
+    elapsed time: 19.1417ms    (CUDA Measured)
       passed
 
   *****************************
@@ -154,15 +154,15 @@ Note for work-efficient compact, there is still some malloc and free calculated 
   *****************************
       [   2   3   2   2   1   0   3   2   2   1   0   2   3 ...   0   0 ]
   ==== cpu compact without scan, power-of-two ====
-    elapsed time: 556.411ms    (std::chrono Measured)
+    elapsed time: 518.492ms    (std::chrono Measured)
       [   2   3   2   2   1   3   2   2   1   2   3   3   3 ...   3   3 ]
       passed
   ==== cpu compact without scan, non-power-of-two ====
-    elapsed time: 556.69ms    (std::chrono Measured)
+    elapsed time: 527.604ms    (std::chrono Measured)
       [   2   3   2   2   1   3   2   2   1   2   3   3   3 ...   2   3 ]
       passed
   ==== cpu compact with scan ====
-    elapsed time: 1373.64ms    (std::chrono Measured)
+    elapsed time: 1249.16ms    (std::chrono Measured)
       [   2   3   2   2   1   3   2   2   1   2   3   3   3 ...   3   3 ]
       passed
   ==== work-efficient compact, power-of-two ====

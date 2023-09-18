@@ -3,8 +3,6 @@
 #include "common.h"
 #include "naive.h"
 
-#include <iostream>
-
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;
@@ -59,7 +57,7 @@ namespace StreamCompaction {
             int max_d = ilog2ceil(n);
             // TODO
             for (int d = 1; d <= max_d; ++d) {
-                kernNaiveScan<<<gridSize, curBlockSize >>>(n, pow(2, d - 1), x, last);
+                kernNaiveScan<<<gridSize, curBlockSize >>>(n, 1 << (d - 1), x, last);
 				std::swap(x, last);
 			}
 
