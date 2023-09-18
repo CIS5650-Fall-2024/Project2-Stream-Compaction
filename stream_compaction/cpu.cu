@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <algorithm>
 #include "cpu.h"
 
 #include "common.h"
@@ -17,9 +18,14 @@ namespace StreamCompaction {
          * For performance analysis, this is supposed to be a simple for loop.
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
          */
-        void scan(int n, int *odata, const int *idata) {
+        void scan(int n, int* odata, const int* idata) {
             timer().startCpuTimer();
             // TODO
+            odata[0] = 0;
+            for (int i = 1; i < n; i++)
+            {
+                odata[i] = odata[i - 1] + idata[i - 1];
+            }
             timer().endCpuTimer();
         }
 
@@ -28,11 +34,16 @@ namespace StreamCompaction {
          *
          * @returns the number of elements remaining after compaction.
          */
-        int compactWithoutScan(int n, int *odata, const int *idata) {
+        int compactWithoutScan(int n, int* odata, const int* idata) {
             timer().startCpuTimer();
             // TODO
+            int j = 0;
+            for (int i = 0; i < n; i++)
+            {
+                if (idata[i]) odata[j++] = idata[i];
+            }
             timer().endCpuTimer();
-            return -1;
+            return j;
         }
 
         /**
@@ -40,11 +51,38 @@ namespace StreamCompaction {
          *
          * @returns the number of elements remaining after compaction.
          */
-        int compactWithScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
+        int compactWithScan(int n, int* odata, const int* idata) {
+
             // TODO
+            int* tmp1 = new int[n], * tmp2 = new int[n];
+            timer().startCpuTimer();
+            for (int i = 0; i < n; i++)
+                tmp1[i] = !!(idata[i]);
+            tmp2[0] = 0;
+            for (int i = 1; i < n; i++)
+            {
+                tmp2[i] = tmp2[i - 1] + tmp1[i - 1];
+            }
+            int cnt = tmp2[n - 1] + tmp1[n - 1];
+            for (int i = 0; i < n; i++)
+            {
+                if (idata[i])
+                {
+                    odata[tmp2[i]] = idata[i];
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            delete[] tmp1;
+            delete[] tmp2;
+
+            return cnt;
+        }
+
+        void sort(int n, int* odata, const int* idata) {
+            memcpy(odata, idata, n * sizeof(int));
+            timer().startCpuTimer();
+            std::sort(odata, odata + n);
+            timer().endCpuTimer();
         }
     }
 }
