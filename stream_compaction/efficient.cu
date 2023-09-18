@@ -61,11 +61,14 @@ namespace StreamCompaction {
             cudaMemcpy(dev_idata, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             checkCUDAError("cudaMemcpy dev_idata failed");
 
+            // Pad end elements with 0
+            // For me this was not required and the "unset" elements were automatically defaulting to 0
+            // But some compilers may throw this off so I'll just manually do the padding
+            cudaMemset(&dev_idata[n], 0, sizeof(int) * (nNextPowerOf2 - n));
+            checkCUDAError("cudaMemset dev_idata failed");
 
             timer().startGpuTimer();
-            // TODO
             // upsweep
-
             for (int d = 0; d < max; d++)
             {
                 kernelUpSweep<<<totalBlocks, BLOCK_SIZE>>>(nNextPowerOf2, dev_idata, d);
