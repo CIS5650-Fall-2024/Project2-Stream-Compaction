@@ -33,6 +33,16 @@ namespace StreamCompaction {
             timer().endCpuTimer();
         }
 
+        void sort(int n, int* odata, const int* idata) {
+            memcpy(odata, idata, n * sizeof(int));
+
+            timer().startCpuTimer();
+
+			std::sort(odata, odata + n);
+
+			timer().endCpuTimer();
+        }
+
         /**
          * CPU stream compaction without using the scan function.
          *

@@ -48,7 +48,7 @@ namespace StreamCompaction {
             x[right] += t;
         }
 
-        __global__ void kernPreScan(int n, int* sums, int* odata, int* idata) {
+        __global__ void kernScanShared(int n, int* sums, int* odata, int* idata) {
             extern __shared__ int temp[];
 
             int curBlockSize = n < TWICE_ELEMENTS_PER_BLOCK ? n : TWICE_ELEMENTS_PER_BLOCK;
@@ -120,12 +120,28 @@ namespace StreamCompaction {
             }
         }
 
-        void preScanHelper(int n, int depth, int* odata, int* idata) {
+        void createSumArr(int depth, int next_power_of_two) {
+            sumArr = (int**)malloc(sizeof(int*) * depth);
+            int blockCnt = (int)ceil((float)next_power_of_two / (float)TWICE_ELEMENTS_PER_BLOCK);
+            for (int i = 0; i < depth; ++i) {
+                cudaMalloc((void**)&(sumArr[i]), blockCnt * sizeof(int));
+                blockCnt = (int)ceil((float)blockCnt / (float)TWICE_ELEMENTS_PER_BLOCK);
+            }
+        }
+
+        void freeSumArr(int depth) {
+            for (int i = 0; i < depth; ++i) {
+                cudaFree(sumArr[i]);
+            }
+            free(sumArr);
+        }
+
+        void scanSharedHelper(int n, int depth, int* odata, int* idata) {
             int blockCnt = (int)ceil((float)n / (float)TWICE_ELEMENTS_PER_BLOCK);
 
-            kernPreScan << <blockCnt, ELEMENTS_PER_BLOCK, TWICE_ELEMENTS_PER_BLOCK * sizeof(int) >> > (n, sumArr[depth], odata, idata);
+            kernScanShared << <blockCnt, ELEMENTS_PER_BLOCK, TWICE_ELEMENTS_PER_BLOCK * sizeof(int) >> > (n, sumArr[depth], odata, idata);
             if (blockCnt > 1) {
-                preScanHelper(blockCnt, depth + 1, sumArr[depth], sumArr[depth]);
+                scanSharedHelper(blockCnt, depth + 1, sumArr[depth], sumArr[depth]);
 				kernAdd << <blockCnt, ELEMENTS_PER_BLOCK >> > (n, odata, sumArr[depth]);
             }
         }
@@ -139,17 +155,11 @@ namespace StreamCompaction {
             cudaMalloc((void**)&out, n * sizeof(int));
             cudaMemcpy(in, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
-            sumArr = (int**)malloc(sizeof(int*) * max_d);
-
-            int blockCnt = (int)ceil((float)next_power_of_two / (float)TWICE_ELEMENTS_PER_BLOCK);
-            for (int i = 0; i < max_d; ++i) {
-				cudaMalloc((void**)&(sumArr[i]), blockCnt * sizeof(int));
-                blockCnt = (int)ceil((float)blockCnt / (float)TWICE_ELEMENTS_PER_BLOCK);
-			}
+            createSumArr(max_d, next_power_of_two);
 
             timer().startGpuTimer();
 
-            preScanHelper(next_power_of_two, 0, out, in);
+            scanSharedHelper(next_power_of_two, 0, out, in);
 
             timer().endGpuTimer();
 
@@ -157,11 +167,7 @@ namespace StreamCompaction {
             cudaFree(in);
             cudaFree(out);
 
-            for (int i = 0; i < max_d; ++i) {
-				cudaFree(sumArr[i]);
-			}
-
-            free(sumArr);
+            freeSumArr(max_d);
         }
 
         /**

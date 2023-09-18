@@ -18,7 +18,8 @@ Here is the list of features this project implemented:
 3. Work-Efficient exclusive scan and stream compaction implementation performed on  GPU. 
 4. [Extra Credit] Try to optimize work-efficient exclusive scan by modifying blockSize, gridSize and internal visit.
 5. Thrust exclusive scan wrapper performed on GPU.
-6. [Extra Credit] Optmized work-efficient exclusive scan using shared memory implementation.
+6. [Extra Credit] Radix sort on GPU.
+7. [Extra Credit] Optmized work-efficient exclusive scan using shared memory implementation.
 
 
 ## Results
@@ -30,11 +31,15 @@ Here are screenshots for performance of all algorithm with array size n = 1<<8 a
 
 ![](res/res_2^8_compact.png)
 
+![](res/res_2^8_radix.png)
+
 <center>Screenshot 2: Test result with array size = 1 << 28</center>
 
 ![](res/res_2^28.png)
 
 ![](res/res_2^28_compact.png)
+
+![](res/res_2^28_radix.png)
 
 There is also a NSight Analysis for the time and memory operation for each method with two tests since it directly call scan() function.
 
@@ -170,5 +175,24 @@ Note for work-efficient compact, there is still some malloc and free calculated 
       passed
   ==== work-efficient compact, non-power-of-two ====
     elapsed time: 117.638ms    (CUDA Measured)
+      passed
+
+  **********************
+  ** RADIX SORT TESTS **
+  **********************
+      [  45  12  33  20  35  10  39  37  19   7  11   9  15 ...  37   0 ]
+  ==== cpu sort, power-of-two ====
+    elapsed time: 4139.96ms    (std::chrono)
+      passed
+  ==== radix sort, power-of-two ====
+    elapsed time: 337.48ms    (CUDA Measured)
+      passed
+  ==== cpu sort, non-power-of-two ====
+    elapsed time: 4099.12ms    (std::chrono)
+      [   0   0   0   0   0   0   0   0   0   0   0   0   0 ...  49  49 ]
+      passed
+  ==== radix sort, non-power-of-two ====
+    elapsed time: 337.146ms    (CUDA Measured)
+      [   0   0   0   0   0   0   0   0   0   0   0   0   0 ...  49  49 ]
       passed
   ```
