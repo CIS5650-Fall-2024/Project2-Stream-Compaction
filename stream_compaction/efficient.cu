@@ -47,25 +47,7 @@ namespace StreamCompaction {
             odata[index + (int)powf(2, d + 1) - 1] += t;
         }
 
-        __global__ void kernCompact(int n, int* idata, int* odata) {
-            int index = threadIdx.x + (blockIdx.x * blockDim.x);
-            if (index >= n) {
-                return;
-            }
-            odata[index] = (idata[index] == 0) ? 0 : 1;
-        }
 
-
-        __global__ void compactKernel(int n, const int* idata, const int* scan, int* odata, const int* temp) {
-            int index = blockIdx.x * blockDim.x + threadIdx.x;
-            if (index >= n) {
-                return;
-            }
-            if (temp[index] != 0) {
-                odata[scan[index]] = idata[index];
-            }
-
-        }
 
 
         /**
@@ -136,32 +118,32 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
-            int* device_A, * device_B, * device_Binary, * device_scan;
+            int* device_idata, * device_odata, * device_bool, * device_scan;
 
             int paddedSize = nextPowerOf2(n);
-            cudaMalloc((void**)&device_A, paddedSize * sizeof(int));
-            checkCUDAError("cudaMalloc device_A failed!");
-            cudaMalloc((void**)&device_B, paddedSize * sizeof(int));
-            checkCUDAError("cudaMalloc device_B failed!");
-            cudaMalloc((void**)&device_Binary, paddedSize * sizeof(int));
-            checkCUDAError("cudaMalloc device_Binary failed!");
+            cudaMalloc((void**)&device_idata, paddedSize * sizeof(int));
+            checkCUDAError("cudaMalloc device_idata failed!");
+            cudaMalloc((void**)&device_odata, paddedSize * sizeof(int));
+            checkCUDAError("cudaMalloc device_odata failed!");
+            cudaMalloc((void**)&device_bool, paddedSize * sizeof(int));
+            checkCUDAError("cudaMalloc device_bool failed!");
             cudaMalloc((void**)&device_scan, paddedSize * sizeof(int));
-            checkCUDAError("cudaMalloc device_Binary failed!");
+            checkCUDAError("cudaMalloc device_scan failed!");
 
-            cudaMemcpy(device_A, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-            checkCUDAError("cudaMemcpy cudaMemcpyHostToDevice device_A to idata failed!");
+            cudaMemcpy(device_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy cudaMemcpyHostToDevice device_idata to idata failed!");
 
 
-            cudaMemset(device_A + n, 0, (paddedSize - n) * sizeof(int));
-            checkCUDAError("device_A cudaMemset failed!");
+            cudaMemset(device_idata + n, 0, (paddedSize - n) * sizeof(int));
+            checkCUDAError("device_idata cudaMemset failed!");
             cudaMemset(device_scan + n, 0, (paddedSize - n) * sizeof(int));
-            checkCUDAError("device_Binary cudaMemset failed!");
+            checkCUDAError("device_scan cudaMemset failed!");
 
             dim3 blocksPerGrid((paddedSize + BlockSize - 1) / BlockSize);
 
             timer().startGpuTimer();
-            kernCompact << <blocksPerGrid, BlockSize >> > (n, device_A, device_Binary);
-            kernUpCopy << <blocksPerGrid, BlockSize >> > (n, device_Binary, device_scan);
+            StreamCompaction::Common::kernMapToBoolean << <blocksPerGrid, BlockSize >> > (n, device_bool, device_idata);
+            kernUpCopy << <blocksPerGrid, BlockSize >> > (n, device_bool, device_scan);
 
 
             for (int d = 0; d <= ilog2ceil(paddedSize) - 1; d++) { //Upsweep
@@ -174,20 +156,20 @@ namespace StreamCompaction {
                 kernDownSweep << <blocksPerGrid, BlockSize >> > (paddedSize, device_scan, d);
             }
 
-            compactKernel << <blocksPerGrid, BlockSize >> > (paddedSize, device_A, device_scan, device_B, device_Binary);
+            StreamCompaction::Common::kernScatter << <blocksPerGrid, BlockSize >> > (paddedSize, device_odata, device_idata, device_bool, device_scan);
             timer().endGpuTimer();
 
-            cudaMemcpy(odata, device_B, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(odata, device_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
             int finalSize;
             cudaMemcpy(&finalSize, device_scan + paddedSize - 1, sizeof(int), cudaMemcpyDeviceToHost);
-            checkCUDAError("cudaMemcpy cudaMemcpyDeviceToHost odata to device_A failed!");
+            checkCUDAError("cudaMemcpy cudaMemcpyDeviceToHost odata to device_idata failed!");
 
-            cudaFree(device_A);
-            checkCUDAError("cudaFree device_A failed!");
-            cudaFree(device_B);
-            checkCUDAError("cudaFree device_B failed!");
-            cudaFree(device_Binary);
-            checkCUDAError("cudaFree device_Binary failed!");
+            cudaFree(device_idata);
+            checkCUDAError("cudaFree device_idata failed!");
+            cudaFree(device_odata);
+            checkCUDAError("cudaFree device_odata failed!");
+            cudaFree(device_bool);
+            checkCUDAError("cudaFree device_bool failed!");
             cudaFree(device_scan);
             checkCUDAError("cudaFree device_scan failed!");
             return finalSize;
