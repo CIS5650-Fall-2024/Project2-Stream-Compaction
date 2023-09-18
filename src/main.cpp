@@ -13,11 +13,13 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 28; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
 int *c = new int[SIZE];
+
+# define NOTESTTHRUST 1
 
 int main(int argc, char* argv[]) {
     // Scan tests
@@ -46,6 +48,8 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     printArray(NPOT, b, true);
     printCmpResult(NPOT, b, c);
+
+#if NOTESTTHRUST
 
     zeroArray(SIZE, c);
     printDesc("naive scan, power-of-two");
@@ -81,6 +85,8 @@ int main(int argc, char* argv[]) {
     //printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
 
+#endif
+
     zeroArray(SIZE, c);
     printDesc("thrust scan, power-of-two");
     StreamCompaction::Thrust::scan(SIZE, c, a);
@@ -94,6 +100,8 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
+
+#if NOTESTTHRUST
 
     printf("\n");
     printf("*****************************\n");
@@ -146,6 +154,26 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
+
+    printf("\n");
+    printf("*****************************\n");
+    printf("** RADIX SORT TESTS **\n");
+    printf("*****************************\n");
+
+    // Radixsort tests
+
+    genArray(SIZE - 1, a, 20);  // Leave a 0 at the end to test that edge case
+    printArray(SIZE, a, true);
+
+    zeroArray(SIZE, b);
+    printDesc("Radix Sort");
+    StreamCompaction::Efficient::radixSort(SIZE, b, a);
+    std::sort(a, a + SIZE);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(SIZE, a, true);
+    printCmpResult(NPOT, a, b);  
+
+#endif
 
     system("pause"); // stop Win32 console from closing on exit
     delete[] a;

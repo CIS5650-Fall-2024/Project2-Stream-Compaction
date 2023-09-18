@@ -3,6 +3,8 @@
 
 #include "common.h"
 
+int gNonCompact = 1;
+
 namespace StreamCompaction {
     namespace CPU {
         using StreamCompaction::Common::PerformanceTimer;
@@ -18,9 +20,16 @@ namespace StreamCompaction {
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
+            if(gNonCompact)
+                timer().startCpuTimer();
             // TODO
-            timer().endCpuTimer();
+            odata[0] = 0;
+            for (int i = 1; i < n; i++) 
+            {
+                odata[i] = odata[i - 1] + idata[i - 1];
+            }
+            if(gNonCompact)
+                timer().endCpuTimer();
         }
 
         /**
@@ -29,10 +38,19 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
+            //timer().startCpuTimer();
             // TODO
-            timer().endCpuTimer();
-            return -1;
+            int count = 0;
+            for (int i = 0; i < n; i++) 
+            {
+                if (idata[i] != 0) 
+                {
+                    odata[count] = idata[i];
+                    count++;
+                }
+            }
+            //timer().endCpuTimer();
+            return count;
         }
 
         /**
@@ -41,10 +59,30 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            gNonCompact = 0;
             timer().startCpuTimer();
             // TODO
+            // Step1: map
+            int* boolmap = new int[n];
+            for (int i = 0; i < n; i++) 
+            {
+                boolmap[i] = (idata[i] != 0 ? 1 : 0);
+            }
+            // Step2: scan
+            scan(n, odata, boolmap);        
+            int count = odata[n - 1];
+            // Step3: scatter
+            for (int k = 0; k < n; k++)
+            {
+                if (boolmap[k] != 0) 
+                {
+                    odata[odata[k]] = idata[k];
+                }
+            }
+            delete[] boolmap;
+
             timer().endCpuTimer();
-            return -1;
+            return count;
         }
     }
 }
