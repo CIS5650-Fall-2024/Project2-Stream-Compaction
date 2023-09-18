@@ -99,9 +99,6 @@ namespace StreamCompaction {
 
             
             cudaMemcpy(odata, device_A, n * sizeof(int), cudaMemcpyDeviceToHost);
-            
-
-
             checkCUDAError("cudaMemcpy cudaMemcpyDeviceToHost odata to device_A failed!");
 
             cudaFree(device_A);
