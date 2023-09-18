@@ -39,6 +39,9 @@ namespace StreamCompaction {
       timer().endGpuTimer();
       cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
       checkCUDAError("failed to copy dev_idata to odata");
+      cudaFree(dev_odata);
+      cudaFree(dev_idata);
+      checkCUDAError("cudaFree failed");
     }
 
     __global__ void scan_single_aggregate(int n, int* odata, const int* idata, int offset) {
