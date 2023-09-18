@@ -8,7 +8,7 @@ CUDA Stream Compaction
 * Tested on: Windows 10, i7-9750H @ 2.60GHz, 16GB RAM, GTX 1650 Max-Q 4096MB (personal laptop)
   * SM 7.5
 
-### Project 2: Stream Compaction
+# Project 2: Stream Compaction
 
 This project involved the implementation and analysis of several parallel GPU algorithms in CUDA. This included the scan and stream compaction algorithms.
 
@@ -34,7 +34,7 @@ The same procedure was run on a non power of 2 array size of 2^26 - 3, with the 
 
 ![](img/npo2_block_size.jpg)
 
-Past a block size of 64, it seems that no further runtime improvements can be observed. This is likely due to the blocks being big enough for the GPU to fully leverage its parallelism, having enough threads at any given moment to run. Thus, going forward, any performance analysis will be done at a block size of 128.
+Past a block size of 64, it seems that no further runtime improvements can be observed. This is likely as each SM on the GPU is able to maximize its warp load with the total threads housed(block size * block count). At values below 64 however, the performance drops. This could be due to the maximum blocks per SM limit causing the warp load of each SM to decrease as less total threads are housed in each SM. Furthermore, this analysis only utilizes block sizes that are powers of 2 as to fully maximize threads per SM(max thread count divisible by block size), but between these powers of 2 there could be decreased performance due to nondivisible block size and hence less threads per SM(and thus less warp load). Thus, going forward, any performance analysis will be done at a block size of 128.
 
 ### Scan
 
