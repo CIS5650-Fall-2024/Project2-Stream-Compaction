@@ -50,19 +50,25 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            int* mask = new int[n];
+            int* bools = new int[n];
             for (int i = 0; i < n; i++) {
-                mask[i] = idata[i] ? 1 : 0;
+                bools[i] = idata[i] ? 1 : 0;
             }
-            int* idx = new int[n];
-            scan(n, idx, mask);
+            int* indices = new int[n];
+            indices[0] = 0;
+            for (int i = 1; i < n; i++) {
+                indices[i] = indices[i - 1] + bools[i - 1];
+            }
             for (int i = 0; i < n; i++) {
-                if (idata[i]) {
-                    odata[idx[i]] = idata[i];
+                if (bools[i]) {
+                    odata[indices[i]] = idata[i];
                 }
             }
+            int count = bools[n - 1] + indices[n - 1];
+            delete[] bools;
+            delete[] indices;
             timer().endCpuTimer();
-            return idata[n - 1] ? idx[n - 1] + 1 : idx[n - 1];
+            return count;
         }
     }
 }
