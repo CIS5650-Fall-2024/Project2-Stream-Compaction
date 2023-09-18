@@ -12,9 +12,9 @@ namespace StreamCompaction {
             std::vector<int> sizes;
             std::vector<int> offsets;
         public:
-            devDataBuffer(int n, int blockSize, int minSize) :totalSize(0), size_(0) {
+            devDataBuffer(int n, int blockSize) :totalSize(0), size_(0) {
                 int extendedSize = BLOCKSPERGRID(n, blockSize) * blockSize;
-                while (extendedSize > minSize) {
+                while (extendedSize > 1) {
                     if (extendedSize < blockSize) {
                         break;
                     }

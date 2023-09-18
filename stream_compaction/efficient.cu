@@ -170,7 +170,7 @@ namespace StreamCompaction {
                 scan(n, odata, idata);
                 return;
             }
-            devDataBuffer buffer(extended_n, blockSize, 1);
+            devDataBuffer buffer(extended_n, blockSize);
             cudaMemcpy(buffer.data(), idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             timer().startGpuTimer();
             int i = 0;
