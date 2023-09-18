@@ -41,23 +41,29 @@ namespace StreamCompaction {
             if (index >= n) {
                 return;
             }
-            
-            int k = 0;
-            if (idata[index] != 0) {
-                odata[index] = k;
-                k++;
-            }
+            odata[index] = (idata[index] == 0) ? 0 : 1;
         }
 
-        __global__ void kernScatter(int n, int* odata) {
-            int index = threadIdx.x + (blockIdx.x * blockDim.x);
+        __global__ void kernScan(int n, int* scan, int* temp) {
+            int index = threadIdx.x + blockIdx.x * blockDim.x;
             if (index >= n) {
                 return;
             }
 
-         
+            scan[index] = (index > 0) ? scan[index - 1] + temp[index - 1] : 0;
+        }
+
+        __global__ void compactKernel(int n, const int* idata, const int* scan, int* odata, const int* temp) {
+            int index = blockIdx.x * blockDim.x + threadIdx.x;
+            if (index >= n) {
+                return;
+            }
+            if (temp[index] != 0) {
+                odata[scan[index]] = idata[index];
+            }
 
         }
+
 
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
@@ -127,13 +133,16 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
-            int* device_A;
-            int* device_Binary;
+            int* device_A, * device_B, * device_Binary, * device_scan;
 
             int paddedSize = nextPowerOf2(n);
             cudaMalloc((void**)&device_A, paddedSize * sizeof(int));
             checkCUDAError("cudaMalloc device_A failed!");
+            cudaMalloc((void**)&device_B, paddedSize * sizeof(int));
+            checkCUDAError("cudaMalloc device_B failed!");
             cudaMalloc((void**)&device_Binary, paddedSize * sizeof(int));
+            checkCUDAError("cudaMalloc device_Binary failed!");
+            cudaMalloc((void**)&device_scan, paddedSize * sizeof(int));
             checkCUDAError("cudaMalloc device_Binary failed!");
 
             cudaMemcpy(device_A, idata, n * sizeof(int), cudaMemcpyHostToDevice);
@@ -159,10 +168,11 @@ namespace StreamCompaction {
                 kernDownSweep << <blocksPerGrid, BlockSize >> > (paddedSize, device_A, d);
             }
             kernCompact << <blocksPerGrid, BlockSize >> > (paddedSize, device_A, device_Binary);
-
+            kernScan << <blocksPerGrid, BlockSize >> > (paddedSize, device_scan, device_Binary);
+            compactKernel << <blocksPerGrid, BlockSize >> > (paddedSize, device_A, device_scan, device_B, device_Binary);
             timer().endGpuTimer();
 
-            cudaMemcpy(odata, device_Binary, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(odata, device_scan, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             for (int i = 0; i < n; i++) {
                 printf("%d ", odata[i]);
@@ -173,6 +183,12 @@ namespace StreamCompaction {
 
             cudaFree(device_A);
             checkCUDAError("cudaFree device_A failed!");
+            cudaFree(device_B);
+            checkCUDAError("cudaFree device_B failed!");
+            cudaFree(device_Binary);
+            checkCUDAError("cudaFree device_Binary failed!");
+            cudaFree(device_scan);
+            checkCUDAError("cudaFree device_scan failed!");
             return -1;
         }
     }

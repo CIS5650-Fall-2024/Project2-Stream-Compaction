@@ -67,7 +67,6 @@ namespace StreamCompaction {
                 else {
                     temp[i] = 1;
                 }
-
             }
 
             for (int i = 0; i < n; i++) {
@@ -75,11 +74,7 @@ namespace StreamCompaction {
                 if (temp[i] == 1) {
                     k++;
                 }
-                
-                
             }
-
-
 
             for (int i = 0; i < n; i++) {
                 if (scan[i] == j) {
@@ -89,6 +84,7 @@ namespace StreamCompaction {
                 }
             }
             delete[] temp;
+            delete[] scan;
             timer().endCpuTimer();
             return oindex;
         }
