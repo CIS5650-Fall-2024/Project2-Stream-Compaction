@@ -67,9 +67,6 @@ namespace StreamCompaction {
             cudaMalloc((void**)&dev_odata, length * sizeof(int));
             cudaMemcpy(dev_odata, idata, N * sizeof(int), cudaMemcpyHostToDevice);
             checkCUDAError("cudaMalloc dev_odata failed!", __LINE__);
-            //to record non-zero numbers 
-            cudaMalloc((void**)&dev_nonZero, 1 * sizeof(int));
-            checkCUDAError("cudaMalloc dev_nonZero failed!", __LINE__);
             cudaDeviceSynchronize();
         }
 
@@ -81,12 +78,21 @@ namespace StreamCompaction {
             cudaMemcpy(dev_idata, idata, N * sizeof(int), cudaMemcpyHostToDevice);
             checkCUDAError("cudaMalloc dev_idata failed!", __LINE__);
             cudaMalloc((void**)&dev_odata, length * sizeof(int));
+            cudaMemcpy(dev_odata, idata, N * sizeof(int), cudaMemcpyHostToDevice);
             checkCUDAError("cudaMalloc dev_odata failed!", __LINE__);
+            //to record non-zero numbers 
+            cudaMalloc((void**)&dev_nonZero, 1 * sizeof(int));
+            checkCUDAError("cudaMalloc dev_nonZero failed!", __LINE__);
+
+            cudaMalloc((void**)&dev_input, length * sizeof(int));
+            cudaMemcpy(dev_input, idata, N * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMalloc dev_input failed!", __LINE__);
             cudaMalloc((void**)&dev_indices, length * sizeof(int));
-            cudaMemcpy(dev_indices, odata, N * sizeof(int), cudaMemcpyHostToDevice);
             checkCUDAError("cudaMalloc dev_indices failed!", __LINE__);
             cudaMalloc((void**)&dev_bools, length * sizeof(int));
             checkCUDAError("cudaMalloc dev_bool failed!", __LINE__);
+
+            cudaDeviceSynchronize();
         }
 
         void endScan()
@@ -101,6 +107,7 @@ namespace StreamCompaction {
             cudaFree(dev_indices);
             cudaFree(dev_idata);
             cudaFree(dev_odata);
+            cudaFree(dev_input);
             cudaFree(dev_nonZero);
         }
         
@@ -324,10 +331,9 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
+            initCompact(n, idata, odata);
 
             timer().startGpuTimer();
-
-            initScan(n, odata, idata);
             dim3 fullBlocksPerGrid((length + blockSize - 1) / blockSize);
             EfficientMapKernel << <fullBlocksPerGrid, blockSize >> > (length, n, dev_odata);
             for (int i = 1; i < length; i = i * 2)
@@ -350,21 +356,19 @@ namespace StreamCompaction {
                 cudaDeviceSynchronize();
                 std::swap(dev_idata, dev_odata);
             }
-            cudaMemcpy(odata, dev_odata, sizeof(int) * n, cudaMemcpyDeviceToHost);
 
-            endScan();
-
-            initCompact(n, idata, odata);
+            std::swap(dev_odata, dev_indices);
             StreamCompaction::Common::kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (length, dev_bools, dev_indices);
-            StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (length, dev_odata, dev_idata, dev_bools, dev_indices);
+            StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (length, dev_odata, dev_input, dev_bools, dev_indices);
+            timer().endGpuTimer();
+
             cudaMemcpy(odata, dev_odata, sizeof(int) * n, cudaMemcpyDeviceToHost);
             int* p = (int*)malloc(1 * sizeof(int));
-            CountKernel << <1, 1 >> > (n, dev_indices, dev_idata, dev_nonZero);
+            CountKernel << <1, 1 >> > (n, dev_indices, dev_input, dev_nonZero);
             cudaMemcpy(p, dev_nonZero, sizeof(int) * 1, cudaMemcpyDeviceToHost);
             int ans = p[0];
             free(p);
             endCompact();
-            timer().endGpuTimer();
             return ans;
         }
     }
