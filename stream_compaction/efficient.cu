@@ -50,29 +50,33 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
+            int max = ilog2ceil(n);
+            int nNextPowerOf2 = pow(2, max);
+
+            int totalBlocks = (nNextPowerOf2 + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
             int* dev_idata;
-            cudaMalloc((void**)&dev_idata, sizeof(int) * n);
+            cudaMalloc((void**)&dev_idata, sizeof(int) * nNextPowerOf2);
             checkCUDAError("cudaMalloc dev_idata failed");
             cudaMemcpy(dev_idata, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             checkCUDAError("cudaMemcpy dev_idata failed");
 
-            int totalBlocks = (n + blockSize - 1) / blockSize;
 
             timer().startGpuTimer();
             // TODO
             // upsweep
-            int max = ilog2ceil(n);
+
             for (int d = 0; d < max; d++)
             {
-                kernelUpSweep<<<totalBlocks, blockSize>>>(n, dev_idata, d);
+                kernelUpSweep<<<totalBlocks, BLOCK_SIZE>>>(nNextPowerOf2, dev_idata, d);
             }
 
-            cudaMemset(dev_idata + n - 1, 0, sizeof(int));
+            cudaMemset(dev_idata + nNextPowerOf2 - 1, 0, sizeof(int));
 
             // downsweep
             for (int d = max - 1; d >= 0; d--)
             {
-                kernelDownSweep<<<totalBlocks, blockSize>>>(n, dev_idata, d);
+                kernelDownSweep<<<totalBlocks, BLOCK_SIZE>>>(nNextPowerOf2, dev_idata, d);
             }
             timer().endGpuTimer();
 
