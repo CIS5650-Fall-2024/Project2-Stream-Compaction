@@ -17,21 +17,47 @@ CUDA Stream Compaction
 
 `efficient_sharedmem.cu, efficient_sharedmem.h`: CUDA source files for work efficient parallel scan with shared memory optimazition
 
+### Finished TODOs
+
+#### **Part 1: CPU scan**
+
+Basically simple CPU code
+
+#### **Part 2: Naive GPU scan**
+
+![](./img/naive-scan-fig.png)
+
+Similar to parallel reduction, for block smaller than block size pad zeros to block size
+
+#### **Part 3: Work efficient scan and compaction**
+
+![](./img/workeff-upsweep.png)
+
+1. Up sweep
+
+   ![](./img/workeff-downsweep.png)
+
+2. Down sweep
+
+#### **Part 4: Thrust's scan**
+
+Use device_vector instead of cudaMalloced memory to get better performance
+
 ### Extra Credits
 
-**Part 5: Launch Least Number of Threads**
+#### **Part 5: Launch Least Number of Threads**
 
 Use different number of blocks and different block size to launch kernel at each loop depth
 
-**Part 6: Radix Sort**
+#### **Part 6: Radix Sort**
 
 ![](./img/radix-s.png)
 
-Based on part7 (optimized work efficient scan). Deal with one bit a time, use parallel scan to put numbers with zeros before numbers with ones. Generate prefix scan with zero array. If current bit is zero, then this bit's position is indicated by the scaned array. If current bit is one, then this bit's position equals to zeros and ones ahead of it.
+Based on **Part 7** (optimized work efficient scan). Deal with one bit a time, use parallel scan to put numbers with zeros before numbers with ones. Generate prefix scan with zero array. If current bit is zero, then this bit's position is indicated by the scaned array. If current bit is one, then this bit's position equals to zeros and ones ahead of it.
 
 The result of GPU radix sort is compared with std::sort on CPU.
 
-**Part 7: Optimized Work Efficient Scan**
+#### **Part 7: Optimized Work Efficient Scan**
 
 Use shared memory per thread block to reduce global memory access. Every thread loads two elements from global memory, thus shared memory size is the twice of block size. Zip the CPU loop in part 3 into GPU code.
 
@@ -57,7 +83,7 @@ After shuffling the address, the performance of work efficient scan is improved 
 
 ### Answers to questions:
 
-1. **Roughly optimize the block sizes of each of your implementations for minimal run time on your GPU.**
+1. #### **Roughly optimize the block sizes of each of your implementations for minimal run time on your GPU.**
 
    Tested when N=1<<26 with non-power-of-two
 
@@ -67,26 +93,60 @@ After shuffling the address, the performance of work efficient scan is improved 
 
 ![](./img/wesm-blocksz.png)
 
-2. **Compare all of these GPU Scan implementations (Naive, Work-Efficient, and Thrust) to the serial CPU version of Scan. Plot a graph of the comparison**
+2. #### **Compare all of these GPU Scan implementations (Naive, Work-Efficient, and Thrust) to the serial CPU version of Scan. Plot a graph of the comparison**
+
    **(with array size on the independent axis).**
 
    ![](./img/scan-diff.png)
 
-3. **Write a brief explanation of the phenomena you see here. Can you find the performance bottlenecks? Is it memory I/O? Computation? Is**
-   **it different for each implementation?**
+3. #### **Write a brief explanation of the phenomena you see here. Can you find the performance bottlenecks? Is it memory I/O? Computation? Is it different for each implementation?**
 
-   Bottle neck for naive implementation: computation, memory IO
+   Using NVTX we can get the exact running interval of each implementaion in NVIDIA's Nsight systems:
 
-   Bottle neck for basic work efficient implementation: memory IO
+   ![](./img/nvtx-eg.png)
 
-   Bottle neck for shared memory work efficient implementation: bank conflict (although it has been reduced by index shuffle)
+   Set n=1<<28, we can profile with Nsight systems to analysis
 
-4. **Paste the output of the test program into a triple-backtick block in your README.**
+   ##### **Naive scan**
+
+   ![](./img/nsightsys-naive.png)
+
+   We can see there are a large amount of unallocated warps in naive scan implementation, and DRAM bandwidth is quite high.
+
+   Bottleneck for naive implementation: memory IO, warps not doing work
+
+   ##### **Work efficient scan**
+
+   ![](./img/nsightsys-workeff.png)
+
+   In the case for basic work efficient implementation, SM utilization is greatly improved, but DRAM IO bandwidth is still quite large.
+
+   Bottleneck for basic work efficient implementation: memory IO
+
+   ##### **Optimized Work efficient scan**
+
+   ![](./img/nsightsys-workeffopt.png)
+
+   For shared memory work efficient implementation, there are two different stages to analysis: the first stage is block scan, the second stage is block merge. For block scan, it's very efficient compared to previous implementation: SM utilization is high, DRAM IO dropped from 90% to 80%.
+
+   Bottleneck for shared memory work efficient implementation: mainly in second stage (merging between blocks), here a number of warps are not active.
+
+   ##### **Thrust scan**
+
+   ![](./img/nsightsys-thrust.png)
+
+   Thrust first allocated some auxiliary memory for scan, then dispatched `DeviceScanInitKernel`, then dispatched `DeviceScanKernel`, and freed memory in the end.
+
+   ![](./img/thrust-perf.png)
+
+   It's a super optimized version of scan with SM utilization of 99%.
+
+4. #### **Paste the output of the test program into a triple-backtick block in your README.**
 
    Results when n=1<<26:
 
    ***Optimized Work Efficient Performance running time = Thrust Implementation Running Time x 1.5***
-   
+
    ```
    ****************
    ** SCAN TESTS **
@@ -170,5 +230,5 @@ After shuffling the address, the performance of work efficient scan is improved 
       elapsed time: 313.52ms    (CUDA Measured)
        passed
    ```
-   
+
    

@@ -209,6 +209,7 @@ namespace StreamCompaction {
             cudaMalloc((void**)&dev_out, N * sizeof(int));
             cudaMalloc((void**)&dev_tmp, N * sizeof(int));
             cudaMemcpy(dev_tmp, tmpBuf.buffers[0].first, N * sizeof(int), cudaMemcpyDeviceToDevice);
+            nvtxRangePushA("Work efficient shared mem compact");
             timer().startGpuTimer();
             Common::kernMapToBoolean << <(n + BLOCK_THREAD_SIZE - 1) / BLOCK_THREAD_SIZE, BLOCK_THREAD_SIZE >> > (n, tmpBuf.buffers[0].first, dev_tmp);
             checkCUDAError("kernMapToBoolean error");
@@ -216,6 +217,7 @@ namespace StreamCompaction {
             Common::kernScatter << <(n + BLOCK_THREAD_SIZE - 1) / BLOCK_THREAD_SIZE, BLOCK_THREAD_SIZE >> > (n, tmpBuf.buffers[0].first, dev_tmp, dev_out, true);
             checkCUDAError("kernScatter error");
             timer().endGpuTimer();
+            nvtxRangePop();
             int excnt;
             cudaMemcpy(&excnt, tmpBuf.buffers[0].first + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
             int cnt = excnt + !!(idata[n - 1]);
