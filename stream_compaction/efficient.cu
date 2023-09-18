@@ -3,6 +3,7 @@
 #include "common.h"
 #include "efficient.h"
 #define REDUCE_BANK_CONFLICT 1
+#define CONFLICT_FREE_OFFSET(n) ((n) >> 6)
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -15,7 +16,7 @@ namespace StreamCompaction {
 
         __device__ __forceinline__ int computeIndex(int idx) {
 #if REDUCE_BANK_CONFLICT
-            return idx + (idx >> 6);
+            return idx + CONFLICT_FREE_OFFSET(idx);
 #else
             return idx;
 #endif
