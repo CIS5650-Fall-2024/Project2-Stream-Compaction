@@ -22,7 +22,7 @@ namespace StreamCompaction {
             
             int _d = 1 << d;            // 2^d
             int _d1 = 1 << (d + 1);      // 2^(d+1)
-            if (index % _d1 == 0)    // TODO: avoid this? do this on the CPU?
+            if (index % _d1 == 0)
             {
                 idata[index + _d1 - 1] += idata[index + _d - 1];
             }
@@ -51,7 +51,7 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             int max = ilog2ceil(n);
-            int nNextPowerOf2 = pow(2, max);
+            int nNextPowerOf2 = 1 << max;
 
             int totalBlocks = (nNextPowerOf2 + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
@@ -118,14 +118,13 @@ namespace StreamCompaction {
             int totalBlocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
             int max = ilog2ceil(n);
-            int nNextPowerOf2 = pow(2, max);
+            int nNextPowerOf2 = 1 << max;
             int totalBlocksPow2 = (nNextPowerOf2 + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
 
             int* dev_indices;
             cudaMalloc((void**)&dev_indices, sizeof(int) * nNextPowerOf2);
             checkCUDAError("cudaMalloc dev_indices failed");
-            cudaMemset(dev_indices, -1, sizeof(int) * nNextPowerOf2);       // -1
+            cudaMemset(dev_indices, 0, sizeof(int) * nNextPowerOf2);
             checkCUDAError("cudaMemset dev_indices failed");
 
             timer().startGpuTimer();
@@ -155,8 +154,7 @@ namespace StreamCompaction {
             timer().endGpuTimer();
 
             int len;
-            // I have no idea why I need this ternary check below
-            cudaMemcpy(&len, dev_indices + n + (n == nNextPowerOf2 ? -1 : 0), sizeof(int), cudaMemcpyDeviceToHost);  // length of compacted array
+            cudaMemcpy(&len, dev_indices + nNextPowerOf2 - 1, sizeof(int), cudaMemcpyDeviceToHost);  // length of compacted array
             checkCUDAError("cudaMemcpy dev_indices last element failed");
             cudaMemcpy(odata, dev_odata, sizeof(int) * len, cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy dev_odata failed");
