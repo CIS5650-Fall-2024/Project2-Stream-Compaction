@@ -20,6 +20,17 @@ namespace StreamCompaction {
             odata[index + (int)powf(2, d + 1) - 1] += odata[index + (int)powf(2, d) - 1];
             
         }
+        __global__ void kernUpCopy(int n, int* idata, int* odata) {
+            int index = threadIdx.x + (blockIdx.x * blockDim.x);
+            if (index >= n) {
+                return;
+            }
+
+            if (odata[index] != idata[index]) {
+                odata[index] = idata[index];
+            }
+
+        }
 
         __global__ void kernZero(const int n, int* data) {
             data[n - 1] = 0;
@@ -44,14 +55,6 @@ namespace StreamCompaction {
             odata[index] = (idata[index] == 0) ? 0 : 1;
         }
 
-        __global__ void kernScan(int n, int* scan, int* temp) {
-            int index = threadIdx.x + blockIdx.x * blockDim.x;
-            if (index >= n) {
-                return;
-            }
-
-            scan[index] = (index > 0) ? scan[index - 1] + temp[index - 1] : 0;
-        }
 
         __global__ void compactKernel(int n, const int* idata, const int* scan, int* odata, const int* temp) {
             int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -151,34 +154,32 @@ namespace StreamCompaction {
 
             cudaMemset(device_A + n, 0, (paddedSize - n) * sizeof(int));
             checkCUDAError("device_A cudaMemset failed!");
-            cudaMemset(device_Binary + n, 0, (paddedSize - n) * sizeof(int));
+            cudaMemset(device_scan + n, 0, (paddedSize - n) * sizeof(int));
             checkCUDAError("device_Binary cudaMemset failed!");
 
             dim3 blocksPerGrid((paddedSize + BlockSize - 1) / BlockSize);
 
             timer().startGpuTimer();
+            kernCompact << <blocksPerGrid, BlockSize >> > (n, device_A, device_Binary);
+            kernUpCopy << <blocksPerGrid, BlockSize >> > (n, device_Binary, device_scan);
+
 
             for (int d = 0; d <= ilog2ceil(paddedSize) - 1; d++) { //Upsweep
-                kernUpSweep << <blocksPerGrid, BlockSize >> > (paddedSize, device_A, d);
+                kernUpSweep << <blocksPerGrid, BlockSize >> > (paddedSize, device_scan, d);
             }
 
-            kernZero << <1, 1 >> > (paddedSize, device_A);
+            kernZero << <1, 1 >> > (paddedSize, device_scan);
 
             for (int d = ilog2ceil(paddedSize) - 1; d >= 0; d--) { //Downsweep
-                kernDownSweep << <blocksPerGrid, BlockSize >> > (paddedSize, device_A, d);
+                kernDownSweep << <blocksPerGrid, BlockSize >> > (paddedSize, device_scan, d);
             }
-            kernCompact << <blocksPerGrid, BlockSize >> > (paddedSize, device_A, device_Binary);
-            kernScan << <blocksPerGrid, BlockSize >> > (paddedSize, device_scan, device_Binary);
+
             compactKernel << <blocksPerGrid, BlockSize >> > (paddedSize, device_A, device_scan, device_B, device_Binary);
             timer().endGpuTimer();
 
             cudaMemcpy(odata, device_B, n * sizeof(int), cudaMemcpyDeviceToHost);
-
-            for (int i = 0; i < n; i++) {
-                printf("%d ", odata[i]);
-            }
-
-
+            int finalSize;
+            cudaMemcpy(&finalSize, device_scan + paddedSize - 1, sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy cudaMemcpyDeviceToHost odata to device_A failed!");
 
             cudaFree(device_A);
@@ -189,7 +190,7 @@ namespace StreamCompaction {
             checkCUDAError("cudaFree device_Binary failed!");
             cudaFree(device_scan);
             checkCUDAError("cudaFree device_scan failed!");
-            return -1;
+            return finalSize;
         }
     }
 }
