@@ -12,18 +12,18 @@ namespace StreamCompaction {
             std::vector<int> sizes;
             std::vector<int> offsets;
         public:
-            devDataBuffer(int n, int blockSize, int minSize) :totalSize(0), size_(1) {
-                int extenedSize = BLOCKPERGRID(n, blockSize) * blockSize;
-                while (extenedSize > minSize) {
+            devDataBuffer(int n, int blockSize, int minSize) :totalSize(0), size_(0) {
+                int extendedSize = BLOCKSPERGRID(n, blockSize) * blockSize;
+                while (extendedSize > minSize) {
+                    if (extendedSize < blockSize) {
+                        break;
+                    }
                     size_++;
-                    sizes.push_back(extenedSize);
+                    sizes.push_back(extendedSize);
                     offsets.push_back(totalSize);
-                    totalSize += extenedSize;
-                    extenedSize = BLOCKPERGRID(extenedSize, blockSize);
+                    totalSize += extendedSize;
+                    extendedSize = BLOCKSPERGRID(extendedSize, blockSize);
                 }
-                sizes.push_back(extenedSize);
-                offsets.push_back(totalSize);
-                totalSize += extenedSize;
                 cudaMalloc((void**)&dev_data, sizeof(int) * totalSize);
             }
             ~devDataBuffer() {
@@ -54,6 +54,7 @@ namespace StreamCompaction {
         void scan(int n, int* odata, const int* idata);
 
         void scanShared(int n, int* odata, const int* idata);
+        void scanSharedNaive(int n, int* odata, const int* idata);
 
         int compact(int n, int* odata, const int* idata);
     }

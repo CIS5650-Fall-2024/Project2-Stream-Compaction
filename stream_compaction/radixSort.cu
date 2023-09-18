@@ -36,7 +36,7 @@ namespace StreamCompaction {
 
         void sort(int n, int* odata, const int* idata, int numBits) {
             int extended_n = 1 << ilog2ceil(n);
-            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+            dim3 fullBlocksPerGrid = BLOCKSPERGRID(n, blockSize);
             int* dev_idata;
             int* dev_odata;
             int* dev_falses;

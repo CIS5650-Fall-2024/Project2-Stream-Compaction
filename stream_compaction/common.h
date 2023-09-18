@@ -12,6 +12,7 @@
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
+#define BLOCKSPERGRID(n, blockSize) ((n + blockSize - 1) / blockSize)
 constexpr int blockSize = 128;
 
 /**

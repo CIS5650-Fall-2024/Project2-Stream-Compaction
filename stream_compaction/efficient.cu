@@ -81,8 +81,8 @@ namespace StreamCompaction {
                     temp[computeIndex(ai)] = temp[computeIndex(bi)];
                     temp[computeIndex(bi)] += t;
                 }
-                __syncthreads();
             }
+            __syncthreads();
             data[index] = temp[computeIndex(thid)];
             if (thid == 0) {
                 blockSum[blockIdx.x] = last + temp[computeIndex(blockDim.x - 1)];
@@ -106,13 +106,13 @@ namespace StreamCompaction {
             dim3 fullBlocksPerGrid;
             for (int i = 1, int n = strideMax; i < strideMax; i <<= 1, n >>= 1)
             {
-                fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+                fullBlocksPerGrid = BLOCKSPERGRID(n, blockSize);
                 kernUpSweep << <fullBlocksPerGrid, blockSize >> > (n, dev_data, i);
             }
             cudaMemset(&dev_data[n - 1], 0, sizeof(int));
             for (int i = strideMax, int n = 1; i >= 1; i >>= 1, n <<= 1)
             {
-                fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+                fullBlocksPerGrid = BLOCKSPERGRID(n, blockSize);
                 kernDownSweep << <fullBlocksPerGrid, blockSize >> > (n, dev_data, i);
             }
         }
@@ -136,7 +136,7 @@ namespace StreamCompaction {
         }
 
         void scanSharedNaive_(int n, int* dev_data, int* dev_blockSum, int blockSize) {
-            dim3 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+            dim3 fullBlocksPerGrid = BLOCKSPERGRID(n, blockSize);
             kernPrescanInplace << <fullBlocksPerGrid, blockSize, blockSize * sizeof(int) >> > (n, dev_data, dev_blockSum);
             scanInplace(n / blockSize, dev_blockSum);
             kernAddBlockSum << <n / blockSize, blockSize >> > (dev_data, dev_blockSum, n);
@@ -145,7 +145,6 @@ namespace StreamCompaction {
         void scanSharedNaive(int n, int* odata, const int* idata) {
             int dMax = ilog2ceil(n);
             int extended_n = 1 << dMax;
-            int blockSize = 256;
             if (extended_n < blockSize) {
                 scan(n, odata, idata);
                 return;
@@ -167,7 +166,6 @@ namespace StreamCompaction {
         void scanShared(int n, int* odata, const int* idata) {
             int dMax = ilog2ceil(n);
             int extended_n = 1 << dMax;
-            int blockSize = 128;
             if (extended_n < blockSize) {
                 scan(n, odata, idata);
                 return;
@@ -176,13 +174,12 @@ namespace StreamCompaction {
             cudaMemcpy(buffer.data(), idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             timer().startGpuTimer();
             int i = 0;
-            for (i = 0; i < buffer.size()-1; i++) {
+            for (i = 0; i < buffer.size() - 1; i++) {
                 kernPrescanInplace << <buffer.sizeAt(i) / blockSize, blockSize, blockSize * sizeof(int) >> > (buffer.sizeAt(i), buffer[i], buffer[i + 1]);
             }
-            //scanInplace(buffer.sizeAt(i), buffer[i]);
-            cudaMemset(buffer[i], 0, sizeof(int));
-            for (int i = buffer.size()-1; i >= 1; i--) {
-                kernAddBlockSum << <buffer.sizeAt(i-1) / blockSize, blockSize >> > (buffer[i - 1], buffer[i], buffer.sizeAt(i-1));
+            scanInplace(buffer.sizeAt(i), buffer[i]);
+            for (int i = buffer.size() - 1; i >= 1; i--) {
+                kernAddBlockSum << <buffer.sizeAt(i - 1) / blockSize, blockSize >> > (buffer[i - 1], buffer[i], buffer.sizeAt(i - 1));
             }
             timer().endGpuTimer();
             cudaMemcpy(odata, buffer.data(), sizeof(int) * n, cudaMemcpyDeviceToHost);
@@ -218,7 +215,7 @@ namespace StreamCompaction {
             cudaMemcpy(dev_idata, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             cudaMemset(dev_odata, 0, sizeof(int) * n);
             cudaMemset(dev_indices, 0, sizeof(int) * extended_n);
-            dim3 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+            dim3 fullBlocksPerGrid = BLOCKSPERGRID(n, blockSize);
             timer().startGpuTimer();
             // DONE
             kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (n, dev_indices, dev_idata);

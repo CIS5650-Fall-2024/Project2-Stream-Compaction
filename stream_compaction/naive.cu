@@ -30,7 +30,7 @@ namespace StreamCompaction {
             cudaMalloc((void**)&dev_idata, n * sizeof(int));
             cudaMalloc((void**)&dev_odata, n * sizeof(int));
             cudaMemcpy(dev_idata+1, idata, (n - 1) * sizeof(int), cudaMemcpyHostToDevice);
-            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+            dim3 fullBlocksPerGrid = BLOCKSPERGRID(n, blockSize);
             timer().startGpuTimer();
             // DONE
             for (int i = 1; i <= dMax; i++)
