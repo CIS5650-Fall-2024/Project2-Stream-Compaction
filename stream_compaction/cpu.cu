@@ -55,11 +55,18 @@ namespace StreamCompaction {
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
-            int *mask = new int[n];
+            // 1/0 mask on idata
+            int* mask = new int[n];
+            int running_sum = 0;
             for (int i = 0; i < n; i++) {
               mask[i] = idata[i] == 0 ? 0 : 1;
             }
-            scan(n, odata, mask);
+            // scanning, exclusive prefix sum saved to odata
+            for (int i = 0; i < n; i++) {
+              odata[i] = running_sum;
+              running_sum += mask[i];
+            }
+            // relocate data
             int remain_cnt = 0;
             for (int i = 0; i < n; i++) {
               if (mask[i] == 1) {
