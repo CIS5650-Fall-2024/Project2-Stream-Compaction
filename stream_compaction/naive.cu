@@ -63,15 +63,15 @@ namespace StreamCompaction {
             cudaMemcpy(dev_odata, odata, sizeof(int) * n, cudaMemcpyHostToDevice);
             checkCUDAError("cudaMemcpy dev_odata failed");
 
-            int totalBlocks = (n + blockSize - 1) / blockSize;
+            int totalBlocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
             timer().startGpuTimer();
             int max = ilog2ceil(n);
             for (int d = 1; d <= max; d++)
             {
-                kernelScan<<<totalBlocks, blockSize>>>(n, dev_odata, dev_idata, 1 << d - 1);
+                kernelScan<<<totalBlocks, BLOCK_SIZE>>>(n, dev_odata, dev_idata, 1 << d - 1);
                 std::swap(dev_odata, dev_idata);
             }
-            kernelShiftRight<<<totalBlocks, blockSize>>>(n, dev_odata, dev_idata);
+            kernelShiftRight<<<totalBlocks, BLOCK_SIZE>>>(n, dev_odata, dev_idata);
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_odata, sizeof(int) * n, cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy dev_odata to odata failed");
