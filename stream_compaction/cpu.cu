@@ -53,10 +53,10 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* mask = new int[n];
             timer().startCpuTimer();
             // TODO
             // 1/0 mask on idata
-            int* mask = new int[n];
             int running_sum = 0;
             for (int i = 0; i < n; i++) {
               mask[i] = idata[i] == 0 ? 0 : 1;
@@ -74,8 +74,8 @@ namespace StreamCompaction {
                 remain_cnt++;
               }
             }
-            delete[] mask;
             timer().endCpuTimer();
+            delete[] mask;
             return remain_cnt;
         }
     }
