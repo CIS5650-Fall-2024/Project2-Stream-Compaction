@@ -172,7 +172,7 @@ namespace StreamCompaction {
             compactKernel << <blocksPerGrid, BlockSize >> > (paddedSize, device_A, device_scan, device_B, device_Binary);
             timer().endGpuTimer();
 
-            cudaMemcpy(odata, device_scan, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(odata, device_B, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             for (int i = 0; i < n; i++) {
                 printf("%d ", odata[i]);
