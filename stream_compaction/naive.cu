@@ -36,7 +36,7 @@ namespace StreamCompaction {
             int* dev_in;
             int* dev_out;
 
-            dim3 gridSize = (n + blockSize - 1) / blockSize;
+            int gridSize = (n + blockSize - 1) / blockSize;
 
             // allocate memory
             cudaMalloc((void**)&dev_in, n * sizeof(int));
