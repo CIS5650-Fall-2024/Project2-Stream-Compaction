@@ -44,6 +44,25 @@ void printCmpLenResult(int n, int expN, T *a, T *b) {
             cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");
 }
 
+template<typename T>
+void evalCmpLenResult(int n, int expN, T* a, T* b) {
+    if (n != expN) {
+        printf("    expected %d elements, got %d\n", expN, n);
+    }
+
+    if (n == -1 || n != expN) {
+        printf(" % s \n", "FAIL COUNT");
+    }
+    else {
+        if (cmpArrays(n, a, b)) {
+            printf(" % s \n", "FAIL VALUE");
+        }
+    }
+    printf("    %s \n",
+        (n == -1 || n != expN) ? "FAIL COUNT" :
+        cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");
+}
+
 void zeroArray(int n, int *a) {
     for (int i = 0; i < n; i++) {
         a[i] = 0;
