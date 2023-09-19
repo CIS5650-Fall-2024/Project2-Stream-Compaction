@@ -54,22 +54,23 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             int* scanResult = new int[n];
+            int* bools = new int[n];
             timer().startCpuTimer();
             // TODO
             //std::cout << "start traverse and build temp arr" << std::endl;
             int sum = 0;
             for (int i = 0; i < n; i++) {
-                odata[i] = idata[i] == 0 ? 0 : 1;
+                bools[i] = idata[i] == 0 ? 0 : 1;
                 scanResult[i] = sum;
-                sum += odata[i];
+                sum += bools[i];
             }
             for (int i = 0; i < n; i++) {
-                if (odata[i] == 1) {
+                if (bools[i] == 1) {
                     odata[scanResult[i]] = idata[i];
                 }
             }
             timer().endCpuTimer();
-            int count = scanResult[n - 1];
+            int count = scanResult[n - 1] + bools[n - 1];
             delete[] scanResult;
             return count;
         }

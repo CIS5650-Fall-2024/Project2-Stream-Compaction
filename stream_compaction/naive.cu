@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 #include "common.h"
 #include "naive.h"
+#include "device_launch_parameters.h"
 
 #define BLOCK_SIZE 128
 
