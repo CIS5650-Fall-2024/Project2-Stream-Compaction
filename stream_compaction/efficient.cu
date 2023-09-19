@@ -103,69 +103,6 @@ namespace StreamCompaction {
             }
         }
 
-        //__global__ void kernBlockScan(int n, int* odata, const int* idata, int* blockSums) {
-        //    extern __shared__ int temp[];
-
-        //    int thid = threadIdx.x;
-        //    size_t index = blockIdx.x * blockDim.x + thid;
-
-        //    int ai = thid, bi = thid + BLOCK_SIZE / 2;
-        //    int bankOffsetA = CONFLICT_FREE_OFFSET(ai);
-        //    int bankOffsetB = CONFLICT_FREE_OFFSET(bi);
-
-        //    // Load input into shared memory with boundary checks
-        //    temp[ai + bankOffsetA] = (2 * index < n) ? idata[2 * index] : 0;
-        //    temp[bi + bankOffsetB] = (2 * index + 1 < n) ? idata[2 * index + 1] : 0;
-        //    __syncthreads();
-
-        //    int offset = 1;
-
-        //    // Up-sweep (reduce) phase
-        //    for (int d = blockDim.x; d > 0; d >>= 1) {
-        //        __syncthreads();
-        //        if (thid < d) {
-        //            int ai = offset * (2 * thid + 1) - 1;
-        //            int bi = offset * (2 * thid + 2) - 1;
-        //            ai += CONFLICT_FREE_OFFSET(ai);
-        //            bi += CONFLICT_FREE_OFFSET(bi);
-        //            temp[bi] += temp[ai];
-        //        }
-        //        offset *= 2;
-        //    }
-
-        //    // Clear last element
-        //    if (thid == 0) {
-        //        blockSums[blockIdx.x] = temp[2 * blockDim.x - 1 +  CONFLICT_FREE_OFFSET(2 * blockDim.x - 1)];
-        //        temp[2 * blockDim.x - 1] = 0;
-        //    }
-
-        //    // Down-sweep phase
-        //    for (int d = 1; d < 2 * blockDim.x; d *= 2) {
-        //        offset >>= 1;
-        //        __syncthreads();
-        //        if (thid < d) {
-        //            int ai = offset * (2 * thid + 1) - 1;
-        //            int bi = offset * (2 * thid + 2) - 1;
-        //            ai += CONFLICT_FREE_OFFSET(ai);
-        //            bi += CONFLICT_FREE_OFFSET(bi);
-        //            int t = temp[ai];
-        //            temp[ai] = temp[bi];
-        //            temp[bi] += t;
-        //        }
-        //    }
-        //    __syncthreads();
-
-        //    // Write results to device memory with boundary checks
-        //    if (2 * index < n) {
-        //        odata[2 * index] = temp[ai + bankOffsetA];
-        //    }
-
-        //    if (2 * index + 1 < n) {
-        //        odata[2 * index + 1] = temp[bi + bankOffsetB];
-        //    }
-        //}
-
-
         __global__ void kernAddScannedBlockSums(int n, int* odata, const int* blockSums) {
             size_t index = blockIdx.x * blockDim.x + threadIdx.x;
             int blockSum = (blockIdx.x > 0) ? blockSums[blockIdx.x - 1] : 0;
@@ -339,7 +276,8 @@ namespace StreamCompaction {
                 checkCUDAErrorFn("down sweep failed");
             }
 #else 
-            scan(n, dev_scan, dev_bools);
+            // scan(n, dev_scan, dev_bools);
+            scanShared(n, dev_scan, dev_bools);
 #endif
             // scatter
             StreamCompaction::Common::kernScatter << <gridSize, BLOCK_SIZE >> > (n, dev_out, dev_in, dev_bools, dev_scan);
