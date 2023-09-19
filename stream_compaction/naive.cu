@@ -31,7 +31,7 @@ namespace StreamCompaction {
       timer().startGpuTimer();
       // TODO
       for (int d = 1; d <= ilog2ceil(n); d++) {
-        int offset = (int) powf(2.0f, (float)(d - 1));
+        int offset = 1 << (d - 1);
         scan_single_aggregate<<<gridDim, BLOCK_SIZE>>>(n, dev_odata, dev_idata, offset);
         std::swap(dev_odata, dev_idata);
       }
