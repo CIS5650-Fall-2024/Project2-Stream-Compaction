@@ -3,7 +3,14 @@
 #include "common.h"
 #include "efficient.h"
 
-#define blockSize 128
+#define BLOCK_SIZE 128
+#define DOUBLE_BLOCK_SIZE 2 * BLOCK_SIZE
+#define NUM_BANKS 16
+#define LOG_NUM_BANKS 4
+
+#define CONFLICT_FREE_OFFSET(n) \
+    ((n) >> NUM_BANKS + (n) >> (2 * LOG_NUM_BANKS))
+
 
 #define TIME_COMPACT 1
 
@@ -39,7 +46,9 @@ namespace StreamCompaction {
             odata[index + (1 << (d + 1)) - 1] += temp;
         }
 
-        // apply shared memory to scan each block
+         /**
+          *  apply shared memory to scan each block
+          */
         __global__ void kernBlockScan(int n, int* odata, const int* idata, int* blockSums) {
             extern __shared__ int temp[];
 
@@ -66,6 +75,7 @@ namespace StreamCompaction {
 
             // Clear last element
             if (thid == 0) {
+                blockSums[blockIdx.x] = temp[2 * blockDim.x - 1];
                 temp[2 * blockDim.x - 1] = 0;
             }
 
@@ -91,12 +101,69 @@ namespace StreamCompaction {
             if (2 * index + 1 < n) {
                 odata[2 * index + 1] = temp[2 * thid + 1];
             }
-
-            // Save block sum
-            if (thid == blockDim.x - 1) {
-                blockSums[blockIdx.x] = temp[2 * blockDim.x - 1] + ((2 * index + 1< n) ? idata[2 * index + 1] : 0);
-            }
         }
+
+        //__global__ void kernBlockScan(int n, int* odata, const int* idata, int* blockSums) {
+        //    extern __shared__ int temp[];
+
+        //    int thid = threadIdx.x;
+        //    size_t index = blockIdx.x * blockDim.x + thid;
+
+        //    int ai = thid, bi = thid + BLOCK_SIZE / 2;
+        //    int bankOffsetA = CONFLICT_FREE_OFFSET(ai);
+        //    int bankOffsetB = CONFLICT_FREE_OFFSET(bi);
+
+        //    // Load input into shared memory with boundary checks
+        //    temp[ai + bankOffsetA] = (2 * index < n) ? idata[2 * index] : 0;
+        //    temp[bi + bankOffsetB] = (2 * index + 1 < n) ? idata[2 * index + 1] : 0;
+        //    __syncthreads();
+
+        //    int offset = 1;
+
+        //    // Up-sweep (reduce) phase
+        //    for (int d = blockDim.x; d > 0; d >>= 1) {
+        //        __syncthreads();
+        //        if (thid < d) {
+        //            int ai = offset * (2 * thid + 1) - 1;
+        //            int bi = offset * (2 * thid + 2) - 1;
+        //            ai += CONFLICT_FREE_OFFSET(ai);
+        //            bi += CONFLICT_FREE_OFFSET(bi);
+        //            temp[bi] += temp[ai];
+        //        }
+        //        offset *= 2;
+        //    }
+
+        //    // Clear last element
+        //    if (thid == 0) {
+        //        blockSums[blockIdx.x] = temp[2 * blockDim.x - 1 +  CONFLICT_FREE_OFFSET(2 * blockDim.x - 1)];
+        //        temp[2 * blockDim.x - 1] = 0;
+        //    }
+
+        //    // Down-sweep phase
+        //    for (int d = 1; d < 2 * blockDim.x; d *= 2) {
+        //        offset >>= 1;
+        //        __syncthreads();
+        //        if (thid < d) {
+        //            int ai = offset * (2 * thid + 1) - 1;
+        //            int bi = offset * (2 * thid + 2) - 1;
+        //            ai += CONFLICT_FREE_OFFSET(ai);
+        //            bi += CONFLICT_FREE_OFFSET(bi);
+        //            int t = temp[ai];
+        //            temp[ai] = temp[bi];
+        //            temp[bi] += t;
+        //        }
+        //    }
+        //    __syncthreads();
+
+        //    // Write results to device memory with boundary checks
+        //    if (2 * index < n) {
+        //        odata[2 * index] = temp[ai + bankOffsetA];
+        //    }
+
+        //    if (2 * index + 1 < n) {
+        //        odata[2 * index + 1] = temp[bi + bankOffsetB];
+        //    }
+        //}
 
 
         __global__ void kernAddScannedBlockSums(int n, int* odata, const int* blockSums) {
@@ -121,7 +188,7 @@ namespace StreamCompaction {
             const int log2ceil = ilog2ceil(n);
             const int fullSize = 1 << log2ceil;
 
-            int gridSize = (fullSize + 2 * blockSize - 1) / (2 * blockSize);
+            int gridSize = (fullSize + DOUBLE_BLOCK_SIZE - 1) / (DOUBLE_BLOCK_SIZE);
             // printf("gridSize: %d\n", gridSize);
 
             // allocate gpu memory
@@ -135,17 +202,11 @@ namespace StreamCompaction {
             checkCUDAErrorFn("malloc dev_blockSums failed!");
 
             timer().startGpuTimer();
-            kernBlockScan << <gridSize, blockSize, 2 * blockSize * sizeof(int) >> > (fullSize, dev_out, dev_in, dev_blockSums);
+            kernBlockScan << <gridSize, BLOCK_SIZE, DOUBLE_BLOCK_SIZE * sizeof(int) >> > (fullSize, dev_out, dev_in, dev_blockSums);
             checkCUDAErrorFn("blockScan failed!");
 
             int* blockSums = new int[gridSize];
             cudaMemcpy(blockSums, dev_blockSums, gridSize * sizeof(int), cudaMemcpyDeviceToHost);
-
-            // printf("blockSums\n");
-            //for (int i = 0; i < gridSize; ++i) {
-            //    printf("%d ", blockSums[i]);
-            //}
-            //printf("\n");
    
             for (int i = 1; i < gridSize; ++i) {
                 blockSums[i] += blockSums[i - 1];
@@ -154,7 +215,7 @@ namespace StreamCompaction {
             cudaMemcpy(dev_blockSums, blockSums, gridSize * sizeof(int), cudaMemcpyHostToDevice);
             delete[] blockSums;
 
-            kernAddScannedBlockSums << <gridSize, blockSize >> > (fullSize, dev_out, dev_blockSums);
+            kernAddScannedBlockSums << <gridSize, BLOCK_SIZE >> > (fullSize, dev_out, dev_blockSums);
 
             timer().endGpuTimer();
 
@@ -184,8 +245,8 @@ namespace StreamCompaction {
             // up sweep 
             for (int d = 0; d <= log2ceil - 1; ++d) {
                 // Adjust the grid size based on the depth of the sweep
-                int gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
-                kernUpSweep << <gridSize, blockSize >> > (fullSize, d, dev_out);
+                int gridSize = (fullSize / (2 << d) + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                kernUpSweep << <gridSize, BLOCK_SIZE >> > (fullSize, d, dev_out);
                 checkCUDAErrorFn("up sweep failed!");
             }
 
@@ -196,10 +257,11 @@ namespace StreamCompaction {
             // down sweep
             for (int d = log2ceil - 1; d >= 0; --d) { 
                 // Adjust the grid size based on the depth of the sweep
-                int gridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
-                kernDownSweep << <gridSize, blockSize >> > (fullSize, d, dev_out);
+                int gridSize = (fullSize / (2 << d) + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                kernDownSweep << <gridSize, BLOCK_SIZE >> > (fullSize, d, dev_out);
                 checkCUDAErrorFn("down sweep failed");
             }
+
             timer().endGpuTimer();
 
             cudaMemcpy(odata, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
@@ -223,7 +285,7 @@ namespace StreamCompaction {
 
             int boolLastVal, scanLastVal;
 
-            int gridSize = (n + blockSize - 1) / blockSize;
+            int gridSize = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
             cudaMalloc((void**)&dev_in, n * sizeof(int));
             checkCUDAErrorFn("malloc dev_in failed!");
@@ -252,7 +314,7 @@ namespace StreamCompaction {
             timer().startGpuTimer();
 #endif
             // map the bool array
-            StreamCompaction::Common::kernMapToBoolean << <gridSize, blockSize >> > (n, dev_bools, dev_in);
+            StreamCompaction::Common::kernMapToBoolean << <gridSize, BLOCK_SIZE >> > (n, dev_bools, dev_in);
             checkCUDAErrorFn("map bool array failed!");
 
             
@@ -262,8 +324,8 @@ namespace StreamCompaction {
 
             // up sweep
             for (int d = 0; d <= log2ceil - 1; ++d) {
-                int dynamicGridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
-                kernUpSweep << <dynamicGridSize, blockSize >> > (fullSize, d, dev_scan);
+                int dynamicGridSize = (fullSize / (2 << d) + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                kernUpSweep << <dynamicGridSize, BLOCK_SIZE >> > (fullSize, d, dev_scan);
                 checkCUDAErrorFn("up sweep failed!");
             }
 
@@ -272,15 +334,15 @@ namespace StreamCompaction {
             
             // down sweep
             for (int d = log2ceil - 1; d >= 0; --d) {
-                int dynamicGridSize = (fullSize / (2 << d) + blockSize - 1) / blockSize;
-                kernDownSweep << <dynamicGridSize, blockSize >> > (fullSize, d, dev_scan);
+                int dynamicGridSize = (fullSize / (2 << d) + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                kernDownSweep << <dynamicGridSize, BLOCK_SIZE >> > (fullSize, d, dev_scan);
                 checkCUDAErrorFn("down sweep failed");
             }
 #else 
             scan(n, dev_scan, dev_bools);
 #endif
             // scatter
-            StreamCompaction::Common::kernScatter << <gridSize, blockSize >> > (n, dev_out, dev_in, dev_bools, dev_scan);
+            StreamCompaction::Common::kernScatter << <gridSize, BLOCK_SIZE >> > (n, dev_out, dev_in, dev_bools, dev_scan);
             checkCUDAErrorFn("scatter failed!");
 #if TIME_COMPACT
             timer().endGpuTimer();

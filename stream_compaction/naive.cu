@@ -3,7 +3,7 @@
 #include "common.h"
 #include "naive.h"
 
-#define blockSize 128
+#define BLOCK_SIZE 128
 
 namespace StreamCompaction {
     namespace Naive {
@@ -36,7 +36,7 @@ namespace StreamCompaction {
             int* dev_in;
             int* dev_out;
 
-            int gridSize = (n + blockSize - 1) / blockSize;
+            int gridSize = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
             // allocate memory
             cudaMalloc((void**)&dev_in, n * sizeof(int));
@@ -50,7 +50,7 @@ namespace StreamCompaction {
 
             timer().startGpuTimer();
             for (int d = 1; d <= ilog2ceil(n); ++d) {
-                kernNaiveScan << <gridSize, blockSize >> > (n, d, dev_out, dev_in);
+                kernNaiveScan << <gridSize, BLOCK_SIZE >> > (n, d, dev_out, dev_in);
                 checkCUDAErrorFn("kernNaiveScan failed!");
 
                 std::swap(dev_in, dev_out);
