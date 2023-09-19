@@ -13,13 +13,16 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 28; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
 int *c = new int[SIZE];
 
 int main(int argc, char* argv[]) {
+    int t = ilog2ceil(8);
+    std::cout << " log(8): " << t << std::endl;
+
     // Scan tests
 
     printf("\n");
@@ -75,7 +78,7 @@ int main(int argc, char* argv[]) {
     printCmpResult(SIZE, b, c);
 
     zeroArray(SIZE, c);
-    printDesc("work-efficient scan, non-power-of-two");
+    printDesc("work-efficient scanv1, non-power-of-two");
     StreamCompaction::Efficient::scan(NPOT, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(NPOT, c, true);
