@@ -14,14 +14,17 @@ __global__ void kernNaiveScan(int offset, int n, int* odata, const int* idata) {
     }
 }
 
-__global__ void kernRightShift(int n, int* data) {
+__global__ void kernRightShift(int n, int* odata, int* idata) {
     int index = threadIdx.x + (blockIdx.x * blockDim.x);
-    if (index >= n - 1) {
+    if (index >= n) {
         return;
     }
-    int readVal = data[index];
-    __syncthreads();
-    data[index + 1] = readVal;
+    if (index == 0) {
+        odata[index] = 0;
+    }
+    else {
+        odata[index] = idata[index - 1];
+    }
 }
 
 namespace StreamCompaction {
@@ -56,11 +59,9 @@ namespace StreamCompaction {
                 kernNaiveScan << <fullBlocksPerGrid, BLOCKSIZE >> > (offset, n, dev_out, dev_in);
                 std::swap(dev_in, dev_out);
             }
-            std::swap(dev_in, dev_out);
-            kernRightShift << <fullBlocksPerGrid, BLOCKSIZE >> > (n, dev_out);
-            cudaMemcpy(odata, dev_out, sizeof(int) * n, cudaMemcpyDeviceToHost);
-            odata[0] = 0;            
+            kernRightShift << <fullBlocksPerGrid, BLOCKSIZE >> > (n, dev_out, dev_in);
             timer().endGpuTimer();
+            cudaMemcpy(odata, dev_out, sizeof(int) * n, cudaMemcpyDeviceToHost);            
             cudaFree(dev_in);
             cudaFree(dev_out);
         }

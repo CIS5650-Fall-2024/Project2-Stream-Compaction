@@ -51,9 +51,9 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
             int* temp = new int[n];
             int* scan = new int[n];
+            timer().startCpuTimer();            
             for (int i = 0; i < n; i++) {
                 if (idata[i] == 0) {
                     temp[i] = 0;
