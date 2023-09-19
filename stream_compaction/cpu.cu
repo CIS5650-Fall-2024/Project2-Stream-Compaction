@@ -18,9 +18,17 @@ namespace StreamCompaction {
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
+            
             // TODO
-            timer().endCpuTimer();
+            odata[0] = 0;
+            for (int i = 1; i < n; i++) {
+                odata[i] = odata[i - 1] + idata[i - 1];
+        
+            }
+
+
+
+            
         }
 
         /**
@@ -31,8 +39,17 @@ namespace StreamCompaction {
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int output = 0;
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    odata[output] = idata[i];
+                    output += 1;
+                }
+            }
+
+
             timer().endCpuTimer();
-            return -1;
+            return output;
         }
 
         /**
@@ -41,10 +58,40 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            
             timer().startCpuTimer();
             // TODO
+            
+            int* checked = new int[n];
+            int* preCheck = new int[n];
+            int counter = 0;
+
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    preCheck[i] = 1;
+                    counter += 1;
+                }
+                else {
+                    preCheck[i] = 0;
+                }
+            }
+
+            scan(n, checked, preCheck);
+
+            for (int i = 0; i < n; i++) {
+                if (preCheck[i]==1) {
+                    odata[checked[i]] = idata[i];
+                }
+            
+            }
+
+            delete[] checked;
+            delete[] preCheck;
+            
             timer().endCpuTimer();
-            return -1;
+            return counter;
+            
+            
         }
     }
 }
