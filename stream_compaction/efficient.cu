@@ -17,24 +17,23 @@ namespace StreamCompaction {
         }
 
         __global__ void kernUpSweep(int N, int offset, int* data) {
-            int index = threadIdx.x + (blockIdx.x * blockDim.x);
-            int k = index * 2 * offset;
-            int target = k + 2 * offset - 1;
-            if (target < N && target >= 0) {
-                data[target] += data[k + offset - 1];
+            size_t k = (threadIdx.x + (blockIdx.x * blockDim.x)) * 2 * offset;
+            if (k >= N) {
+                return;
             }
+            data[k + 2 * offset - 1] += data[k + offset - 1];
         }
 
         __global__ void kernDownSweep(int N, int offset, int* data) {
-            int index = threadIdx.x + (blockIdx.x * blockDim.x);
-            int k = index * 2 * offset;
-            int left = k + offset - 1;
-            int right = k + 2 * offset - 1;
-            if (right < N && right >= 0) {
-                int temp = data[left];
-                data[left] = data[right];
-                data[right] += temp;
+            size_t k = (threadIdx.x + (blockIdx.x * blockDim.x)) * 2 * offset;
+            if (k >= N) {
+                return;
             }
+            size_t left = k + offset - 1;
+            size_t right = k + 2 * offset - 1;
+            int temp = data[left];
+            data[left] = data[right];
+            data[right] += temp;
         }
 
         /**
@@ -47,18 +46,18 @@ namespace StreamCompaction {
             checkCUDAErrorFn("malloc dev_data failed");
             cudaMemcpy(dev_data, idata, n * sizeof(int), cudaMemcpyHostToDevice);
             checkCUDAErrorFn("copy idata to dev_data failed");
-            int B = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            dim3 B((N + BLOCK_SIZE - 1) / BLOCK_SIZE);
             timer().startGpuTimer();
             // TODO
             for (int i = 1; i < N; i <<= 1) {
                 kernUpSweep << <B, BLOCK_SIZE >> > (N, i, dev_data);
-                B = std::max(B >> 1, 1);
+                B.x = std::max(B.x >> 1, 1U);
             }
             cudaMemset(dev_data + N - 1, 0, sizeof(int));
             checkCUDAErrorFn("set dev_data root to 0 failed");
             for (int i = N >> 1; i > 0; i >>= 1) {
+                B.x = (N / (2 * i) + BLOCK_SIZE - 1) / BLOCK_SIZE;
                 kernDownSweep << <B, BLOCK_SIZE >> > (N, i, dev_data);
-                B = std::min(B << 1, (N + i - 1) / i);
             }
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
@@ -94,28 +93,29 @@ namespace StreamCompaction {
             checkCUDAErrorFn("malloc dev_bools failed");
             cudaMalloc((void**)&dev_index, N * sizeof(int));
             checkCUDAErrorFn("malloc dev_index failed");
+
+            cudaMalloc((void**)&dev_odata, N * sizeof(int));
+            checkCUDAErrorFn("malloc dev_odata failed");
             
             dim3 fullBlocksPerGrid((N + BLOCK_SIZE - 1) / BLOCK_SIZE);
-            int B = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+            dim3 B((N + BLOCK_SIZE - 1) / BLOCK_SIZE);
             timer().startGpuTimer();
             // TODO
             StreamCompaction::Common::kernMapToBoolean<<<fullBlocksPerGrid, BLOCK_SIZE>>>(N, dev_bools, dev_idata);
             cudaMemcpy(dev_index, dev_bools, N * sizeof(int), cudaMemcpyDeviceToDevice);
             for (int i = 1; i < N; i <<= 1) {
                 kernUpSweep << <B, BLOCK_SIZE >> > (N, i, dev_index);
-                B = std::max(B >> 1, 1);
+                B.x = std::max(B.x >> 1, 1U);
             }
             cudaMemset(dev_index + N - 1, 0, sizeof(int));
             checkCUDAErrorFn("set dev_bools root to 0 failed");
             for (int i = N >> 1; i > 0; i >>= 1) {
+                B.x = (N / i + BLOCK_SIZE - 1) / BLOCK_SIZE;
                 kernDownSweep << <B, BLOCK_SIZE >> > (N, i, dev_index);
-                B = std::min(B << 1, (N + i - 1) / i);
             }
-            cudaMemcpy(&compressedLength, &dev_index[N - 1], sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(&compressedLength, dev_index + N - 1, sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAErrorFn("copy dev_index[N-1] to compressedLength failed");
-            cudaMalloc((void**)&dev_odata, compressedLength * sizeof(int));
-            checkCUDAErrorFn("malloc dev_odata failed");
-            StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, BLOCK_SIZE >> > (N, dev_odata, dev_idata, dev_bools, dev_index);
+            StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, BLOCK_SIZE >> > (n, dev_odata, dev_idata, dev_bools, dev_index);
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_odata, compressedLength * sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAErrorFn("copy dev_odata to odata failed");
