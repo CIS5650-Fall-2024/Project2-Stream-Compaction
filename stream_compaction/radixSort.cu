@@ -49,7 +49,6 @@ namespace StreamCompaction {
             for (int mask = 1; mask < maxMask; mask <<= 1)
             {
                 kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (n, dev_falses, dev_idata, mask);
-                cudaMemcpy(odata, dev_falses, n * sizeof(int), cudaMemcpyDeviceToHost);
                 StreamCompaction::Efficient::scanInplace(extended_n, dev_falses);
                 int totalFalses = 0, tmp_back = 0;
                 cudaMemcpy(&totalFalses, dev_falses + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
@@ -57,7 +56,6 @@ namespace StreamCompaction {
                 totalFalses += (tmp_back & mask) == 0;
                 kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_falses, mask, totalFalses);
                 std::swap(dev_idata, dev_odata);
-                cudaMemcpy(odata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
             }
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
