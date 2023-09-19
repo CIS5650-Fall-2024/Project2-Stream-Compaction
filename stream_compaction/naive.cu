@@ -33,6 +33,7 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             int *dev_odata, *dev_idata;
+            int rounds = ilog2ceil(n);
             cudaMalloc((void**)&dev_odata, n * sizeof(int));
             checkCUDAError("cudaMalloc dev_odata failed!");
             cudaMalloc((void**)&dev_idata, n * sizeof(int));
@@ -41,7 +42,6 @@ namespace StreamCompaction {
             dim3 blocks((n + blockSize - 1) / blockSize);
 
             timer().startGpuTimer();
-            int rounds = ilog2ceil(n);
             int offset = 1;
             for (int i = 0; i < rounds; i++) {
                 kernScan<<<blocks, blockSize>>>(n, dev_odata, dev_idata, offset);
