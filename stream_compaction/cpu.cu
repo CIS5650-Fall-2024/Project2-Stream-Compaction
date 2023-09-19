@@ -80,5 +80,14 @@ namespace StreamCompaction {
             if (maxIdx > 0) return maxIdx + 1;
             return -1;
         }
+
+        void sort(int n, int* odata, const int* idata) {
+          timer().startCpuTimer();
+
+          std::copy(idata, idata + n, odata);
+          std::sort(odata, odata + n);
+
+          timer().endCpuTimer();
+        }
     }
 }
