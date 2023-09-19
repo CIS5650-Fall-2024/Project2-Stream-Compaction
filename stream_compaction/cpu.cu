@@ -1,5 +1,6 @@
 #include <cstdio>
 #include "cpu.h"
+#include <iostream>
 
 #include "common.h"
 
@@ -19,7 +20,11 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            // TODO: traverse all elements and record the exclusive prefix sum to odata.
+            odata[0] = 0;
+            for (int i = 1; i < n; i++) {
+                odata[i] = odata[i-1] + idata[i-1];
+            }
             timer().endCpuTimer();
         }
 
@@ -30,9 +35,16 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            // TODO: traverse all elements and copy to odata without 0's.
+            int count = 0;
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    odata[count] = idata[i];
+                    count++;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return count;
         }
 
         /**
@@ -41,10 +53,25 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* scanResult = new int[n];
             timer().startCpuTimer();
             // TODO
+            //std::cout << "start traverse and build temp arr" << std::endl;
+            int sum = 0;
+            for (int i = 0; i < n; i++) {
+                odata[i] = idata[i] == 0 ? 0 : 1;
+                scanResult[i] = sum;
+                sum += odata[i];
+            }
+            for (int i = 0; i < n; i++) {
+                if (odata[i] == 1) {
+                    odata[scanResult[i]] = idata[i];
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            int count = scanResult[n - 1];
+            delete[] scanResult;
+            return count;
         }
     }
 }
