@@ -13,6 +13,8 @@
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
+extern int BlockSize;
+
 /**
  * Check for CUDA errors; print and exit if there was a problem.
  */
@@ -35,7 +37,7 @@ namespace StreamCompaction {
         __global__ void kernMapToBoolean(int n, int *bools, const int *idata);
 
         __global__ void kernScatter(int n, int *odata,
-                const int *idata, const int *bools, const int *indices);
+                const int *idata, const int *indices);
 
         /**
         * This class is used for timing the performance
@@ -128,5 +130,7 @@ namespace StreamCompaction {
             float prev_elapsed_time_cpu_milliseconds = 0.f;
             float prev_elapsed_time_gpu_milliseconds = 0.f;
         };
+
+        void ShowGPUInfo();
     }
 }

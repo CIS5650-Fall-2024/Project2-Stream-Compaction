@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <vector>
 #include "cpu.h"
+#include <algorithm>
 
 #include "common.h"
 
@@ -80,6 +81,18 @@ namespace StreamCompaction {
 
             timer().endCpuTimer();
             return pre_sum_exclusive[n - 1];
+        }
+        /**
+         * CPU sort std::sort
+         *
+         * @returns the number of elements remaining after compaction.
+         */
+        void sort(int n, int* odata, const int* idata)
+        {
+            std::memcpy(odata, idata, n * sizeof(int));
+            timer().startCpuTimer();
+            std::sort(odata, odata + n);
+            timer().endCpuTimer();
         }
     }
 }

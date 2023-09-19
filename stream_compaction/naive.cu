@@ -43,7 +43,7 @@ namespace StreamCompaction {
             while (d < n)
             {
                 int k = n - d;
-                kernalNaiveScan<<<(k + 31) / 32, 32 >> >(k, d, dev_write, dev_read);
+                kernalNaiveScan<<<(k + BlockSize - 1) / BlockSize, BlockSize >> >(k, d, dev_write, dev_read);
                 checkCUDAError("Luanch kernalNaiveScan failed!");
                 cudaMemcpy(dev_read + d, dev_write + d, k * sizeof(int), cudaMemcpyDeviceToDevice);
 

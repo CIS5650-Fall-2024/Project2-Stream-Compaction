@@ -23,7 +23,10 @@ namespace StreamCompaction {
          * which map to 0 will be removed, and elements which map to 1 will be kept.
          */
         __global__ void kernMapToBoolean(int n, int *bools, const int *idata) {
-            // TODO
+            int index = threadIdx.x + (blockDim.x * blockIdx.x);
+            if (index >= n) return;
+
+            bools[index] = (idata[index] != 0 ? 1 : 0);
         }
 
         /**
@@ -31,9 +34,24 @@ namespace StreamCompaction {
          * if bools[idx] == 1, it copies idata[idx] to odata[indices[idx]].
          */
         __global__ void kernScatter(int n, int *odata,
-                const int *idata, const int *bools, const int *indices) {
-            // TODO
+                const int *idata, const int *indices) {
+            int index = threadIdx.x + (blockDim.x * blockIdx.x);
+            if (index >= n) return;
+
+            if (idata[index] != 0)
+            {
+                odata[indices[index]] = idata[index];
+            }
         }
 
+        void ShowGPUInfo()
+        {
+            cudaDeviceProp prop;
+            cudaGetDeviceProperties(&prop, 0);
+            printf("SM: %d\n", prop.multiProcessorCount);
+            printf("Warp Size: %d\n", prop.warpSize);
+            printf("Max Threads/Block Size: %d\n", prop.maxThreadsPerBlock);
+            printf("Max Blocks/MultiProcessor: %d\n", prop.maxBlocksPerMultiProcessor);
+        }
     }
 }

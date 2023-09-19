@@ -29,25 +29,6 @@ namespace StreamCompaction {
             data[(index + 1) * step - 1 - (step >> 1)] = temp;
         }
 
-        __global__ void kernalLabelData(int n, int* label, const int* data)
-        {
-            int index = threadIdx.x + (blockDim.x * blockIdx.x);
-            if (index >= n) return;
-
-            label[index] = (data[index] != 0 ? 1 : 0);
-        }
-
-        __global__ void kernalScatter(int n, int* result, const int* label, const int* data)
-        {
-            int index = threadIdx.x + (blockDim.x * blockIdx.x);
-            if (index >= n) return;
-
-            if (data[index] != 0)
-            {
-                result[label[index]] = data[index];
-            }
-        }
-
         void EfficientParallelScan(const int& pot_length, int* dev_data)
         {
             // Up-Sweep
@@ -55,7 +36,8 @@ namespace StreamCompaction {
             int step = 2;
             while (k > 1)
             {
-                kernalEfficientScan_UpSweep << <(k + 31) / 32, 32 >> > (k, step, dev_data);
+                const int block = BlockSize;
+                kernalEfficientScan_UpSweep << <(k + block - 1) / block, block >> > (k, step, dev_data);
                 checkCUDAError("Luanch kernalEfficientScan_UpSweep failed!");
 
                 k >>= 1;
@@ -69,7 +51,8 @@ namespace StreamCompaction {
             step = pot_length;
             while (k < pot_length)
             {
-                kernalEfficientScan_DownSweep << <(k + 31) / 32, 32 >> > (k, step, dev_data);
+                const int block = BlockSize;
+                kernalEfficientScan_DownSweep << <(k + block - 1) / block, block >> > (k, step, dev_data);
                 checkCUDAError("Luanch kernalEfficientScan_DownSweep failed!");
 
                 k <<= 1;
@@ -137,11 +120,11 @@ namespace StreamCompaction {
 
             timer().startGpuTimer();
 
-            kernalLabelData << <(pot_length + 31) / 32, 32 >> > (pot_length, dev_label, dev_data);
+            Common::kernMapToBoolean << <(pot_length + BlockSize - 1) / BlockSize, BlockSize >> > (pot_length, dev_label, dev_data);
 
             EfficientParallelScan(pot_length, dev_label);
 
-            kernalScatter << <(pot_length + 31) / 32, 32 >> > (pot_length, dev_result, dev_label, dev_data);
+            Common::kernScatter << <(pot_length + BlockSize - 1) / BlockSize, BlockSize >> > (pot_length, dev_result, dev_data, dev_label);
             checkCUDAError("Luanch kernalScatter failed!");
 
             timer().endGpuTimer();

@@ -5,6 +5,7 @@
 #include <thrust/scan.h>
 #include "common.h"
 #include "thrust.h"
+#include <thrust/sort.h>
 
 namespace StreamCompaction {
     namespace Thrust {
@@ -46,6 +47,17 @@ namespace StreamCompaction {
 
             cudaFree(dev_read);
             cudaFree(dev_write);
+        }
+
+        void sort(int n, int* odata, const int* idata) 
+        {
+            thrust::device_vector<int> thrust_dev_data(idata, idata + n);
+            
+            timer().startGpuTimer();
+            thrust::sort(thrust_dev_data.begin(), thrust_dev_data.end());
+            timer().endGpuTimer();
+
+            cudaMemcpy(odata, thrust_dev_data.data().get(), n * sizeof(int), cudaMemcpyDeviceToHost);
         }
     }
 }
