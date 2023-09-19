@@ -163,7 +163,16 @@ namespace StreamCompaction {
             cudaFree(dev_data);
             cudaFree(dev_blockSum);
         }
-
+        void scanSharedInplace(int n, Common::devDataBuffer& buffer) {
+            int i = 0;
+            for (i = 0; i < buffer.size() - 1; i++) {
+                kernPrescanInplace << <buffer.sizeAt(i) / blockSize, blockSize, blockSize * sizeof(int) >> > (buffer.sizeAt(i), buffer[i], buffer[i + 1]);
+            }
+            scanInplace(buffer.sizeAt(i), buffer[i]);
+            for (int i = buffer.size() - 1; i >= 1; i--) {
+                kernAddBlockSum << <buffer.sizeAt(i - 1) / blockSize, blockSize >> > (buffer[i - 1], buffer[i], buffer.sizeAt(i - 1));
+            }
+        }
         void scanShared(int n, int* odata, const int* idata) {
             int dMax = ilog2ceil(n);
             int extended_n = 1 << dMax;
@@ -171,7 +180,7 @@ namespace StreamCompaction {
                 scan(n, odata, idata);
                 return;
             }
-            devDataBuffer buffer(extended_n, blockSize);
+            Common::devDataBuffer buffer(extended_n, blockSize);
             cudaMemcpy(buffer.data(), idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             timer().startGpuTimer();
             int i = 0;
