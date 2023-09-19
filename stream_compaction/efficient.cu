@@ -19,7 +19,7 @@ namespace StreamCompaction {
         }
  
         __global__ void kernUpSweep(int n, int d, int* odata) {
-            int index = (blockIdx.x * blockDim.x + threadIdx.x) * (2 << d);
+            size_t index = (blockIdx.x * blockDim.x + threadIdx.x) * (2 << d);
  
             if (index >= n) return;
 
@@ -27,7 +27,7 @@ namespace StreamCompaction {
         }
 
         __global__ void kernDownSweep(int n, int d, int* odata) {
-            int index = (blockIdx.x * blockDim.x + threadIdx.x) * (2 << d);
+            size_t index = (blockIdx.x * blockDim.x + threadIdx.x) * (2 << d);
 
             if (index >= n) return;
 
@@ -44,14 +44,15 @@ namespace StreamCompaction {
             extern __shared__ int temp[];
 
             int thid = threadIdx.x;
-            int index = blockIdx.x * blockDim.x * 2 + thid;
+            size_t index = blockIdx.x * blockDim.x + thid;
 
             // Load input into shared memory with boundary checks
             temp[2 * thid] = (2 * index < n) ? idata[2 * index] : 0;
             temp[2 * thid + 1] = (2 * index + 1 < n) ? idata[2 * index + 1] : 0;
+            __syncthreads();
 
             int offset = 1;
-
+           
             // Up-sweep (reduce) phase
             for (int d = blockDim.x; d > 0; d >>= 1) {
                 __syncthreads();
@@ -85,24 +86,29 @@ namespace StreamCompaction {
             // Write results to device memory with boundary checks
             if (2 * index < n) {
                 odata[2 * index] = temp[2 * thid];
-                if (2 * index + 1 < n) {
-                    odata[2 * index + 1] = temp[2 * thid + 1];
-                }
+            }
+
+            if (2 * index + 1 < n) {
+                odata[2 * index + 1] = temp[2 * thid + 1];
             }
 
             // Save block sum
-            if (thid == 0) {
-                blockSums[blockIdx.x] = temp[2 * blockDim.x - 2] + temp[2 * blockDim.x - 1];
+            if (thid == blockDim.x - 1) {
+                blockSums[blockIdx.x] = temp[2 * blockDim.x - 1] + ((2 * index + 1< n) ? idata[2 * index + 1] : 0);
             }
         }
 
 
         __global__ void kernAddScannedBlockSums(int n, int* odata, const int* blockSums) {
-            int index = blockIdx.x * blockDim.x + threadIdx.x;
-            if (index >= n) return;
+            size_t index = blockIdx.x * blockDim.x + threadIdx.x;
+            int blockSum = (blockIdx.x > 0) ? blockSums[blockIdx.x - 1] : 0;
 
-            if (blockIdx.x > 0) {
-                odata[index] += blockSums[blockIdx.x - 1];
+            if (2 * index < n) {
+                odata[2 * index] += blockSum;
+            }
+
+            if (2 * index + 1 < n) {
+                odata[2 * index + 1] += blockSum;
             }
         }
 
@@ -113,9 +119,9 @@ namespace StreamCompaction {
             int* dev_in, * dev_out, * dev_blockSums;
             
             const int log2ceil = ilog2ceil(n);
-            const long int fullSize = 1 << log2ceil;
+            const int fullSize = 1 << log2ceil;
 
-            int gridSize = (fullSize + blockSize - 1) / blockSize;
+            int gridSize = (fullSize + 2 * blockSize - 1) / (2 * blockSize);
             // printf("gridSize: %d\n", gridSize);
 
             // allocate gpu memory
@@ -130,25 +136,25 @@ namespace StreamCompaction {
 
             timer().startGpuTimer();
             kernBlockScan << <gridSize, blockSize, 2 * blockSize * sizeof(int) >> > (fullSize, dev_out, dev_in, dev_blockSums);
+            checkCUDAErrorFn("blockScan failed!");
 
             int* blockSums = new int[gridSize];
             cudaMemcpy(blockSums, dev_blockSums, gridSize * sizeof(int), cudaMemcpyDeviceToHost);
 
-            printf("blockSums\n");
-            for (int i = 0; i < gridSize; ++i) {
-                printf("%d ", blockSums[i]);
+            // printf("blockSums\n");
+            //for (int i = 0; i < gridSize; ++i) {
+            //    printf("%d ", blockSums[i]);
+            //}
+            //printf("\n");
+   
+            for (int i = 1; i < gridSize; ++i) {
+                blockSums[i] += blockSums[i - 1];
             }
-            printf("\n");
 
-            cudaMemcpy(odata, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
-            printf("odata\n");
-            for (int i = 0; i < n; ++i) {
-                printf("%d ", odata[i]);
-            }
-            printf("\n");
+            cudaMemcpy(dev_blockSums, blockSums, gridSize * sizeof(int), cudaMemcpyHostToDevice);
+            delete[] blockSums;
 
-            // Assuming gridSize is small enough for a single block to handle
-            kernBlockScan << <1, gridSize / 2, gridSize * sizeof(int) >> > (gridSize, dev_blockSums, dev_blockSums, nullptr);
+            kernAddScannedBlockSums << <gridSize, blockSize >> > (fullSize, dev_out, dev_blockSums);
 
             timer().endGpuTimer();
 

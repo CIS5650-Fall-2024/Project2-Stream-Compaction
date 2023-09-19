@@ -15,7 +15,7 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 20; // feel free to change the size of array
+const int SIZE = 1 << 28; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int* a = new int[SIZE];
 int* b = new int[SIZE];
@@ -34,7 +34,11 @@ int main(int argc, char* argv[]) {
 
     genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
     a[SIZE - 1] = 0;
+    // a = new int[SIZE] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
     printArray(SIZE, a, true);
+
+    // a = { [30  37  14  22  42   6  37  11  20  40  13  37  27  10  35   0] }
+    
 
     // initialize b using StreamCompaction::CPU::scan you implement
     // We use b for further comparison. Make sure your StreamCompaction::CPU::scan is correct.
@@ -86,7 +90,7 @@ int main(int argc, char* argv[]) {
     printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
 
-    /*zeroArray(SIZE, c);
+    zeroArray(SIZE, c);
     printDesc("work-efficient scan with shared memory, power-of-two");
     StreamCompaction::Efficient::scanShared(SIZE, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
@@ -98,7 +102,7 @@ int main(int argc, char* argv[]) {
     StreamCompaction::Efficient::scanShared(NPOT, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     printArray(NPOT, c, true);
-    printCmpResult(NPOT, b, c);*/
+    printCmpResult(NPOT, b, c);
 
     zeroArray(SIZE, c);
     printDesc("thrust scan, power-of-two");
