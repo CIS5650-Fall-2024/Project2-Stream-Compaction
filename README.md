@@ -29,6 +29,101 @@ Stream compaction is an algorithm that, given an array and some condition, creat
 
 # Performance Analysis
 
+## Time(ms) vs Block Size (optimizing block size)
+
+This project was first executed on an array of size **2<sup>20</sup>different** with different block sizes to roughly optimize them.
+
+| ![](./img/timeVsBlockSize.png) |
+|:--:|
+| **Scan**: time (ms) vs block size (# of threads per block)
+
+There is little gain in performance beyond 128 threads, so further performance analysis was done with block size set to **128**. 
+
+## Time (ms) vs Array Size
+
+### Scan
+
+Each of the scan implementations (CPU, GPU Naive, GPU Work-Efficient) was compared against each other with increasing array sizes. Additionally, the results were also compared against Nvidia's thrust library's `exclusive_scan`.
+
+| ![](./img/scanPerformance.png) |
+|:--:|
+| **Scan**: time (ms) vs array size, Block Size: 128 |
+
+### Stream Compaction
+
+Each of the stream compaction implementations was compared against each other with increasing array sizes.
+
+| ![](./img/streamCompactionPerformance.png) |
+|:--:|
+| **Stream Compaction**: time (ms) vs array size, Block Size: 128 |
+
 Include analysis, etc. (Remember, this is public, so don't put
 anything here that you don't want to share with the world.)
 
+# Sample Output
+
+This output was obtained with a block size of **128**, power of 2 array size of **2<sup>16</sup>**, and non-power of array size of **2<sup>16</sup> - 3**.
+
+```
+****************
+** SCAN TESTS **
+****************
+    [  19  33  49  24  24  41   7  27  48   8  21  34  25 ...  17   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 0.0379ms    (std::chrono Measured)
+    [   0  19  52 101 125 149 190 197 224 272 280 301 335 ... 1605490 1605507 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 0.0317ms    (std::chrono Measured)
+    [   0  19  52 101 125 149 190 197 224 272 280 301 335 ... 1605434 1605446 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 0.158912ms    (CUDA Measured)
+    [   0  19  52 101 125 149 190 197 224 272 280 301 335 ... 1605490 1605507 ]
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 0.193856ms    (CUDA Measured)
+    [   0  19  52 101 125 149 190 197 224 272 280 301 335 ... 1605434 1605446 ]
+    passed
+==== work-efficient scan, power-of-two ====
+   elapsed time: 0.326432ms    (CUDA Measured)
+    [   0  19  52 101 125 149 190 197 224 272 280 301 335 ... 1605490 1605507 ]
+    passed
+==== work-efficient scan, non-power-of-two ====
+   elapsed time: 0.247808ms    (CUDA Measured)
+    [   0  19  52 101 125 149 190 197 224 272 280 301 335 ... 1605434 1605446 ]
+    passed
+==== thrust scan, power-of-two ====
+   elapsed time: 0.059744ms    (CUDA Measured)
+    [   0  19  52 101 125 149 190 197 224 272 280 301 335 ... 1605490 1605507 ]
+    passed
+==== thrust scan, non-power-of-two ====
+   elapsed time: 0.051552ms    (CUDA Measured)
+    [   0  19  52 101 125 149 190 197 224 272 280 301 335 ... 1605434 1605446 ]
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   3   1   3   2   0   3   3   3   2   2   1   0   3 ...   1   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 0.1817ms    (std::chrono Measured)
+    [   3   1   3   2   3   3   3   2   2   1   3   3   1 ...   3   1 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 0.1807ms    (std::chrono Measured)
+    [   3   1   3   2   3   3   3   2   2   1   3   3   1 ...   3   3 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 0.2497ms    (std::chrono Measured)
+    [   3   1   3   2   3   3   3   2   2   1   3   3   1 ...   3   1 ]
+    passed
+==== work-efficient compact, power-of-two ====
+   elapsed time: 0.31232ms    (CUDA Measured)
+    [   3   1   3   2   3   3   3   2   2   1   3   3   1 ...   3   1 ]
+    passed
+==== work-efficient compact, non-power-of-two ====
+   elapsed time: 0.395264ms    (CUDA Measured)
+    [   3   1   3   2   3   3   3   2   2   1   3   3   1 ...   3   3 ]
+    passed
+Press any key to continue . . .
+```
