@@ -13,7 +13,7 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = (1 << 28); // feel free to change the size of array
+const int SIZE = (1 << 20); // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -67,6 +67,36 @@ int main(int argc, char* argv[]) {
 	std::cout << "avg thrust: " << avgThrust / 100. << std::endl;
 	std::cout << "......." << std::endl;
 #endif
+
+#if 0
+    float avgCPU = 0.f;
+    float avgEff = 0.f;
+    float avgThrust = 0.f;
+    int testCnt = 5;
+    for (int i = 0;i < testCnt;++i) {
+        genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
+        a[SIZE - 1] = 0;
+
+        zeroArray(SIZE, c);
+        StreamCompaction::CPU::sort(SIZE, c, a);
+        avgCPU += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+        zeroArray(SIZE, c);
+        StreamCompaction::Efficient::sort(SIZE, c, a);
+        avgEff += StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+
+        zeroArray(SIZE, c);
+        StreamCompaction::Thrust::sort(SIZE, c, a);
+        avgThrust += StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation();
+
+    }
+    float denom = testCnt;
+    std::cout << "avg CPU: " << avgCPU / denom << std::endl;
+    std::cout << "avg efficient: " << avgEff / denom << std::endl;
+    std::cout << "avg thrust: " << avgThrust / denom << std::endl;
+    std::cout << "......." << std::endl;
+#endif
+
 
 #if 1
     // Scan tests

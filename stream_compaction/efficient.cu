@@ -2,6 +2,8 @@
 #include <cuda_runtime.h>
 #include "common.h"
 #include "efficient.h"
+#include <thrust/scan.h>
+#include <thrust/device_ptr.h>
 
 static int blockSize = 64;
 
@@ -128,7 +130,7 @@ namespace StreamCompaction {
             int lastBool = 0;
             cudaMemcpy(&lastBool, dev_bools + (N - 1), sizeof(int), cudaMemcpyDeviceToHost);
             ans += lastBool;
-            
+
             //free GPU
             cudaFree(dev_idata);
             cudaFree(dev_bools);
@@ -162,6 +164,12 @@ namespace StreamCompaction {
             }
         }
 
+        __global__ void kernCheckSorted(int n, bool* odata, const int* idata) {
+            int id = blockDim.x * blockIdx.x + threadIdx.x;
+            if (id >= (n-1))return;
+            if(idata[id] > idata[id + 1])*odata=false;
+        }
+
         void sort(int n, int* odata, const int* idata) {
             
             // TODO
@@ -170,20 +178,27 @@ namespace StreamCompaction {
             int* dev_idata;
             int* dev_odata;
             int* dev_bools;
-            //int* dev_indices_1;
+            bool* dev_sorted;
             int* dev_indices_0;
+
             cudaMalloc((void**)&dev_idata, N * sizeof(int));
             checkCUDAError("cudaMalloc dev_idata failed!");
+            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemset(dev_idata + n, INT_MAX, (N - n) * sizeof(int));//to make non-power-of-two right
+
             cudaMalloc((void**)&dev_bools, N * sizeof(int));
             checkCUDAError("cudaMalloc dev_bools failed!");
+
             cudaMalloc((void**)&dev_odata, N * sizeof(int));
             checkCUDAError("cudaMalloc dev_odata failed!");
-            //cudaMalloc((void**)&dev_indices_1, N * sizeof(int));
-            //checkCUDAError("cudaMalloc dev_indices failed!");
+
+            cudaMalloc((void**)&dev_sorted, sizeof(bool));
+            checkCUDAError("cudaMalloc dev_sorted failed!");
+
             cudaMalloc((void**)&dev_indices_0, N * sizeof(int));
             checkCUDAError("cudaMalloc dev_indices failed!");
-            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-            cudaMemset(dev_idata + n, INT_MAX, (N - n)*sizeof(int));//to make non-power-of-two right
+
+
 
             dim3 fullBlocksPerGrid((N + blockSize - 1) / blockSize);
             int mask = 1;
@@ -191,22 +206,33 @@ namespace StreamCompaction {
             timer().startGpuTimer();
 
             for (int i = 0;i < 32;++i) {
+                //improvement2 avoid too much scan: makes the algorithm 8x faster
+                bool sorted = false;
+                cudaMemset(dev_sorted, true, sizeof(bool));
+                kernCheckSorted << <fullBlocksPerGrid, blockSize >> > (n, dev_sorted, dev_idata);
+                cudaMemcpy(&sorted, dev_sorted, sizeof(bool), cudaMemcpyDeviceToHost);
+                if (sorted)break;
+
                 //map 0
                 kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (N, dev_bools, dev_idata,mask,true);
                 cudaMemcpy(dev_indices_0, dev_bools, N * sizeof(int), cudaMemcpyDeviceToDevice);
                 devScan(dev_indices_0, layerCnt, blockSize);
+                //thrust::device_ptr<int> thrust_ptr(dev_indices_0);
+                //thrust::device_ptr<int> thrust_ptr_1(dev_bools);
+                //thrust::exclusive_scan(thrust_ptr_1, thrust_ptr_1 + N, thrust_ptr);
+                
                 int zeroCnt = 0;
                 int lastBool = 0;
                 cudaMemcpy(&zeroCnt, dev_indices_0 + (N - 1), sizeof(int), cudaMemcpyDeviceToHost);
                 cudaMemcpy(&lastBool, dev_bools + (N - 1), sizeof(int), cudaMemcpyDeviceToHost);
                 zeroCnt += lastBool;
 
+                //improvement1 skip map1: only need to scan once to get the index of 0 and 1, makes the algorithm faster than CPU
                 //map1
                 //kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (N, dev_bools, dev_idata, mask, false);
                 //cudaMemcpy(dev_indices_1, dev_bools, N * sizeof(int), cudaMemcpyDeviceToDevice);
                 //devScan(dev_indices_1, layerCnt, blockSize);
-                kernSortScatter << <fullBlocksPerGrid, blockSize >> > (N,
-                    dev_odata, dev_idata, dev_bools, dev_indices_0,zeroCnt);
+                kernSortScatter << <fullBlocksPerGrid, blockSize >> > (N, dev_odata, dev_idata, dev_bools, dev_indices_0,zeroCnt);
                 mask <<= 1;
                 std::swap(dev_odata, dev_idata);
             }
@@ -221,6 +247,7 @@ namespace StreamCompaction {
             cudaFree(dev_bools);
             cudaFree(dev_odata);
             cudaFree(dev_indices_0);
+            cudaFree(dev_sorted);
             
         }
     }
