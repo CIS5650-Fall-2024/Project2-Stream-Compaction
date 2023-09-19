@@ -5,6 +5,7 @@
 #include <thrust/scan.h>
 #include "common.h"
 #include "radix.h"
+#include "efficient.h"
 
 namespace StreamCompaction {
     namespace Radix {
@@ -13,54 +14,6 @@ namespace StreamCompaction {
         {
             static PerformanceTimer timer;
             return timer;
-        }
-
-        __global__ void kernalEfficientScan_UpSweep(int k, int step, int* data)
-        {
-            int index = threadIdx.x + (blockDim.x * blockIdx.x);
-
-            if (index >= k) return;
-            data[(index + 1) * step - 1] = data[(index + 1) * step - 1] + data[(index + 1) * step - 1 - (step >> 1)];
-        }
-        __global__ void kernalEfficientScan_DownSweep(int k, int step, int* data)
-        {
-            int index = threadIdx.x + (blockDim.x * blockIdx.x);
-
-            if (index >= k) return;
-            int temp = data[(index + 1) * step - 1];
-            data[(index + 1) * step - 1] = data[(index + 1) * step - 1] + data[(index + 1) * step - 1 - (step >> 1)];
-            data[(index + 1) * step - 1 - (step >> 1)] = temp;
-        }
-
-        void EfficientParallelScan(const int& pot_length, int* dev_data)
-        {
-            // Up-Sweep
-            int k = pot_length >> 1;
-            int step = 2;
-            while (k > 1)
-            {
-                const int block = BlockSize;
-                kernalEfficientScan_UpSweep << <(k + block - 1) / block, block >> > (k, step, dev_data);
-                checkCUDAError("Luanch kernalEfficientScan_UpSweep failed!");
-
-                k >>= 1;
-                step <<= 1;
-            }
-            //replace last number with 0
-            cudaMemset(dev_data + pot_length - 1, 0, sizeof(int));
-
-            // Down-Sweep
-            k = 1;
-            step = pot_length;
-            while (k < pot_length)
-            {
-                const int block = BlockSize;
-                kernalEfficientScan_DownSweep << <(k + block - 1) / block, block >> > (k, step, dev_data);
-                checkCUDAError("Luanch kernalEfficientScan_DownSweep failed!");
-
-                k <<= 1;
-                step >>= 1;
-            }
         }
 
         __global__ void kernalCheckStop(int n, const int* idata, int* stop)
@@ -76,8 +29,7 @@ namespace StreamCompaction {
             if (index >= n) return;
 
             int num = idata[index];
-            int result = ((num & (1 << k)) != 0 ? 0 : 1);
-
+            int result = 1 - ((num & (1 << k)) >> k);
             if (k == 0 || result != ((num & (1 << (k - 1))) != 0 ? 0 : 1))
             {
                 *skip = 1;
@@ -146,7 +98,9 @@ namespace StreamCompaction {
                 int last_num;
                 cudaMemcpy(&last_num, dev_label + pot_length - 1, sizeof(int), cudaMemcpyDeviceToHost);
 
-                EfficientParallelScan(pot_length, dev_label);
+                Efficient::EfficientParallelScan(pot_length, dev_label);
+                //thrust::device_ptr<int> thrust_dev_label(dev_label);
+                //thrust::exclusive_scan(thrust_dev_label, thrust_dev_label + pot_length, dev_label);
 
                 int start_index;
                 cudaMemcpy(&start_index, dev_label + pot_length - 1, sizeof(int), cudaMemcpyDeviceToHost);

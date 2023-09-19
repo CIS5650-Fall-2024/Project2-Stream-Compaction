@@ -14,6 +14,12 @@ void checkCUDAErrorFn(const char *msg, const char *file, int line) {
     exit(EXIT_FAILURE);
 }
 
+int BlockSize = 128;
+int SM_Count = 0;
+int Warp_Size = 0;
+int MaxThreadPerBlock = 1024;
+int MaxBlocksPerSM = 0;
+int MaxWave = 0;
 
 namespace StreamCompaction {
     namespace Common {
@@ -44,14 +50,24 @@ namespace StreamCompaction {
             }
         }
 
-        void ShowGPUInfo()
+        void GetGPUInfo(bool print)
         {
             cudaDeviceProp prop;
             cudaGetDeviceProperties(&prop, 0);
-            printf("SM: %d\n", prop.multiProcessorCount);
-            printf("Warp Size: %d\n", prop.warpSize);
-            printf("Max Threads/Block Size: %d\n", prop.maxThreadsPerBlock);
-            printf("Max Blocks/MultiProcessor: %d\n", prop.maxBlocksPerMultiProcessor);
+            SM_Count = prop.multiProcessorCount;
+            Warp_Size = prop.warpSize;
+            MaxThreadPerBlock = prop.maxThreadsPerBlock;
+            MaxBlocksPerSM = prop.maxBlocksPerMultiProcessor;
+            MaxWave = MaxBlocksPerSM * SM_Count;
+
+            if (print)
+            {
+                printf("SM: %d\n", SM_Count);
+                printf("Warp Size: %d\n", Warp_Size);
+                printf("Max Threads/Block Size: %d\n", MaxThreadPerBlock);
+                printf("Max Block/SM: %d\n", MaxBlocksPerSM);
+                printf("Max Wave: %d\n", MaxWave);
+            }
         }
     }
 }

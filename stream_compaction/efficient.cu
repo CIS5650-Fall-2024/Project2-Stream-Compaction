@@ -36,7 +36,7 @@ namespace StreamCompaction {
             int step = 2;
             while (k > 1)
             {
-                const int block = BlockSize;
+                const int block = GetBlockSize(k);
                 kernalEfficientScan_UpSweep << <(k + block - 1) / block, block >> > (k, step, dev_data);
                 checkCUDAError("Luanch kernalEfficientScan_UpSweep failed!");
 
@@ -51,7 +51,7 @@ namespace StreamCompaction {
             step = pot_length;
             while (k < pot_length)
             {
-                const int block = BlockSize;
+                const int block = GetBlockSize(k);
                 kernalEfficientScan_DownSweep << <(k + block - 1) / block, block >> > (k, step, dev_data);
                 checkCUDAError("Luanch kernalEfficientScan_DownSweep failed!");
 

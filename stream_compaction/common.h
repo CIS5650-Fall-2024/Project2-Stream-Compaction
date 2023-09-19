@@ -13,7 +13,14 @@
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
+#define DYNAMIC_BLOCK_SIZE 0
+
 extern int BlockSize;
+extern int SM_Count;
+extern int Warp_Size;
+extern int MaxThreadPerBlock;
+extern int MaxBlocksPerSM;
+extern int MaxWave;
 
 /**
  * Check for CUDA errors; print and exit if there was a problem.
@@ -30,6 +37,22 @@ inline int ilog2(int x) {
 
 inline int ilog2ceil(int x) {
     return x == 1 ? 0 : ilog2(x - 1) + 1;
+}
+
+inline int lowbit(int x) { return x & -x; }
+inline int pow2floor(int x) 
+{ 
+    while (x != lowbit(x)) x += lowbit(x);
+    return x >> 1;
+}
+
+inline int GetBlockSize(int k) 
+{
+#if DYNAMIC_BLOCK_SIZE
+    return std::max(std::min(MaxThreadPerBlock, pow2floor(k / SM_Count)), Warp_Size); 
+#else
+    return BlockSize;
+#endif
 }
 
 namespace StreamCompaction {
@@ -131,6 +154,6 @@ namespace StreamCompaction {
             float prev_elapsed_time_gpu_milliseconds = 0.f;
         };
 
-        void ShowGPUInfo();
+        void GetGPUInfo(bool print = true);
     }
 }
