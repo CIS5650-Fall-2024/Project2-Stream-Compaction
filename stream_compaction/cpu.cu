@@ -28,6 +28,15 @@ namespace StreamCompaction {
             timer().endCpuTimer();
         }
 
+        void _scan_no_timer(int n, int *odata, const int *idata) {
+            for (int i = 0; i < n; i++) {
+                odata[i] = idata[i];
+                if (i > 0) {
+                    odata[i] += odata[i - 1];
+                }
+            }
+        }
+
         /**
          * CPU stream compaction without using the scan function.
          *
@@ -53,12 +62,12 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            int* bools[n];
+            int* bools = new int[n];
             for (int i = 0; i < n; i++) {
-                bools[i] = 1 if (idata[i] != 0) else 0;
+                bools[i] = (idata[i] != 0) ? 1 : 0;
             }
-            int* scanned[n];
-            scan(n, scanned, bools);
+            int* scanned = new int[n];
+            _scan_no_timer(n, scanned, bools);
             // convert to exclusive scan
             for (int i = n - 1; i > 0; i--) {
                 scanned[i] = scanned[i - 1];
@@ -72,6 +81,8 @@ namespace StreamCompaction {
                 }
             }
 
+            delete[] bools;
+            delete[] scanned;
             timer().endCpuTimer();
             return numElements;
         }

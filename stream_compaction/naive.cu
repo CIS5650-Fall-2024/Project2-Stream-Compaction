@@ -14,10 +14,12 @@ namespace StreamCompaction {
 
         __global__ void kernNaiveScan(int n, int d, int* odata, int* idata) {
             int k = (blockIdx.x * blockDim.x) + threadIdx.x;
-            if (k >= 2*d-1) {
-                return;
+            if (k >= 1 << (d-1)) {
+                odata[k] = idata[k-(1<<(d-1))] + idata[k];
             }
-            odata[k] = idata[k-2*d-1] + idata[k];
+            else {
+                odata[k] = idata[k];
+            }
         }
 
         /**
@@ -47,16 +49,21 @@ namespace StreamCompaction {
             int d_max = ilog2ceil(n_padded);
             for (int d=1; d<=d_max; d++) {
                 kernNaiveScan<<<num_blocks, block_size>>>(n_padded, d, dev_bufferB, dev_bufferA);
+                checkCUDAError("kernNaiveScan failed!");
                 std::swap(dev_bufferA, dev_bufferB);
             }
             if (d_max % 2 == 0) {
                 cudaMemcpy(odata, dev_bufferA, n * sizeof(int), cudaMemcpyDeviceToHost);
+                checkCUDAError("cudaMemcpy dev_bufferA to odata failed!");
             } else {
                 cudaMemcpy(odata, dev_bufferB, n * sizeof(int), cudaMemcpyDeviceToHost);
+                checkCUDAError("cudaMemcpy dev_bufferB to odata failed!");
             }
             
             cudaFree(dev_bufferA);
+            checkCUDAError("cudaFree dev_bufferA failed!");
             cudaFree(dev_bufferB);
+            checkCUDAError("cudaFree dev_bufferB failed!");
 
             timer().endGpuTimer();
         }
