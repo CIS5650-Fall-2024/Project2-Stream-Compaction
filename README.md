@@ -10,31 +10,37 @@ CUDA Stream Compaction
 # CUDA Scan  & Stream Compaction
 
 ## Table of Contents
-* [Overview](#overview)
-* [Prefix Sum Scan](#prefix-sum-scan)
-  * [What is Prefix Sum Scan?](#what-is-prefix-sum-scan)
-  * [Implementation](#implementation)
-    * [CPU Scan](#cpu-scan)
-    * [Naive GPU Scan](#naive-gpu-scan)
-    * [Work-Efficient GPU Scan](#work-efficient-gpu-scan)
-      * [Up-Sweep](#up-sweep)
-      * [Down-Sweep](#down-sweep)
-      * [Dynamic Grid Sizing in Work-Efficient Scan](#dynamic-grid-sizing-in-work-efficient-scan)
-    * [Work-Efficient GPU Scan with Shared Memory](#work-efficient-gpu-scan-with-shared-memory)
-    * [Thrust Scan](#thrust-scan)
-* [Stream Compaction](#stream-compaction)
-  * [What is Stream Compaction?](#what-is-stream-compaction)
-  * [Implementation](#implementation-1)
-    * [CPU Compact without Scan](#cpu-compact-without-scan)
-    * [CPU Compact with Scan](#cpu-compact-with-scan)
-    * [Work-Efficient Compact](#work-efficient-compact)
-* [Performance Analysis](#performance-analysis)
-  * [Performance Analysis on Different Scan Algorithms](#performance-analysis-on-different-scan-algorithms)
-  * [Performance Analysis on Different Block Sizes](#performance-analysis-on-different-block-sizes)
-  * [Performance Analysis on Different Compact Algorithms](#performance-analysis-on-different-compact-algorithms)
-  * [Nsight Timeline for Thrust Scan](#nsight-timeline-for-thrust-scan)
-* [Blooper](#blooper)
-* [Output](#output)
+- [CUDA Stream Compaction](#cuda-stream-compaction)
+- [CUDA Scan  \& Stream Compaction](#cuda-scan---stream-compaction)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Prefix Sum Scan](#prefix-sum-scan)
+    - [What is Prefix Sum Scan?](#what-is-prefix-sum-scan)
+    - [Implementation](#implementation)
+      - [CPU Scan](#cpu-scan)
+      - [Naive GPU Scan](#naive-gpu-scan)
+      - [Work-Efficient GPU Scan](#work-efficient-gpu-scan)
+        - [Up-Sweep](#up-sweep)
+        - [Down-Sweep](#down-sweep)
+        - [Dynamic Grid Sizing in Work-Efficient Scan](#dynamic-grid-sizing-in-work-efficient-scan)
+      - [Work-Efficient GPU Scan with Shared Memory](#work-efficient-gpu-scan-with-shared-memory)
+      - [Thrust Scan](#thrust-scan)
+  - [Stream Compaction](#stream-compaction)
+    - [What is Stream Compaction?](#what-is-stream-compaction)
+    - [Implementation](#implementation-1)
+      - [CPU Compact without Scan](#cpu-compact-without-scan)
+      - [CPU Compact with Scan](#cpu-compact-with-scan)
+      - [Work-Efficient Compact](#work-efficient-compact)
+  - [Performance Analysis](#performance-analysis)
+    - [Performance Analysis on Different Scan Algorithms](#performance-analysis-on-different-scan-algorithms)
+      - [Observations](#observations)
+    - [Performance Analysis on Different Block Sizes](#performance-analysis-on-different-block-sizes)
+      - [Observations](#observations-1)
+    - [Performance Analysis on Different Compact Algorithms](#performance-analysis-on-different-compact-algorithms)
+      - [Observations](#observations-2)
+    - [Nsight Timeline for Thrust Scan](#nsight-timeline-for-thrust-scan)
+  - [Blooper](#blooper)
+  - [Output](#output)
 
 ## Overview
 
@@ -138,12 +144,12 @@ Finally, adding block sums to elements:
 
 The final output array becomes: `[0, 3, 4, 11, 11, 15, 16, 22]`.
 
-By dividing the task into blocks and using shared memory to handle intra-block computations, `StreamCompaction::Efficient::scanShared` manages to achieve faster computation times and more efficient memory usage, especially for large datasets.
+By dividing the task into blocks and using shared memory to handle intra-block computations, `StreamCompaction::Efficient::scanShared` manages to achieve faster computation times and more efficient memory usage, especially for large array size.
 
 
 #### Thrust Scan
 
-Thrust is a CUDA library that offers a collection of efficient parallel primitives. In this project, the Thrust library's built-in scan function is used. It provides a highly optimized and robust implementation of the prefix sum scan, ensuring both speed and accuracy.
+[Thrust](https://docs.nvidia.com/cuda/thrust/index.html) is a CUDA library that offers a collection of efficient parallel primitives. In this project, the Thrust library's built-in scan function is used. It provides a highly optimized and robust implementation of the prefix sum scan, ensuring both speed and accuracy.
 
 ## Stream Compaction
 
@@ -180,7 +186,7 @@ The accompanying image furnishes a clearer picture of the CPU compact with scan 
 
 #### Work-Efficient Compact
 
-The `StreamCompaction::Efficient::compact` function champions a work-efficient approach. This method is designed to harness the GPU's parallel processing prowess to its fullest, ensuring minimal redundancy in operations. By organizing data in a structured manner and pruning unnecessary calculations, it achieves quicker computation times on the GPU compared to more naive methods. The most important steps in the work-efficient compact is the scan, which is the same as the work-efficient scan described above. 
+The `StreamCompaction::Efficient::compact` function champions a work-efficient approach. This method is designed to harness the power of GPU's parallel processing. The most important steps in the work-efficient compact is the scan, which is the same as the work-efficient scan described above. 
 
 ## Performance Analysis
 
@@ -196,19 +202,19 @@ Performance evaluations were executed on varying array sizes with a block size o
 
 * **CPU Scan**: As array size augments, there's an evident exponential surge in execution duration. The principal bottleneck here, especially for large size, is memory I/O.
 
-* **Naive Scan**: Stable performance is observed for small sizes, but there's a pronounced increase post \(2^{16}\). The GPU's inherent parallelism masks some inefficiencies for smaller datasets, but they become beneficial as data scales.
+* **Naive Scan**: Stable performance is observed for small sizes, but there's a pronounced increase post $2^{16}$. The GPU's inherent parallelism masks some inefficiencies for smaller datasets, but they become beneficial as data scales.
 
-* **Work-Efficient Scan**: Performance deterioration is evident post \(2^{18}\). Despite its design focus on minimizing operations, the degradation indicates other factors (potentially memory I/O) coming into play for large size.
+* **Work-Efficient Scan**: Performance deterioration is evident post $2^{18}$. Despite its design focus on minimizing operations, the degradation indicates other factors (potentially memory I/O) coming into play for large size.
 
 * **Work-Efficient Scan with Shared Memory**: This method exhibits unstable performance across varying sizes, indicating a sensitivity to data layout and memory access patterns. As data size increases, the shared memory approach might be encountering bank conflicts, a typical GPU challenge.
 
-* **Thrust Scan**: Performance remains relatively steadfast until around \(2^{18}\), post which it ascends. This trend, even in an optimized library like Thrust, underscores the challenges tied to extensive data sizes.
+* **Thrust Scan**: Performance remains relatively steadfast until around $2^{18}$, post which it ascends. This trend, even in an optimized library like Thrust, underscores the challenges tied to extensive data sizes.
 
-A pervasive observation is the sharp escalation in execution time for all scan methodologies post \(2^{18}\). This is a strong indicator that memory I/O is emerging as a universal bottleneck for all scan strategies.
+A pervasive observation is the sharp escalation in execution time for all scan methodologies post $2^{18}$. This is a strong indicator that memory I/O is emerging as a universal bottleneck for all scan strategies.
 
 ### Performance Analysis on Different Block Sizes
 
-We tested how block size affects performance using an array size of \(2^{20}\). The graph below shows the results for each scan method with different block sizes.
+We tested how block size affects performance using an array size of $2^{20}$. The graph below shows the results for each scan method with different block sizes.
 
 ![Block Size Performance](img/blocksize.png)
 
@@ -230,11 +236,11 @@ We tested how different compact algorithms perform with various array sizes, usi
 
 * **CPU Compact Without/With Scan**: Both these methods take more time as the array size gets bigger, showing a pattern similar to the CPU Scan. This points towards memory access becoming a major slowdown for CPU-based methods as the data size increases.
 
-* **Work-Efficient Compact**: For smaller data sizes up to \(2^{18}\), this method performs consistently. However, beyond that size, it starts to slow down, likely due to the same memory access issues as its work-efficient scan.
+* **Work-Efficient Compact**: For smaller data sizes up to $2^{18}$, this method performs consistently. However, beyond that size, it starts to slow down, likely due to the same memory access issues as its work-efficient scan.
 
 ### Nsight Timeline for Thrust Scan
 
-To dive deeper into the workings of the thrust scan, we examined its behavior using the Nsight timeline. The image below presents the timeline for thrust scan when processing an array of size \(2^{20}\).
+To dive deeper into the workings of the thrust scan, we examined its behavior using the Nsight timeline. The image below presents the timeline for thrust scan when processing an array of size $2^{20}$.
 
 ![Nsight Timeline](img/thrust.jpg)
 
