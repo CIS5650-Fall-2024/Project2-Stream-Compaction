@@ -30,8 +30,8 @@ Write a brief explanation of the phenomena you see here.**
 The observation is that the thrust implementation is slower than the GPU and CPU approach. Based on my knowledge, I think it is more possible that the thrust implementation might spend large amounts of time on memory I/O operation. I trust that the algorithm of the thrust might be fast and reliable.
 
 
-**
-Can you find the performance bottlenecks? Is it memory I/O? Computation? Is it different for each implementation?
+
+**Can you find the performance bottlenecks? Is it memory I/O? Computation? Is it different for each implementation?
 Paste the output of the test program into a triple-backtick block in your README.**
 
 Because our time check excludes the init and end memory operation, based on my observation and my hypothesis, I think that the memory I/O computation might be there but didn't actually influence me. At least I didn't observe the performance bottlenecks.
