@@ -5,7 +5,8 @@ CUDA Stream Compaction
 
 * Tong Hu
   * [LinkedIn](https://www.linkedin.com/in/tong-hu-5819a122a/)
-* Tested on: Tested on: Windows 11, Ryzen 7 1700X @ 3.4GHz 16GB, GTX 1080 16GB (Personal Computer)
+* Time tested on: Windows 11, Ryzen 7 1700X @ 3.4GHz 16GB, GTX 1080 16GB (Personal Computer)
+* Nsight system analysis tested on: Windows 11, i5-11600K @ 3.91GHz 32GB, RTX 2060 6GB (Personal Desktop) (since GTX 1080 does not support GPU metric collection)
 
 ### Features
 - CPU Scan & Stream Compaction
@@ -49,7 +50,16 @@ When the array size is small (smaller than $2^{16}$), CPU Scan performs better t
 
 Comparing the naive parallel scan and work-efficient parallel scan, we can see from the figure that the work-efficient parallel scan performs better when the array size is large (greater than $2^{20}$). It takes naive parallel scan $O(n\log n)$ floating point adds operations while takes work-efficient scan $O(n)$ adds. Although both algorithm seems to run in parallel in the ideal case, in reality the number of threads run in parallel is bounded by hardware, and therefore, work-efficient scan performs better since the number of threads it need to lauch is smaller.
 
+Figure 3. Nsight system trace
+![Nsight system trace](/img/overall_2.png)
 
+From Figure 3, we can see that compared with self-implemented Scan, the thrust's scan has very low DRAM bandwidth usage, and the unallocated warps in active SMs are also very low. Following are factors that might affect the performance:
+
+1. Thrust's Scan might use shared memory, and memory coalescing when accessing global memory. This improves the memory throughput.
+2. Thrust's Scan might optimize the block size and launch parameters based on workload and GPU type while our self-implemented scans hard code the block size only roughly optimized by eye.
+
+### Bottleneck
+Also, from Figure 3, we can know that the bottleneck of performance of Scan functions should be the memory bandwidth. The bandwidth of DRAM of both naive and work-efficient Scan are almost full.
 
 ### The output of the test program when the array size is $2^{25}$.
 ```
