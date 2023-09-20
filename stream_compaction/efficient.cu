@@ -3,8 +3,9 @@
 #include "common.h"
 #include "efficient.h"
 #include "device_launch_parameters.h"
+#include "nvtx3/nvToolsExt.h"
 
-#define BLOCK_SIZE 128
+#define BLOCK_SIZE 265
 
 namespace StreamCompaction {
   namespace Efficient {
@@ -62,21 +63,24 @@ namespace StreamCompaction {
       checkCUDAError("failed to cudaMalloc buffer");
       cudaMemcpy(dev_buffer, idata, n * sizeof(int), cudaMemcpyHostToDevice);
       checkCUDAError("failed to copy idata to buffer");
+      nvtxRangePushA("Work-Efficient Scan");
       timer().startGpuTimer();
       // TODO
       for (int d = 0; d < layer; d++) {
         // update #threads needed
         num_thds >>= 1;
-        dim3 gridDim((num_thds + BLOCK_SIZE - 1) / BLOCK_SIZE);
-        up_sweep<<<gridDim, BLOCK_SIZE>>>(dev_buffer, d, num_thds);
+        int grid_size = (num_thds + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        up_sweep<<<grid_size, BLOCK_SIZE>>>(dev_buffer, d, num_thds);
       }
       nullify_last_elem<<<1, 1>>>(padded_n, dev_buffer);
       for (int d = layer - 1; d >= 0; d--) {
-        dim3 gridDim((num_thds + BLOCK_SIZE - 1) / BLOCK_SIZE);
-        down_sweep<<<gridDim, BLOCK_SIZE>>>(dev_buffer, d, num_thds);
+        int grid_size = (num_thds + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        down_sweep<<<grid_size, BLOCK_SIZE>>>(dev_buffer, d, num_thds);
         num_thds <<= 1;
       }
       timer().endGpuTimer();
+      cudaDeviceSynchronize();
+      nvtxRangePop();
       cudaMemcpy(odata, dev_buffer, n * sizeof(int), cudaMemcpyDeviceToHost);
       checkCUDAError("failed to copy buffer to odata");
       cudaFree(dev_buffer);
