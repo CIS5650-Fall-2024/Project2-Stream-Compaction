@@ -30,10 +30,7 @@ namespace StreamCompaction {
             thrust::exclusive_scan(dv_in.begin(), dv_in.end(), dv_out.begin());
             timer().endGpuTimer();
 
-            for (int i = 0; i < n; i++)
-            {
-                odata[i] = dv_out[i];
-            }
+            thrust::copy(dv_out.begin(), dv_out.end(), odata);
         }
     }
 }

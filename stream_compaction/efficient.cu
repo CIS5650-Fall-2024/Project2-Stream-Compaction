@@ -96,7 +96,8 @@ namespace StreamCompaction {
             cudaMalloc((void**)&iarray, size * sizeof(int));
             cudaMalloc((void**)&bool_array, size * sizeof(int));
             cudaMalloc((void**)&scan_array, size * sizeof(int));
-            cudaMemcpy(iarray, idata, size * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemset(iarray, 0, n * sizeof(int));
+            cudaMemcpy(iarray, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
             timer().startGpuTimer();
 
