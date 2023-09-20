@@ -28,7 +28,7 @@ This is the Nsight timeline for the execution of GPU scan using thrust. It seems
 
 ### Output of the test program
 SIZE = 1 << 24
-
+```
 ****************
 ** SCAN TESTS **
 ****************
@@ -81,3 +81,4 @@ SIZE = 1 << 24
 ==== work-efficient compact, non-power-of-two ====
    elapsed time: 13.2913ms    (CUDA Measured)
     passed
+```
