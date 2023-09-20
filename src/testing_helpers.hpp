@@ -28,6 +28,13 @@ void printCmpResult(int n, T *a, T *b) {
 }
 
 template<typename T>
+void evalCmpResult(int n, T *a, T *b) {
+    if (cmpArrays(n, a, b)) {
+        printf(" % s \n", "FAIL VALUE");
+    }
+}
+
+template<typename T>
 void printCmpLenResult(int n, int expN, T *a, T *b) {
     if (n != expN) {
         printf("    expected %d elements, got %d\n", expN, n);
@@ -35,6 +42,25 @@ void printCmpLenResult(int n, int expN, T *a, T *b) {
     printf("    %s \n",
             (n == -1 || n != expN) ? "FAIL COUNT" :
             cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");
+}
+
+template<typename T>
+void evalCmpLenResult(int n, int expN, T* a, T* b) {
+    if (n != expN) {
+        printf("    expected %d elements, got %d\n", expN, n);
+    }
+
+    if (n == -1 || n != expN) {
+        printf(" % s \n", "FAIL COUNT");
+    }
+    else {
+        if (cmpArrays(n, a, b)) {
+            printf(" % s \n", "FAIL VALUE");
+        }
+    }
+   /* printf("    %s \n",
+        (n == -1 || n != expN) ? "FAIL COUNT" :
+        cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");*/
 }
 
 void zeroArray(int n, int *a) {
@@ -65,6 +91,18 @@ void printArray(int n, int *a, bool abridged = false) {
             printf("... ");
         }
         printf("%3d ", a[i]);
+    }
+    printf("]\n");
+}
+
+void printDoubleArray(int n, double* a, bool abridged = false) {
+    printf("    [ ");
+    for (int i = 0; i < n; i++) {
+        if (abridged && i + 2 == 15 && n > 16) {
+            i = n - 2;
+            printf("... ");
+        }
+        printf("%5f ", a[i]);
     }
     printf("]\n");
 }
