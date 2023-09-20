@@ -3,8 +3,6 @@
 #include "common.h"
 #include "efficient.h"
 
-#define blockSize 128
-
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
