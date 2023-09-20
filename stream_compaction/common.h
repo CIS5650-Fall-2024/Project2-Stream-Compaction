@@ -2,6 +2,7 @@
 
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <nvtx3/nvToolsExt.h>
 
 #include <cstdio>
 #include <cstring>

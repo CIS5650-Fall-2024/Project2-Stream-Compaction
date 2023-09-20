@@ -47,6 +47,7 @@ namespace StreamCompaction {
             int blockSize = 512;  
             int gridSize = (n + blockSize - 1) / blockSize;
 
+            nvtxRangePushA("naive scan");
             timer().startGpuTimer();
 
             for (int d = 1; d <= ilog2ceil(n); ++d) {
@@ -61,6 +62,7 @@ namespace StreamCompaction {
             }
 
             timer().endGpuTimer();
+            nvtxRangePop();
 
             // Copy results back to host
             cudaMemcpy(odata + 1, dev_odata , (n - 1) * sizeof(int), cudaMemcpyDeviceToHost);

@@ -148,7 +148,7 @@ namespace StreamCompaction {
           int d = ilog2ceil(n) - 1;
           int extendLength = 1 << (d + 1);
 
-          int blockSize = 64; 
+          int blockSize = 128; 
           int numBlocks = (extendLength + blockSize - 1) / blockSize;
 
           int d_max = ilog2ceil(blockSize) - 1;
@@ -166,6 +166,7 @@ namespace StreamCompaction {
           cudaMalloc((void**)&dev_o_blockSums, numBlocks * sizeof(int));
           cudaMemset(dev_o_blockSums, 0, numBlocks * sizeof(int));
 
+          nvtxRangePushA("scanShared");
           timer().startGpuTimer();
           //Step 1: Perform scan on individual blocks and record the block sums.
           blockScan << <numBlocks, blockSize >> > (dev_data, dev_blockSums, extendLength, d_max);
@@ -190,6 +191,7 @@ namespace StreamCompaction {
           addBlockSums << <numBlocks, blockSize >> > (dev_data, dev_o_blockSums, n);
           checkCUDAError("addBlockSums");
           timer().endGpuTimer();
+          nvtxRangePop();
 
           // Copy results back to host
           cudaMemcpy(odata + 1, dev_data, (n - 1) * sizeof(int), cudaMemcpyDeviceToHost);
@@ -219,10 +221,10 @@ namespace StreamCompaction {
             cudaMemcpy(dev_data, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
             // Set up execution parameters
-            int blockSize = 128;
+            int blockSize = 256;
             int initialBlockSize = blockSize;
 
-
+            nvtxRangePushA("workefficient");
             timer().startGpuTimer();
             // ------------------------ Version 2.0 -------------------------------------------
             // 
@@ -256,6 +258,7 @@ namespace StreamCompaction {
             }
             //_______________________Version 2.0 ___________________________________________________
             timer().endGpuTimer();
+            nvtxRangePop();
 
             cudaDeviceSynchronize();
             // Copy results back to host
