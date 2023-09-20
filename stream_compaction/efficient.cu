@@ -70,6 +70,121 @@ namespace StreamCompaction {
         }
 
 
+        __global__ void blockScan(int* data, int* blockSums, int n, int D_max) {
+          extern __shared__ int sdata[];
+          int tid = threadIdx.x;
+          int gid = blockIdx.x * blockDim.x + threadIdx.x;
+
+          if (gid >= n) return;
+          // Load input into shared memory.
+          sdata[tid] = (gid < n) ? data[gid] : 0;
+          __syncthreads();
+
+          // Up-sweep (Reduce)
+          int stride;
+          for (int d = 0; d <= D_max; ++d) {
+            stride = 1 << (d + 1);
+
+            if (tid < (blockDim.x / stride)) {
+              
+              int right = stride * tid + (stride >> 1) - 1;
+              int left = stride * (tid + 1) - 1;
+              sdata[left] += sdata[right];
+            }
+            __syncthreads();
+          }
+
+          // Clear last element for downsweep
+          int lastSum = sdata[blockDim.x - 1];
+          if (tid == 0) {
+            sdata[blockDim.x - 1] = 0;
+          }
+          __syncthreads();
+
+          //// Down-sweep
+          for (int d = D_max; d >= 0; --d) {
+            stride = 1 << (d + 1);
+
+            if (tid < (blockDim.x / stride)) {
+              // Compute the indices for the left and right elements to be operated on
+              int a = stride * (tid + 1) - 1;
+              int b = stride * tid + (stride >> 1) - 1;
+
+              int temp = sdata[b];
+              sdata[b] = sdata[a];
+              sdata[a] += temp;
+            }
+          }
+
+          // Write results to output array.
+          //convert the exclusive scan into inclusive one
+          if (tid < blockDim.x - 1) {
+            data[gid] = sdata[tid + 1];
+          }
+          else if (tid == blockDim.x - 1) {
+            data[gid] = lastSum;
+          }
+
+          // Record the block sum for this block.
+          if (tid == 0) {
+            if (blockSums != nullptr) {
+              blockSums[blockIdx.x] = lastSum;
+            }
+          }
+        }
+
+        __global__ void addBlockSums(int* data, int* blockSums, int n) {
+          int gid = blockIdx.x * blockDim.x + threadIdx.x;
+          if (gid >= n) return;
+          
+          int blockSum = 0;
+          if (blockIdx.x >= 1) {
+            for (int i = 0; i < blockIdx.x; i++) {
+              blockSum += blockSums[i];
+            }
+            //blockSum = blockSums[blockIdx.x - 1];
+            //data[gid] += blockSum;
+          }
+        }
+
+        void scanShared(int n, int* datao, const int* datai) {
+          int blockSize = 64; 
+          int numBlocks = (n + blockSize - 1) / blockSize;
+
+          int d_max = ilog2ceil(blockSize) - 1;
+          int d_max_2 = ilog2ceil(numBlocks) - 1;
+          int* dev_data;
+          int* dev_blockSums;
+          cudaMalloc(&dev_data, n * sizeof(int));
+          cudaMalloc(&dev_blockSums, numBlocks * sizeof(int));
+
+          cudaMemcpy(dev_data, datai, n * sizeof(int), cudaMemcpyHostToDevice);
+          cudaMemset(dev_blockSums, 0, numBlocks);
+
+          timer().startGpuTimer();
+          // Step 1: Perform scan on individual blocks and record the block sums.
+          blockScan << <numBlocks, blockSize >> > (dev_data, dev_blockSums, n, d_max);
+          cudaGetLastError();
+
+          // Step 1.1: Perform scan on block sums.
+          //blockScan << <1, numBlocks >> > (dev_blockSums, nullptr, numBlocks, d_max_2);
+          //cudaGetLastError();
+
+          // Step 2: Add the block sums to the scanned array.
+          addBlockSums << <numBlocks, blockSize >> > (dev_data, dev_blockSums, n);
+          timer().endGpuTimer();
+
+          // Copy results back to host
+          cudaMemcpy(datao + 1, dev_data, (n - 1) * sizeof(int), cudaMemcpyDeviceToHost);
+
+          // manually convert it into exclusive scan
+          datao[0] = 0;
+
+          cudaFree(dev_data);
+          cudaFree(dev_blockSums);
+        }
+
+
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
@@ -136,8 +251,6 @@ namespace StreamCompaction {
 
             // Free device memory
             cudaFree(dev_data);
-
-            
         }
 
         /**
@@ -181,7 +294,7 @@ namespace StreamCompaction {
             cudaMemcpy(dev_indices, dev_bools, extendLength * sizeof(int), cudaMemcpyDeviceToDevice);
             // Up-sweep
             for (int i = 0; i <= d; ++i) {
-              upSweep << <gridSize, blockSize >> > (extendLength, i, dev_indices);
+              upSweepV2 << <gridSize, blockSize >> > (extendLength, i, dev_indices);
             }
 
             // Clear the last element
@@ -189,7 +302,7 @@ namespace StreamCompaction {
 
             // Down-sweep
             for (int i = d; i >= 0; --i) {
-              downSweep << <gridSize, blockSize >> > (extendLength, i, dev_indices);
+              downSweepV2 << <gridSize, blockSize >> > (extendLength, i, dev_indices);
             }
 
             StreamCompaction::Common::kernScatter << <gridSize, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_indices);

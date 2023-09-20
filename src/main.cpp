@@ -14,7 +14,7 @@
 #include <stream_compaction/radixsort.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 9; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
     printf("** SCAN TESTS **\n");
     printf("****************\n");
 
-    genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
+    genArray(SIZE - 1, a, 10);  // Leave a 0 at the end to test that edge case
     a[SIZE - 1] = 0;
     printArray(SIZE, a, true);
 
@@ -79,11 +79,25 @@ int main(int argc, char* argv[]) {
     printCmpResult(SIZE, b, c);
 
     zeroArray(SIZE, c);
-    printDesc("work-efficient scanv1, non-power-of-two");
+    printDesc("work-efficient scan, non-power-of-two");
     StreamCompaction::Efficient::scan(NPOT, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
+
+    //zeroArray(SIZE, c);
+    //printDesc("work-efficient scanShared, power-of-two");
+    //StreamCompaction::Efficient::scanShared(SIZE, c, a);
+    //printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    ////printArray(SIZE, c, true);
+    //printCmpResult(SIZE, b, c);
+
+    //zeroArray(SIZE, c);
+    //printDesc("work-efficient scanShared, non-power-of-two");
+    //StreamCompaction::Efficient::scanShared(NPOT, c, a);
+    //printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    ////printArray(NPOT, c, true);
+    //printCmpResult(NPOT, b, c);
 
     zeroArray(SIZE, c);
     printDesc("thrust scan, power-of-two");
