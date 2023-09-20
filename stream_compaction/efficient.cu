@@ -5,7 +5,7 @@
 #include "device_launch_parameters.h"
 #include <iostream>
 
-#define BLOCK_SIZE 128
+#define BLOCK_SIZE 16
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -47,15 +47,15 @@ namespace StreamCompaction {
             for (int d = 0; d < ilog2ceil(n); d++) {
                 nThread = newN >> (d + 1);
                 numBlocks = (nThread + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                efficientScanUpSweep << <numBlocks, BLOCK_SIZE >> > (newN, nThread, d, dev_idata);
+                efficientScanUpSweep <<<numBlocks, BLOCK_SIZE >>> (newN, nThread, d, dev_idata);
             }
             // replace the last number of the array with 0.
-            replaceWithZero << <1, 1 >> > (newN, 1, dev_idata);
+            replaceWithZero <<<1, 1 >>> (newN, 1, dev_idata);
             // down sweep
             for (int d = 0; d < ilog2ceil(n); d++) {
                 nThread = 1 << d;
                 numBlocks = (nThread + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                efficientScanDownSweep << <numBlocks, BLOCK_SIZE >> > (newN, nThread, d, dev_idata);
+                efficientScanDownSweep <<<numBlocks, BLOCK_SIZE >>> (newN, nThread, d, dev_idata);
             }
         }
 

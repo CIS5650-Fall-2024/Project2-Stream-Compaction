@@ -4,7 +4,7 @@
 #include "naive.h"
 #include "device_launch_parameters.h"
 
-#define BLOCK_SIZE 128
+#define BLOCK_SIZE 256
 
 namespace StreamCompaction {
     namespace Naive {
