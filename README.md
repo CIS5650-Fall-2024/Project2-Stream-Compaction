@@ -21,6 +21,9 @@ The four basic implementations just followed the instructions from slide.
 Blocksize limitation: by doing shared memory, my block size will be limited to block size 64, (starting at 128, I think there is some memory conflict inside each block, which resulting in error). For other methods, blocksize does not influence performance that much starting at blocksize 32. (if block size too small, will slow down performance project 1)
 
 ### Performance Analysis
+![](img/p1.png)
+![](img/p2.png)
+![](img/p3.png)
 
 The one thing I noticed first is my CPU is way stronger than I thought. Only when it reachs array=2^24, it starts to show up slowdown on performance. But right after 2^28, my CPU is no longer compatible of doing this arithematics.
 
