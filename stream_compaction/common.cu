@@ -43,7 +43,7 @@ namespace StreamCompaction {
 
           if (idx >= n) return;
 
-          if (bools[idx] > 0) {
+          if (bools[idx] == 1) {
             odata[indices[idx]] = idata[idx];
           }
         }

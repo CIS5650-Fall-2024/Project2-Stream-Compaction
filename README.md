@@ -21,7 +21,10 @@ To make it clear, scan here refers to calculate the prefix sum of an array, whet
 - add Nsight Performance Analysis at readme
 ### Feature Details
 ### Performance Analysis
-#### Find the optimized of each of implementation for minimal run time
+#### Find the optimized of each of implementation for minimal run time on GPU
+First, I choose array size = 2^26 to find the optimal block size. The reason is that stream generally comes in a large scale and if it is small size, then using cpu is rather fast. 
+
+#### Optimal block Size for GPU native 
 
 #### Compare all of these GPU Scan implementations (Naive, Work-Efficient, and Thrust) to the serial CPU version of Scan. Plot a graph of the comparison (with array size on the independent axis).
 
