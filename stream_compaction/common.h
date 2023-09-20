@@ -9,9 +9,12 @@
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
+#include <vector>
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
+#define BLOCKSPERGRID(n, blockSize) ((n + blockSize - 1) / blockSize)
+constexpr int blockSize = 128;
 
 /**
  * Check for CUDA errors; print and exit if there was a problem.
@@ -21,6 +24,7 @@ void checkCUDAErrorFn(const char *msg, const char *file = NULL, int line = -1);
 inline int ilog2(int x) {
     int lg = 0;
     while (x >>= 1) {
+        if (x <= 0) { throw std::runtime_error("Dead loop while shifting"); }
         ++lg;
     }
     return lg;
@@ -32,6 +36,47 @@ inline int ilog2ceil(int x) {
 
 namespace StreamCompaction {
     namespace Common {
+        class devDataBuffer {
+        private:
+            int* dev_data;
+            int totalSize, size_;
+            std::vector<int> sizes;
+            std::vector<int> offsets;
+        public:
+            devDataBuffer(int n, int blockSize) :totalSize(0), size_(0) {
+                int extendedSize = BLOCKSPERGRID(n, blockSize) * blockSize;
+                while (extendedSize > 1) {
+                    if (extendedSize < blockSize) {
+                        break;
+                    }
+                    size_++;
+                    sizes.push_back(extendedSize);
+                    offsets.push_back(totalSize);
+                    totalSize += extendedSize;
+                    extendedSize = BLOCKSPERGRID(extendedSize, blockSize);
+                }
+                cudaMalloc((void**)&dev_data, sizeof(int) * totalSize);
+            }
+            ~devDataBuffer() {
+                cudaFree(dev_data);
+            }
+            int* operator[](int i) const {
+                return dev_data + offsets[i];
+            }
+            int* data() const {
+                return dev_data;
+            }
+            int size() const {
+                return size_;
+            }
+            int memCnt()const {
+                return totalSize;
+            }
+            int sizeAt(int i) const {
+                return sizes[i];
+            }
+
+        };
         __global__ void kernMapToBoolean(int n, int *bools, const int *idata);
 
         __global__ void kernScatter(int n, int *odata,
