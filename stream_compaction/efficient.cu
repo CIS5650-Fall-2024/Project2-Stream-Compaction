@@ -46,8 +46,6 @@ namespace StreamCompaction {
 
             for (int i = 0; i < ilog2ceil(n); i++) {
 
-                //scanOperation <<<fullBlocksPerGrid, blockSize >>> (n, i, gpu_odata, gpu_idata);
-
                 dim3 fullBlocksPerGrid((ending / (1 << (i + 1)) + blockSize - 1) / blockSize);
                 upSweep <<<fullBlocksPerGrid, blockSize >>> (n, i, gpu_idata);
             }
