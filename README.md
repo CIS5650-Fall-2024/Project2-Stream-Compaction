@@ -8,9 +8,18 @@ CUDA Stream Compaction
 * Tested on: Windows 11 Pro 22H2, AMD EPYC 7V12 64-Core Processor (4 vCPU cores) @ 2.44GHz 28GiB, Tesla T4 16GiB (Azure)
 
 ## Performance Analysis
+Tests done with CUDA block size as 128 unless otherwise specified. Let's look at the comparisons!
+
+### Array Size
+
+We have compared five different implementations.
+
+![](img/Runtime%20Comparison%20for%20CPU%20and%20GPU%20Scan.svg)
+![](img/Runtime%20Comparison%20for%20CPU%20and%20GPU%20Scan%20Bar.svg)
 
 
-### Sample Output with `int[2^29]`
+### Sample Output
+Tested with `int[2^29]` and CUDA Block Size 128.
 
 ```
 ****************

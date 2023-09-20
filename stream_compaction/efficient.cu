@@ -5,11 +5,11 @@
 
 /** default naive implementation from lecture (disable all defs)
  *  also three improved implementations of work-efficient scan
- *      1. GEM3 base
- *      2. GEM3 full impl
- *      3. GEM3 full impl with recursive scan (experimental)
+ *      1. GEMS3 base
+ *      2. GEMS3 full impl
+ *      3. GEMS3 full impl with recursive scan (experimental)
  */
-#define GEM3 // tested, 5 ~ 10 times slower than thrust
+#define GEMS3 // tested, 5 ~ 10 times slower than thrust
 #define FULL // tested, 1.5 ~ 3 times slower than thrust
 //#define RECUR // works but not fully tested, this should work well for extremely large array, like size >= 2^32
 
@@ -23,13 +23,13 @@ namespace StreamCompaction {
             return timer;
         }
 
-#ifdef GEM3 // ref: https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda
+#ifdef GEMS3 // ref: https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda
 
 #define BLOCK_SIZE 128
 #define THREADS_PER_BLOCK BLOCK_SIZE
 #define NUM_BLOCKS(n) (((n) + BLOCK_SIZE - 1) / BLOCK_SIZE)
 
-        __global__ void kernGEM3WarpReorgWorkEfficientScanUpSweep(int n, int d, int offset, int* data) {
+        __global__ void kernGEMS3WarpReorgWorkEfficientScanUpSweep(int n, int d, int offset, int* data) {
             int thid = (blockIdx.x * blockDim.x) + threadIdx.x;
             if (thid >= n || thid >= d) return;
 
@@ -40,7 +40,7 @@ namespace StreamCompaction {
             data[bi] += data[ai];
         }
 
-        __global__ void kernGEM3WarpReorgWorkEfficientScanDownSweep(int n, int d, int offset, int* data) {
+        __global__ void kernGEMS3WarpReorgWorkEfficientScanDownSweep(int n, int d, int offset, int* data) {
             int thid = (blockIdx.x * blockDim.x) + threadIdx.x;
             if (thid >= n || thid >= d) return;
 
@@ -57,14 +57,14 @@ namespace StreamCompaction {
             // upsweep
             int offset = 1;
             for (int d = n >> 1; d > 0; d >>= 1) {
-                kernGEM3WarpReorgWorkEfficientScanUpSweep<<<NUM_BLOCKS(d), THREADS_PER_BLOCK>>>(n, d, offset, dev_data);
+                kernGEMS3WarpReorgWorkEfficientScanUpSweep<<<NUM_BLOCKS(d), THREADS_PER_BLOCK>>>(n, d, offset, dev_data);
                 offset <<= 1;
             }
             cudaMemset(dev_data + n - 1, 0, sizeof(int));
             // downsweep
             for (int d = 1; d < n; d <<= 1) {
                 offset >>= 1;
-                kernGEM3WarpReorgWorkEfficientScanDownSweep<<<NUM_BLOCKS(d), THREADS_PER_BLOCK>>>(n, d, offset, dev_data);
+                kernGEMS3WarpReorgWorkEfficientScanDownSweep<<<NUM_BLOCKS(d), THREADS_PER_BLOCK>>>(n, d, offset, dev_data);
             }
         }
 
@@ -100,7 +100,7 @@ namespace StreamCompaction {
 #define LOG_NUM_BANKS 5
 #define CONFLICT_FREE_OFFSET(n) ((n) >> NUM_BANKS + (n) >> (2 * LOG_NUM_BANKS))
 
-        __global__ void kernGEM3FullWorkEfficientFixedSizeScan(int* odata, int* idata, int* incr) {
+        __global__ void kernGEMS3FullWorkEfficientFixedSizeScan(int* odata, int* idata, int* incr) {
             extern __shared__ int temp[];
 
             int n = ELEMENTS_PER_TILE; // fixed size scan
@@ -171,7 +171,7 @@ namespace StreamCompaction {
             int numTiles = (n + ELEMENTS_PER_TILE - 1) / ELEMENTS_PER_TILE;
 
             if (numTiles > THRESHOULD) {
-                kernGEM3FullWorkEfficientFixedSizeScan<<<numTiles, THREADS_PER_BLOCK, SHARED_MEM_SIZE>>>(dev_odata, dev_idata, dev_incr);
+                kernGEMS3FullWorkEfficientFixedSizeScan<<<numTiles, THREADS_PER_BLOCK, SHARED_MEM_SIZE>>>(dev_odata, dev_idata, dev_incr);
                 recurScan(numTiles, dev_incr, dev_incr, dev_incr + numTiles);
                 addIncr<<<NUM_BLOCKS(n), THREADS_PER_BLOCK>>>(n, dev_odata, dev_incr);
             } else {
@@ -204,7 +204,7 @@ namespace StreamCompaction {
             // ----------------------------------
             // TODO
 #ifndef RECUR
-            kernGEM3FullWorkEfficientFixedSizeScan<<<numTiles, THREADS_PER_BLOCK, SHARED_MEM_SIZE>>>(dev_data, dev_data, dev_incr);
+            kernGEMS3FullWorkEfficientFixedSizeScan<<<numTiles, THREADS_PER_BLOCK, SHARED_MEM_SIZE>>>(dev_data, dev_data, dev_incr);
             warpReorgScan(numTiles, dev_incr);
             addIncr<<<NUM_BLOCKS(n), THREADS_PER_BLOCK>>>(n, dev_data, dev_incr);
 #else
@@ -279,7 +279,7 @@ namespace StreamCompaction {
             checkCUDAError("cudaMemcpy dev_data failed!");
             cudaFree(dev_data);
         }
-#endif // GEM3
+#endif // GEMS3
 
         /**
          * Performs stream compaction on idata, storing the result into odata.
