@@ -34,7 +34,7 @@ The line graph shows that CPU sort is faster than any GPU methods when the numbe
 |-----------|
 |   32      |
 
-![](./img/blocksize.png)
+![](./img/runtime.png)
 
 It is noticed that to keep the scale of y-axis reasonable, I did not include $2^{24}$ data, which are over 10ms, of CPU method and GPU native in the graph.
 
