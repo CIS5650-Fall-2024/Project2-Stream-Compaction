@@ -58,9 +58,9 @@ void evalCmpLenResult(int n, int expN, T* a, T* b) {
             printf(" % s \n", "FAIL VALUE");
         }
     }
-    printf("    %s \n",
+   /* printf("    %s \n",
         (n == -1 || n != expN) ? "FAIL COUNT" :
-        cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");
+        cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");*/
 }
 
 void zeroArray(int n, int *a) {

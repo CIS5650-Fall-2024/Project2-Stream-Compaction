@@ -164,6 +164,29 @@ namespace StreamCompaction {
             cudaFree(dev_blockSums);
         }
 
+        void scanHelper(int n, int log2ceil, int* dev_out) {
+            // up sweep 
+            for (int d = 0; d <= log2ceil - 1; ++d) {
+                // Adjust the grid size based on the depth of the sweep
+                int gridSize = (n / (2 << d) + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                kernUpSweep << <gridSize, BLOCK_SIZE >> > (n, d, dev_out);
+                checkCUDAErrorFn("up sweep failed!");
+            }
+
+            // set the last value to 0
+            cudaMemset(dev_out + n - 1, 0, sizeof(int));
+            checkCUDAErrorWithLine("set the last value to zero failed!");
+
+            // down sweep
+            for (int d = log2ceil - 1; d >= 0; --d) {
+                // Adjust the grid size based on the depth of the sweep
+                int gridSize = (n / (2 << d) + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                kernDownSweep << <gridSize, BLOCK_SIZE >> > (n, d, dev_out);
+                checkCUDAErrorFn("down sweep failed");
+            }
+
+        }
+
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
@@ -179,25 +202,7 @@ namespace StreamCompaction {
 
             timer().startGpuTimer();
 
-            // up sweep 
-            for (int d = 0; d <= log2ceil - 1; ++d) {
-                // Adjust the grid size based on the depth of the sweep
-                int gridSize = (fullSize / (2 << d) + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                kernUpSweep << <gridSize, BLOCK_SIZE >> > (fullSize, d, dev_out);
-                checkCUDAErrorFn("up sweep failed!");
-            }
-
-            // set the last value to 0
-            cudaMemset(dev_out + fullSize - 1, 0, sizeof(int));
-            checkCUDAErrorWithLine("set the last value to zero failed!");
-
-            // down sweep
-            for (int d = log2ceil - 1; d >= 0; --d) { 
-                // Adjust the grid size based on the depth of the sweep
-                int gridSize = (fullSize / (2 << d) + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                kernDownSweep << <gridSize, BLOCK_SIZE >> > (fullSize, d, dev_out);
-                checkCUDAErrorFn("down sweep failed");
-            }
+            scanHelper(fullSize, log2ceil, dev_out);
 
             timer().endGpuTimer();
 
