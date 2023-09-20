@@ -13,7 +13,7 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 25; // feel free to change the size of array
+const int SIZE = 1 << 17; // feel free to change the size of array
                           // 28 = 268435456
 //const int SIZE = 1000000;
 
