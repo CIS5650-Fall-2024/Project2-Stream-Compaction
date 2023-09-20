@@ -68,7 +68,7 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
+            
             // TODO
             int* gpu_odataa;
             int* gpu_idataa;
@@ -85,8 +85,10 @@ namespace StreamCompaction {
 
             checkCUDAError("memory error 01!!!!!");
 
-            processScan(n, ending, gpu_idataa);
 
+            timer().startGpuTimer();
+            processScan(n, ending, gpu_idataa);
+            timer().endGpuTimer();
 
 
             checkCUDAError("error in loop final process!!!!!");
@@ -101,7 +103,7 @@ namespace StreamCompaction {
             cudaFree(gpu_odataa);
             cudaFree(gpu_idataa);
 
-            timer().endGpuTimer();
+            
         }
 
         /**

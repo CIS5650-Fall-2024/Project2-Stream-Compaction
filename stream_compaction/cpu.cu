@@ -59,12 +59,14 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             
-            timer().startCpuTimer();
+            
             // TODO
             
             int* checked = new int[n];
             int* preCheck = new int[n];
             int counter = 0;
+
+            timer().startCpuTimer();
 
             for (int i = 0; i < n; i++) {
                 if (idata[i] != 0) {
@@ -84,11 +86,12 @@ namespace StreamCompaction {
                 }
             
             }
+            timer().endCpuTimer();
 
             delete[] checked;
             delete[] preCheck;
             
-            timer().endCpuTimer();
+            
             return counter;
             
             

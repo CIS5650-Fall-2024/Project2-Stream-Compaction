@@ -5,7 +5,7 @@
 
 
 
-#define blockSize 128
+#define blockSize 8
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;
@@ -67,7 +67,7 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
+            
             // TODO
             int* gpu_odata;
             int* gpu_idata;
@@ -80,6 +80,8 @@ namespace StreamCompaction {
 
             dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
             dim3 numBlocks((n -1 + blockSize - 1) / blockSize);
+
+            timer().startGpuTimer();
             for (int i = 1; i <= ilog2ceil(n); i++) {
                 scanOperation <<<fullBlocksPerGrid, blockSize >>> (n, i, gpu_odata, gpu_idata);
 
@@ -94,6 +96,8 @@ namespace StreamCompaction {
             
             convertToExclusive << <numBlocks, blockSize >> > (n, gpu_odata, gpu_idata);
 
+            timer().endGpuTimer();
+
             cudaMemcpy(odata, gpu_odata, sizeof(int) * n, cudaMemcpyDeviceToHost);
 
             checkCUDAError("memory error!!!!!");
@@ -102,7 +106,7 @@ namespace StreamCompaction {
             cudaFree(gpu_idata);
 
 
-            timer().endGpuTimer();
+            
         }
     }
 }
