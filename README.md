@@ -83,7 +83,7 @@ Below is a screenshot of the Nsight timeline for this program.
 |:--:|
 |Image 1|
 
-The <span style="color:#66FF00">green</span> sections represent copying over memory from the device to the host, and the <span style="color:#FF4040">red</span> sections copy over memory back from the host to device. These take the most amount of time.
+The <span style="color:#66FF00">green</span> sections show time spent in copying over memory from the device to the host, and the <span style="color:#FF4040">red</span> sections show time spent in copying over memory back from the host to device. These take the most amount of time.
 
 The <span style="color:#889CD2">purple</span> coloured sections are the actual kernels. This project's naive and work-efficient scan implementations take 27.4% of all kernel execution time, whereas thrust's `DeviceScanInitKernel` and `DeviceScanKernel` take only 1.2% of the total kernel execution time.
 
