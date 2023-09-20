@@ -5,6 +5,7 @@
 
 namespace StreamCompaction {
     namespace CPU {
+        bool disableScanTimer = false;
         using StreamCompaction::Common::PerformanceTimer;
         PerformanceTimer& timer()
         {
@@ -18,9 +19,13 @@ namespace StreamCompaction {
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
+            if (!disableScanTimer) timer().startCpuTimer();
             // TODO
-            timer().endCpuTimer();
+            odata[0] = 0;
+            for (int i = 1; i < n; i++) {
+                odata[i] = odata[i - 1] + idata[i - 1];
+            }
+            if (!disableScanTimer) timer().endCpuTimer();
         }
 
         /**
@@ -29,10 +34,16 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
+            int count = 0;
             timer().startCpuTimer();
             // TODO
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    odata[count++] = idata[i];
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return count;
         }
 
         /**
@@ -41,10 +52,25 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* tmp = new int[n];
+            disableScanTimer = true;
             timer().startCpuTimer();
             // TODO
+            for (int i = 0; i < n; i++) {
+                tmp[i] = idata[i] == 0 ? 0 : 1;
+            }
+            scan(n, odata, tmp);
+            for (int i = 0; i < n; i++) {
+                if (tmp[i] != 0) {
+                    // odata[i] <= i, so there is no race condition
+                    odata[odata[i]] = idata[i];
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            disableScanTimer = false;
+            int count = odata[n - 1] + tmp[n - 1];
+            delete[] tmp;
+            return count;
         }
     }
 }
