@@ -3,12 +3,20 @@ CUDA Stream Compaction
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 2**
 
-* (TODO) YOUR NAME HERE
-  * (TODO) [LinkedIn](), [personal website](), [twitter](), etc.
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+* Janet Wang
+  * https://xchennnw.github.io/
+* Tested on: Windows 11, i7-12700H @ 2.30GHz 16GB, Nvidia Geforce RTX 3070 Ti  8054MB
 
-### (TODO: Your README)
+### TODO implemented
+* CPU Scan & Stream Compaction
+* Naive GPU Scan Algorithm
+* Work-Efficient GPU Scan & Stream Compaction
+* Scan using Thrust
+  
+### Project Description 
+This project is about GPU stream compaction in CUDA, including a few different versions of the Scan (Prefix Sum) algorithm: a CPU version, GPU naive scan, GPU "work-efficient" scan, and GPU scan using thrust. It also includes GPU stream compaction using the above algorithms.
 
-Include analysis, etc. (Remember, this is public, so don't put
-anything here that you don't want to share with the world.)
-
+### Performance Analysis 
+![](scan2.png)
+![](scan1.png)
+![](nsight.png)
