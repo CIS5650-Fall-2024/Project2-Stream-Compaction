@@ -8,6 +8,8 @@ namespace StreamCompaction {
 
         void scan(int n, int *odata, const int *idata);
 
+        void _scan_dev(int n, int *dev_idata);
+
         int compact(int n, int *odata, const int *idata);
     }
 }

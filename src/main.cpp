@@ -11,9 +11,10 @@
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
+#include <unistd.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 24; // 8 feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -21,7 +22,9 @@ int *c = new int[SIZE];
 
 int main(int argc, char* argv[]) {
     // Scan tests
-
+    // std::cout << "sleeping..." << std::endl;
+    // sleep(5);
+    // std::cout << "awake!" << std::endl;
     printf("\n");
     printf("****************\n");
     printf("** SCAN TESTS **\n");
