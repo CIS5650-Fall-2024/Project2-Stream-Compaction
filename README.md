@@ -13,7 +13,7 @@ Roughly optimize the block sizes of each of your implementations for minimal run
 (You shouldn't compare unoptimized implementations to each other!)
 Compare all of these GPU Scan implementations (Naive, Work-Efficient, and Thrust) to the serial CPU version of Scan. Plot a graph of the comparison (with array size on the independent axis).
 
-![Unlock FPS](images/output.png)
+![Unlock FPS](img/output.png)
 
 We wrapped up both CPU and GPU timing functions as a performance timer class for you to conveniently measure the time cost.
 We use std::chrono to provide CPU high-precision timing and CUDA event to measure the CUDA performance.
@@ -33,4 +33,4 @@ Write a brief explanation of the phenomena you see here.
 Can you find the performance bottlenecks? Is it memory I/O? Computation? Is it different for each implementation?
 Paste the output of the test program into a triple-backtick block in your README.
 
-![Unlock FPS](images/output.png)
+![Unlock FPS](img/output.png)
