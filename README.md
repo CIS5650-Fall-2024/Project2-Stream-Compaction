@@ -198,7 +198,7 @@ Finally, the naive parallel scan is the worst. For 33 million array size, this a
 
 ### 4. A Sneak Peak of Thrust Implementation
 
-![Figure 6](img/results/nsight_timeline.PNG)
+![Figure 6](img/results/nsight_timeline.png)
 
 *Figure 6: Nsight Timeline on Thrust Eclusive Scan operation*
 
