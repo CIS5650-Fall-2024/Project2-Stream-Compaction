@@ -19,4 +19,4 @@ This project is about GPU stream compaction in CUDA, including a few different v
 ### Performance Analysis 
 ![](scan2.png)
 ![](scan1.png)
-![](nsight.png)
+![](nsight.PNG)
