@@ -20,6 +20,11 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int running_sum = 0;
+            for (int i = 0; i < n; i++) {
+              odata[i] = running_sum;
+              running_sum += idata[i];
+            }
             timer().endCpuTimer();
         }
 
@@ -31,8 +36,15 @@ namespace StreamCompaction {
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int l_ptr = 0;
+            for (int r_ptr = 0; r_ptr < n; r_ptr++) {
+              if (idata[r_ptr] != 0) {
+                odata[l_ptr] = idata[r_ptr];
+                l_ptr++;
+              }
+            }
             timer().endCpuTimer();
-            return -1;
+            return l_ptr;
         }
 
         /**
@@ -41,10 +53,30 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* mask = new int[n];
             timer().startCpuTimer();
             // TODO
+            // 1/0 mask on idata
+            int running_sum = 0;
+            for (int i = 0; i < n; i++) {
+              mask[i] = idata[i] == 0 ? 0 : 1;
+            }
+            // scanning, exclusive prefix sum saved to odata
+            for (int i = 0; i < n; i++) {
+              odata[i] = running_sum;
+              running_sum += mask[i];
+            }
+            // relocate data
+            int remain_cnt = 0;
+            for (int i = 0; i < n; i++) {
+              if (mask[i] == 1) {
+                odata[odata[i]] = idata[i];
+                remain_cnt++;
+              }
+            }
             timer().endCpuTimer();
-            return -1;
+            delete[] mask;
+            return remain_cnt;
         }
     }
 }
