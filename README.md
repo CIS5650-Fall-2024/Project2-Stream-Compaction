@@ -247,7 +247,7 @@ These observations underscore the fact that memory access, rather than computati
 
 ## Blooper
 
-While working on this project, I faced an unexpected issue that's worth highlighting. Both the work-efficient scan and its variant using shared memory started acting up for array sizes beyond \(2^{24}\).
+While working on this project, I faced an unexpected issue that's worth highlighting. Both the work-efficient scan and its variant using shared memory started acting up for array sizes beyond $2^{24}$.
 
 For array sizes that are powers of 2, the work-efficient scan would yield an array filled entirely with zeros. On the other hand, for non-power-of-2 sizes, an "illegal memory access" error would be thrown during the `kernUpSweep` kernel execution.
 
