@@ -12,7 +12,7 @@
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
-const int BLOCKSIZE = 1 << 7;
+#define BLOCK_SIZE 128
 
 
 /**

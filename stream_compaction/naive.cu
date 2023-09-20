@@ -40,7 +40,7 @@ namespace StreamCompaction {
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
-        void scan(int n, int* odata, const int* idata) {
+        void scan(int n, int* odata, const int* idata, int BLOCKSIZE) {
             int* dev_in;
             int* dev_out;           
             int noOfIters = ilog2ceil(n);

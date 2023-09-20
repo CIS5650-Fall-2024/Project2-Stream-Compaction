@@ -35,18 +35,16 @@ namespace StreamCompaction {
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
-        void scan(int n, int *odata, const int *idata) {
+        void scan(int n, int *odata, const int *idata, int BLOCKSIZE) {
             int* dev_data;
             int paddedSize = 1 << ilog2ceil(n);
             int noOfIters = ilog2ceil(paddedSize) - 1;
-            int zero = 0;
             
             cudaMalloc((void**)&dev_data, paddedSize * sizeof(int));
             checkCUDAError("cudaMalloc dev_data failed!");
 
             cudaMemcpy(dev_data, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
-            cudaMemcpy(&dev_data[n], &zero, sizeof(int) * (paddedSize - n), cudaMemcpyHostToDevice);
-
+            cudaMemset(&dev_data[n], 0, sizeof(int) * (paddedSize - n));
             timer().startGpuTimer();
             
             //up sweep
@@ -57,7 +55,7 @@ namespace StreamCompaction {
             }
 
             //set last element to zero before starting down sweep            
-            cudaMemcpy(&dev_data[paddedSize -1], &zero, sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemset(&dev_data[paddedSize -1], 0, sizeof(int));
 
             //down sweep
             for (int d = noOfIters; d >= 0; d--) {
@@ -79,7 +77,7 @@ namespace StreamCompaction {
          * @param idata  The array of elements to compact.
          * @returns      The number of elements remaining after compaction.
          */
-        int compact(int n, int *odata, const int *idata) {                                
+        int compact(int n, int *odata, const int *idata, int BLOCKSIZE) {
             int* dev_idata;
             int* dev_odata;
             int* dev_bools;
