@@ -14,6 +14,7 @@
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
 
 #define blockSize 512
+#define OPTIMIZE 1
 
 /**
  * Check for CUDA errors; print and exit if there was a problem.

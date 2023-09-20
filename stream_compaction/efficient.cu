@@ -27,6 +27,19 @@ namespace StreamCompaction {
             }
         }
 
+        __global__ void kernUpSweepOptimized(int n, int d, int stride, int* data) {
+            int index = blockIdx.x * blockDim.x + threadIdx.x;
+            if (index >= n) {
+                return;
+            }
+
+            int offset = 1 << d;
+            if (index < stride) {
+                data[(index * 2 + 2) * offset - 1] +=
+                    data[(index * 2 + 1) * offset - 1];
+            }
+        }
+
         // Performs ONE iteration of down sweep
         __global__ void kernDownSweep(int n, int d, int *data) {
             int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -37,10 +50,26 @@ namespace StreamCompaction {
             int offset1 = 1 << d;
             int offset2 = 1 << (1 + d);
             if (index % offset2 == 0) {
-                int left = data[index + offset1 - 1]; // Save left child
-                data[index + offset1 - 1] = data[index + offset2 - 1]; // Set left child to this node’s value
-                data[index + offset2 - 1] += left; // Set right child to old left value +
-                                                   // this node’s value
+                int left = data[index + offset1 - 1];                   // Save left child
+                data[index + offset1 - 1] = data[index + offset2 - 1];  // Set left child to this node’s value
+                data[index + offset2 - 1] += left;                      // Set right child to old left value +
+                                                                        // this node’s value
+            }
+        }
+
+        __global__ void kernDownSweepOptimized(int n, int d, int stride, int* data) {
+            int index = blockIdx.x * blockDim.x + threadIdx.x;
+            if (index >= n) {
+                return;
+            }
+
+            int offset1 = (index * 2 + 1) * stride - 1;
+            int offset2 = (index * 2 + 2) * stride - 1;
+            if (index < d) {
+                int left = data[offset1];       // Save left child
+                data[offset1] = data[offset2];  // Set left child to this node’s value
+                data[offset2] += left;          // Set right child to old left value +
+                                                // this node’s value
             }
         }
 
@@ -68,18 +97,63 @@ namespace StreamCompaction {
 
             timer().startGpuTimer();
             // Up Sweep
-            for (int d = 0; d <= power2-1; ++d) {
-                kernUpSweep <<<blocksPerGrid, blockSize>>> (chunk, d, dev_buf);
+            for (int d = 0; d <= power2 - 1; ++d) {
+                kernUpSweep << <blocksPerGrid, blockSize >> > (chunk, d, dev_buf);
                 //checkCUDAError("kernUpSweep failed!");
             }
             
             // Down Sweep
+            cudaDeviceSynchronize();
             cudaMemset(dev_buf + chunk - 1, 0, sizeof(int)); // set root to zero
             //checkCUDAError("cudaMemset dev_buf[chunk-1] failed!");
 
             for (int d = power2-1; d >= 0; --d) {
                 kernDownSweep <<<blocksPerGrid, blockSize>>> (chunk, d, dev_buf);
                 //checkCUDAError("kernDownSweep failed!");
+            }
+            timer().endGpuTimer();
+
+            cudaMemcpy(odata, dev_buf, arrSize, cudaMemcpyDeviceToHost);
+            //checkCUDAError("cudaMemcpy odata failed!");
+            cudaFree(dev_buf);
+        }
+
+        void scanOptimized(int n, int* odata, const int* idata) {
+            int* dev_buf;
+
+            int power2 = ilog2ceil(n);
+            int chunk = 1 << power2;
+
+            dim3 blocksPerGrid((chunk + blockSize - 1) / blockSize);
+            size_t arrSize = n * sizeof(int);
+
+            cudaMalloc((void**)&dev_buf, chunk * sizeof(int));
+            //checkCUDAError("cudaMalloc dev_buf failed!");
+
+            cudaMemcpy(dev_buf, idata, arrSize, cudaMemcpyHostToDevice);
+            //checkCUDAError("cudaMemcpy idata to dev_buf failed!");
+            if (chunk > n) {
+                cudaMemset(dev_buf + n, 0, (chunk - n) * sizeof(int));
+                //checkCUDAError("cudaMemset dev_buf[n] failed!");
+            }
+
+            timer().startGpuTimer();
+            // Up Sweep
+            int stride = chunk >> 1;
+            for (int d = 0; d <= power2 - 1; ++d) {
+                kernUpSweepOptimized << <blocksPerGrid, blockSize >> > (chunk, d, stride, dev_buf);
+                stride >>= 1;
+            }
+
+            // Down Sweep
+            cudaDeviceSynchronize();
+            cudaMemset(dev_buf + chunk - 1, 0, sizeof(int)); // set root to zero
+            //checkCUDAError("cudaMemset dev_buf[chunk-1] failed!");
+
+            stride = chunk >> 1;
+            for (int d = 1; d < chunk; d <<= 1) {
+                kernDownSweepOptimized << <blocksPerGrid, blockSize >> > (chunk, d, stride, dev_buf);
+                stride >>= 1;
             }
             timer().endGpuTimer();
 
