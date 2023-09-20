@@ -28,6 +28,8 @@ For the fastest implementation, **thrust::exclusive_scan**, I've observed its ex
 
 Assuming **cudeEventRecord** are the GPU timer operations, there are 5 operations within exclusive scan: **cudaMalloc**, **DeviceScanInitKernel**, **DeviceScanKernel**, **cudaStreamSynchronize**, **cudaFree**. Since **idata** was copied into device memory prior to starting the GPU timer, **cudaMalloc** was likely an operation to store temporary data within the operation since that memory was freed at the end of this function. The two scan operations were likely performing the addition, and they took the least time, meaning the **cudaMalloc** most likely allocated some shared memory for these operations to execute quickly. 
 
+Based on the increased runtimes of all the implementations, a large bottleneck seems to be caused by excessive yet unproductive blocks, hence reducing and packing blocks enhanced the runtime. 
+
 Finally, an overview of all the runtimes: 
 ```
 
