@@ -39,7 +39,7 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
+            
 
             int n_padded = 1 << ilog2ceil(n);
 
@@ -51,23 +51,24 @@ namespace StreamCompaction {
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
             checkCUDAError("cudaMemcpy dev_idata failed!");
             cudaMemset(dev_idata + n, 0, (n_padded - n) * sizeof(int));
-
+            timer().startGpuTimer();
             _scan_dev(n_padded, dev_idata);
+            timer().endGpuTimer();
 
             cudaMemcpy(odata, dev_idata+1, (n - 1) * sizeof(int), cudaMemcpyDeviceToHost);
             odata[n - 1] = odata[n - 2] + idata[n - 1];
             checkCUDAError("cudaMemcpy odata failed!");
             cudaFree(dev_idata);
-            checkCUDAError("cudaFree failed!");
-
-            timer().endGpuTimer();
+            checkCUDAError("cudaFree failed!");     
         }
 
         void _scan_dev(int n_padded, int *dev_idata) {
             int blockSize = 128;
             int num_blocks = (n_padded + blockSize - 1) / blockSize;
 
-            for (int d = 0; d <= ilog2ceil(n_padded) - 1; d++) {
+            int ilog2ceil_n = ilog2ceil(n_padded)-1;
+
+            for (int d = 0; d <= ilog2ceil_n; d++) {
                 kernScanUpsweep<<<num_blocks, blockSize>>>(n_padded, d, dev_idata);
                 checkCUDAError("kernScanUpsweep failed!");
             }
@@ -75,7 +76,7 @@ namespace StreamCompaction {
             cudaMemset(dev_idata + n_padded - 1, 0, sizeof(int));
             checkCUDAError("cudaMemset dev_idata failed!");
 
-            for (int d = ilog2ceil(n_padded) - 1; d >= 0; d--) {
+            for (int d = ilog2ceil_n; d >= 0; d--) {
                 kernScanDownsweep<<<num_blocks, blockSize>>>(n_padded, d, dev_idata);
                 checkCUDAError("kernScanDownsweep failed!");
             }
@@ -91,7 +92,6 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
             int blockSize = 128;
             int n_padded = 1 << ilog2ceil(n);
             int num_blocks = (n_padded + blockSize - 1) / blockSize;
@@ -112,6 +112,7 @@ namespace StreamCompaction {
                 checkCUDAError("cudaMemset dev_idata failed!");
             }
 
+            timer().startGpuTimer();
             Common::kernMapToBoolean<<<num_blocks, blockSize>>>(n_padded, dev_bools, dev_idata);
 
             cudaMalloc((void**)&dev_indices, n_padded * sizeof(int));
@@ -127,6 +128,7 @@ namespace StreamCompaction {
 
             Common::kernScatter<<<num_blocks, blockSize>>>(n_padded, dev_scattered, dev_idata, dev_bools, dev_indices);
             checkCUDAError("kernScatter failed!");
+            timer().endGpuTimer();
 
             // since dev_indices is exclusive scan (prefix sum), we can grab num valid elements from the last element
             int num_valid;
@@ -143,7 +145,7 @@ namespace StreamCompaction {
             cudaFree(dev_indices);
             cudaFree(dev_scattered);
             checkCUDAError("cudaFree failed!");
-            timer().endGpuTimer();
+            
             return num_valid;
         }
     }
