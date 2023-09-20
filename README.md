@@ -274,6 +274,8 @@ Nevertheless, the root cause remains somewhat elusive. Intuitively, an int shoul
 
 ## Output
 
+Below is the output of the program when run with an array size of $2^{20}$ and a block size of 128.
+
 ```
 ****************
 ** SCAN TESTS **
