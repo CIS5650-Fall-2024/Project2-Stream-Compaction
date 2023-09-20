@@ -3,7 +3,7 @@
 #include "common.h"
 #include "efficient.h"
 
-#define blockSize 128
+#define logBlockSize 6
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -37,36 +37,34 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
+            const int blockSize = 1 << logBlockSize;
             int* dev_data;
 
             // allocate enough memory to the next power of two 
-            const int expN = 1 << ilog2ceil(n);
+            const int log = ilog2ceil(n);
+            const int expN = 1 << log;
             const int extra = expN - n;
 
             cudaMalloc((void**)&dev_data, expN * sizeof(int));
 
             cudaMemcpy(dev_data + extra, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
+            timer().startGpuTimer();
+
             // up
-            for (int d = 0; d < ilog2ceil(n); d++) {
-                kernUp << <dim3(1 + (expN/ (1 << (d + 1)))), blockSize >> > (d, expN, dev_data);
+            for (int d = 0; d < log; d++) {
+                kernUp << <dim3(max(1, expN >> (d + logBlockSize + 1))), blockSize >> > (d, expN, dev_data);
             }
 
             // down
-            for (int d = ilog2ceil(n) - 1; d >= 0; d--) {
-                kernDown << <dim3(1 + (expN / (1 << (d + 1)))), blockSize >> > (d, expN, dev_data);
+            for (int d = log - 1; d >= 0; d--) {
+                kernDown << <dim3(max(1, expN >> (d + logBlockSize + 1))), blockSize >> > (d, expN, dev_data);
             }
-
-            cudaMemcpy(odata, dev_data + extra + 1, (n - 1) * sizeof(int), cudaMemcpyDeviceToHost);
-            odata[n - 1] += idata[n - 1];
-            if (n > 1) {
-                odata[n - 1] += odata[n - 2];
-            }
-
-            cudaFree(dev_data);
 
             timer().endGpuTimer();
+
+            cudaMemcpy(odata, dev_data + extra, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaFree(dev_data);
         }
 
         /**
@@ -79,7 +77,8 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
+            const int blockSize = 1 << logBlockSize;
+
             int* dev_idata;
             int* dev_hasValue;
             int* dev_scanned;
@@ -87,7 +86,8 @@ namespace StreamCompaction {
 
             int total = 0;
 
-            const int expN = 1 << ilog2ceil(n);
+            const int log = ilog2ceil(n);
+            const int expN = 1 << log;
             const int extra = expN - n;
 
             cudaMalloc((void**)&dev_idata, n * sizeof(int));
@@ -98,6 +98,8 @@ namespace StreamCompaction {
 
             const dim3 fullBlocksPerGrid((expN + blockSize - 1) / blockSize);
 
+            timer().startGpuTimer();
+
             // get 0 and non 0 elements
             StreamCompaction::Common::kernMapToBoolean <<<fullBlocksPerGrid, blockSize >>>(n, dev_hasValue, dev_idata);
 
@@ -107,12 +109,12 @@ namespace StreamCompaction {
 
             cudaMemcpy(dev_scanned + extra, dev_hasValue, n * sizeof(int), cudaMemcpyDeviceToDevice);
 
-            for (int d = 0; d < ilog2ceil(n); d++) {
-                kernUp << <dim3(1 + (expN / (1 << (d + 1)))), blockSize >> > (d, expN, dev_scanned);
+            for (int d = 0; d < log; d++) {
+                kernUp << <dim3(max(1, expN >> (d + logBlockSize + 1))), blockSize >> > (d, expN, dev_scanned);
             }
 
-            for (int d = ilog2ceil(n) - 1; d >= 0; d--) {
-                kernDown << <dim3(1 + (expN / (1 << (d + 1)))), blockSize >> > (d, expN, dev_scanned);
+            for (int d = log - 1; d >= 0; d--) {
+                kernDown << <dim3(max(1, expN >> (d + logBlockSize + 1))), blockSize >> > (d, expN, dev_scanned);
             }
 
             cudaMemcpy(&total, dev_scanned + expN - 1, sizeof(int), cudaMemcpyDeviceToHost);
@@ -125,6 +127,8 @@ namespace StreamCompaction {
 
             StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_hasValue, dev_scanned + extra);
 
+            timer().endGpuTimer();
+
             // cudaMemcpy(odata, dev_scanned + extra, n * sizeof(int), cudaMemcpyDeviceToHost);
             cudaMemcpy(odata, dev_odata, expN * sizeof(int), cudaMemcpyDeviceToHost);
 
@@ -133,7 +137,7 @@ namespace StreamCompaction {
             cudaFree(dev_scanned);
             cudaFree(dev_odata);
 
-            timer().endGpuTimer();
+            
             return total;
         }
     }
