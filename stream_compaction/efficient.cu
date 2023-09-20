@@ -111,38 +111,12 @@ namespace StreamCompaction {
             incre= increments[blockIdx.x];
             idata[index] += incre;
         }
+
         void oldscan(int n, int* odata, const int* idata) {
 
             // TODO
-            if (upgrade) {
-                dim3 threadsPerBlock(blockSize);
             
-                int* buffer1;
-
-                int iter = ilog2ceil(n);
-                int newsize = 1 << iter;
-                cudaMalloc((void**)&buffer1, newsize * sizeof(int));
-                int numOfblock = (newsize + blockSize - 1) / blockSize;
-                cudaMemset(buffer1, 0, newsize * sizeof(int));
-                cudaMemcpy(buffer1, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-                int idx = 1;
-                timer().startGpuTimer();
-                for (int i = 2; i < newsize; i = i << 1) {
-                    numOfblock = (newsize/i + blockSize - 1) / blockSize;
-                    kernEffUpSweepNew << <numOfblock, threadsPerBlock >> > (newsize, i, idx++,buffer1);
-                }
-                cudaMemset(&buffer1[newsize - 1], 0, sizeof(int));
-                for (int i = newsize; i >= 2; i = i >> 1) {
-                    numOfblock = (newsize / i + blockSize - 1) / blockSize;
-                    kernEffDownSweepNew << <numOfblock, threadsPerBlock >> > (newsize, i, idx--,buffer1);
-                }
-                timer().endGpuTimer();
-
-                cudaMemcpy(odata, buffer1, n * sizeof(int), cudaMemcpyDeviceToHost);
-                cudaFree(buffer1);
-                //cudaFree(buffer2);
-            }
-            else {
+      
                 dim3 threadsPerBlock(blockSize);
                 int numOfblock = (n + blockSize - 1) / blockSize;
                 int* buffer1;
@@ -165,8 +139,38 @@ namespace StreamCompaction {
 
                 cudaMemcpy(odata, buffer1, n * sizeof(int), cudaMemcpyDeviceToHost);
                 cudaFree(buffer1);
-            }
 
+
+        }
+        void scanupgrade(int n, int* odata, const int* idata) {
+     
+                dim3 threadsPerBlock(blockSize);
+
+                int* buffer1;
+
+                int iter = ilog2ceil(n);
+                int newsize = 1 << iter;
+                cudaMalloc((void**)&buffer1, newsize * sizeof(int));
+                int numOfblock = (newsize + blockSize - 1) / blockSize;
+                cudaMemset(buffer1, 0, newsize * sizeof(int));
+                cudaMemcpy(buffer1, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+                int idx = 1;
+                timer().startGpuTimer();
+                for (int i = 2; i < newsize; i = i << 1) {
+                    numOfblock = (newsize / i + blockSize - 1) / blockSize;
+                    kernEffUpSweepNew << <numOfblock, threadsPerBlock >> > (newsize, i, idx++, buffer1);
+                }
+                cudaMemset(&buffer1[newsize - 1], 0, sizeof(int));
+                for (int i = newsize; i >= 2; i = i >> 1) {
+                    numOfblock = (newsize / i + blockSize - 1) / blockSize;
+                    kernEffDownSweepNew << <numOfblock, threadsPerBlock >> > (newsize, i, idx--, buffer1);
+                }
+                timer().endGpuTimer();
+
+                cudaMemcpy(odata, buffer1, n * sizeof(int), cudaMemcpyDeviceToHost);
+                cudaFree(buffer1);
+                //cudaFree(buffer2);
+       
         }
 
         void scan(int n, int* odata, const int* idata) {
