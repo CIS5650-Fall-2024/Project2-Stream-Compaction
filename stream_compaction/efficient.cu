@@ -216,6 +216,7 @@ namespace StreamCompaction {
             cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy dev_data failed!");
             cudaFree(dev_data);
+            cudaFree(dev_incr);
         }
 #endif // FULL
 #else // naive from lecture
