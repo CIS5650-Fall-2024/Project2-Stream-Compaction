@@ -30,8 +30,11 @@ The algorithm performs O(n log2 n) addition operations while a sequential scan p
 #### Work-Efficient GPU Scan & Stream Compaction
 This algorithm is based on the one presented by Blelloch (1990).\
 It performs O(n) operations for n datas, 2*(n - 1) adds and (n - 1) swaps. So it is considerably better for large arrays.
+
 **Up-Sweep**
+
 ![](./img/39fig03.jpg)
+
 **Down-Sweep**
 
 Using scan method, we can do parrall stream compaction easily in the following way.
@@ -68,11 +71,13 @@ It shows that for native GPU scan, executation time drops drastically after bloc
 
 #### Optimal block Size for work efficient GPU scan with dynamic wrap lanuching
 ![](./img/work_efficient_scan_dynamic_wrap_lanuching.png)
+
 The x-axis is the block size, which specifys how many threads are in a single block. The y-axis is executation time in ms.
 As blockSize increases, the executation time dropped quickly and bounce up slightlt after 256 blockSize. So 256 is the optimal blockSize.
 
 #### Optimal block Size for work efficient GPU scan with extra share memory
 ![](./img/share_memory_optimization.png)
+
 The x-axis is the block size in log, which specifys how many threads are in a single block. The y-axis is executation time in ms.
 Based on the picture, the optimal block size is 128. Also, there are some memoery issues when the block size is 512 or higher so I do not plot the data after that, but the time reaches minimal at block size of 128.
 
@@ -84,16 +89,19 @@ CPU scan is really fast when the input array size is small, only after around 10
 
 #### Performance bottlenecks for each implementation.
 #### Naive Scan
-Naive Scan has an extensive size of global memory access.
+Naive Scan has an extensive size of global memory access.\
 Bottleneck: memory bandwidth
+![](./img/naive_analysis.png)
 
 #### Efficient Scan with dynamic wrap optimization
-Algo time complexity drop but memory has not changed. It also has a lot of global memory access. Some are reduced by dynamic wrap optimization so that threads do not lanuched. But a single thread run similarly.
+Algo time complexity drops but memory has not changed. It also has a lot of global memory access. Some are reduced by dynamic wrap optimization so that threads do not lanuched. But a single thread run similarly.\
 Bottleneck: memory bandwidth
 
 #### Efficient Scan with extra share memory optimization
-Global memory requests drop a lot and compute intensity increase.
-Bottleneck: algo implementation, compute compabitity
+Global memory requests drop a lot and compute intensity increase.\
+Bottleneck: algo implementation
+![](./img/blockscanShared_analysis.png)
+
 
 ### Thrust scan
 From Nsigh System trace, I get stats like this. You can see that occupany has reach the max.
@@ -101,10 +109,12 @@ From Nsigh System trace, I get stats like this. You can see that occupany has re
 
 Zoom up a little bit
 ![](./img/thrust_analysis_2.png)
-From the picture above, thrust::exclusive_scan has the following functions calls: cudaEventRecord, cudaMalloc, DeviceScanInitKernel, DeviceScanKernel, cudaStreamSychronize, cudaFree, cudaEventRecord.
+From the picture above, thrust::exclusive_scan has the following functions calls: _kenrel_agent, cudaStreamSychronize, cudaEventRecord, cudaMalloc, DeviceScanInitKernel, DeviceScanKernel, cudaStreamSychronize, cudaFree, cudaEventRecord.
 
 ![](./img/thrust_analysis_3.png)
-You can see that DeviceScanKernel do the scan actually and the Wrap occupancy approaches the limit.
+You can see that DeviceScanKernel do the scan actually and the Wrap occupancy approaches the limit.\
+Bottleneck: memory bandwidth
+![](./img/thrust_scan_analysis.png)
 
 
 #### Output of the test program
