@@ -22,7 +22,7 @@ namespace StreamCompaction {
             thrust::device_vector<int> dv_in(idata, idata + n);
             thrust::device_vector<int> dv_out(n);
             
-            nvtxRangePushA("scanShared");
+            nvtxRangePushA("thrust scan");
 
             timer().startGpuTimer();
             thrust::exclusive_scan(dv_in.begin(), dv_in.end(), dv_out.begin());

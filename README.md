@@ -18,14 +18,51 @@ To make it clear, scan here refers to calculate the prefix sum of an array, whet
 - GPU Scan Using Shared Memory 
 #### Features to be included
 - bank conflict reduce
-- add Nsight Performance Analysis at readme
+- more Nsight Performance Analysis
 ### Feature Details
+#### CPU Scan & Stream Compaction
+CPU Scan is quite straight forward, use a for loop to compute the exclusive prefix sum, stream compaction in cpu is easy to write down, just to remove all zeros.
+#### GPU naive Scan 
+![](./img/figure-39-2.jpg)
+
+The algorithm performs O(n log2 n) addition operations while a sequential scan performs O(n) adds. So it's not very efficient.
+
+#### Work-Efficient GPU Scan & Stream Compaction
+This algorithm is based on the one presented by Blelloch (1990).\
+It performs O(n) operations for n datas, 2*(n - 1) adds and (n - 1) swaps. So it is considerably better for large arrays.
+**Up-Sweep**
+![](./img/39fig03.jpg)
+**Down-Sweep**
+
+Using scan method, we can do parrall stream compaction easily in the following way.
+![](./img/39fig10.jpg)
+
+#### But Why Work-Efficient GPU can be slower?
+Despite that the algorithm performs less operation, it run slow on GPU and can actually slower than naive scan implemention. Below is the reason:
+![](./img/part5.png)
+The left side is exactly the steps to scan in the algo mentioned above. It lanuches more threads than it actually needs and cause serious wrap divergence. All other finished threads are waiting the most time-cosuming one in the wrap. Also, for that single thread, it actually run more iterations than the naive scan, which cause the whole implementation slower.
+
+The solution is in the right: rearrange the thread index to avoid wrap divergence. Also, only launch the threads that has works, which mean dynamically reducing the threads and thus wraps in each iteration to save time.
+
+![](./img/figure-39-4.jpg)
+
+#### Radix Sort
+With scan implementation provided above, it is easy to implement radix sort with O(klog(n)). The following picture show one single sort iteration based on 1bit. For k bits number, there is k time sort iteration needed.
+![](./img/39fig14.jpg)
+
+I add module like radixsort.cu and test it in the main.cpp as well. Please check the output the output of the test program.
+
+#### GPU Scan Using Shared Memory
+The idea is to reduce the global memory access and reuse the data to compute to hide memory latency. To use share memory, we need do scan based on that shared memory block so the input has to be divided into blocks. After that, scan the array that stores the sum of each individual blocks and then add the responding the scanned sum to get the total scan across blocks. In my code, it is `scanshared` function in the efficient.cu
+![](./img/39fig06.jpg)
+
 ### Performance Analysis
 #### Find the optimized of each of implementation for minimal run time on GPU
 First, I choose array size = 2^26 to find the optimal block size. The reason is that stream generally comes in a large scale and if it is small size, then using cpu is rather fast. 
 
 #### Optimal block Size for GPU naive scan
 ![](./img/Native_GPU_Scan.png)
+
 The x-axis is the block size, which specifys how many threads are in a single block. The y-axis is executation time in ms.
 It shows that for native GPU scan, executation time drops drastically after block size increase to around 100 and the time do not change greatly from that scale. So any scale ranging from 100(128) to 1000(1024) is acceptable. I choose 512 blocks for the naive GPU scan
 
@@ -59,8 +96,16 @@ Global memory requests drop a lot and compute intensity increase.
 Bottleneck: algo implementation, compute compabitity
 
 ### Thrust scan
+From Nsigh System trace, I get stats like this. You can see that occupany has reach the max.
 ![](./img/thrust_analysis_1.png)
-The occupancy is full from the picuture. So it use full potential compute compabitity of hardware.
+
+Zoom up a little bit
+![](./img/thrust_analysis_2.png)
+From the picture above, thrust::exclusive_scan has the following functions calls: cudaEventRecord, cudaMalloc, DeviceScanInitKernel, DeviceScanKernel, cudaStreamSychronize, cudaFree, cudaEventRecord.
+
+![](./img/thrust_analysis_3.png)
+You can see that DeviceScanKernel do the scan actually and the Wrap occupancy approaches the limit.
+
 
 #### Output of the test program
 Input Array Size is 2^29

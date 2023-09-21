@@ -224,7 +224,7 @@ namespace StreamCompaction {
             int blockSize = 256;
             int initialBlockSize = blockSize;
 
-            nvtxRangePushA("workefficient");
+            nvtxRangePushA("work efficient scan");
             timer().startGpuTimer();
             // ------------------------ Version 2.0 -------------------------------------------
             // 
