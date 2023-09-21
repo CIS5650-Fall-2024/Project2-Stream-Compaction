@@ -70,5 +70,16 @@ namespace StreamCompaction {
             timer().endCpuTimer();
             return count;
         }
+        
+        int compare(const void *a, const void *b) {
+            return (*(int*)a - *(int*)b);
+        }
+
+        void sort(int n, int *odata, const int *idata) {
+            timer().startCpuTimer();
+            memcpy(odata, idata, n * sizeof(int));
+            qsort(odata, n, sizeof(int), compare);
+            timer().endCpuTimer();
+        }
     }
 }

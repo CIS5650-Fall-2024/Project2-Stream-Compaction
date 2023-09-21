@@ -36,7 +36,7 @@ namespace StreamCompaction {
             }
         }
 
-        __global__ void kernCount(int n, int *count, int *idata, int *indices) {
+        __global__ void kernCount(int n, int *count, const int *idata, const int *indices) {
             int index = (blockIdx.x * blockDim.x) + threadIdx.x;
             if (index == n - 1) {
                 count[0] = indices[index] + (idata[index] ? 1 : 0);
