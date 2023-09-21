@@ -19,7 +19,10 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            odata[0] = 0;
+            for (int i = 1; i < n; i++) {
+                odata[i] = odata[i - 1] + idata[i - 1];
+            }
             timer().endCpuTimer();
         }
 
@@ -30,9 +33,14 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int idx = 0;
+            for (int i = 0; i < n; i++) {
+                if (idata[i]) {
+                    odata[idx++] = idata[i];
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return idx;
         }
 
         /**
@@ -42,9 +50,36 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int* bools = new int[n];
+            for (int i = 0; i < n; i++) {
+                bools[i] = idata[i] ? 1 : 0;
+            }
+            int* indices = new int[n];
+            indices[0] = 0;
+            for (int i = 1; i < n; i++) {
+                indices[i] = indices[i - 1] + bools[i - 1];
+            }
+            for (int i = 0; i < n; i++) {
+                if (bools[i]) {
+                    odata[indices[i]] = idata[i];
+                }
+            }
+            int count = bools[n - 1] + indices[n - 1];
+            delete[] bools;
+            delete[] indices;
             timer().endCpuTimer();
-            return -1;
+            return count;
+        }
+        
+        int compare(const void *a, const void *b) {
+            return (*(int*)a - *(int*)b);
+        }
+
+        void sort(int n, int *odata, const int *idata) {
+            timer().startCpuTimer();
+            memcpy(odata, idata, n * sizeof(int));
+            qsort(odata, n, sizeof(int), compare);
+            timer().endCpuTimer();
         }
     }
 }
