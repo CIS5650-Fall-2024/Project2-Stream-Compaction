@@ -14,6 +14,12 @@ void checkCUDAErrorFn(const char *msg, const char *file, int line) {
     exit(EXIT_FAILURE);
 }
 
+int BlockSize = 128;
+int SM_Count = 0;
+int Warp_Size = 0;
+int MaxThreadPerBlock = 1024;
+int MaxBlocksPerSM = 0;
+int MaxWave = 0;
 
 namespace StreamCompaction {
     namespace Common {
@@ -23,7 +29,10 @@ namespace StreamCompaction {
          * which map to 0 will be removed, and elements which map to 1 will be kept.
          */
         __global__ void kernMapToBoolean(int n, int *bools, const int *idata) {
-            // TODO
+            int index = threadIdx.x + (blockDim.x * blockIdx.x);
+            if (index >= n) return;
+
+            bools[index] = (idata[index] != 0 ? 1 : 0);
         }
 
         /**
@@ -31,9 +40,34 @@ namespace StreamCompaction {
          * if bools[idx] == 1, it copies idata[idx] to odata[indices[idx]].
          */
         __global__ void kernScatter(int n, int *odata,
-                const int *idata, const int *bools, const int *indices) {
-            // TODO
+                const int *idata, const int *indices) {
+            int index = threadIdx.x + (blockDim.x * blockIdx.x);
+            if (index >= n) return;
+
+            if (idata[index] != 0)
+            {
+                odata[indices[index]] = idata[index];
+            }
         }
 
+        void GetGPUInfo(bool print)
+        {
+            cudaDeviceProp prop;
+            cudaGetDeviceProperties(&prop, 0);
+            SM_Count = prop.multiProcessorCount;
+            Warp_Size = prop.warpSize;
+            MaxThreadPerBlock = prop.maxThreadsPerBlock;
+            MaxBlocksPerSM = prop.maxBlocksPerMultiProcessor;
+            MaxWave = MaxBlocksPerSM * SM_Count;
+
+            if (print)
+            {
+                printf("SM: %d\n", SM_Count);
+                printf("Warp Size: %d\n", Warp_Size);
+                printf("Max Threads/Block Size: %d\n", MaxThreadPerBlock);
+                printf("Max Block/SM: %d\n", MaxBlocksPerSM);
+                printf("Max Wave: %d\n", MaxWave);
+            }
+        }
     }
 }
