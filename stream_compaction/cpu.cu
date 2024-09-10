@@ -20,6 +20,11 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int partialSum = 0;
+            for (int i = 0; i < n; ++i) {
+                odata[i] = partialSum;
+                partialSum += idata[i];
+            }
             timer().endCpuTimer();
         }
 
@@ -30,9 +35,20 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int numElements = 0;
+            for (int i = 0; i < n; ++i) {
+                if (idata[i]) odata[numElements++] = idata[i];
+            }
             timer().endCpuTimer();
-            return -1;
+            return numElements;
+        }
+
+        int scatter(int n, int* odata, const int* bdata, const int* idata) {
+            int numElements = 0;
+            for (int i = 0; i < n; ++i) {
+                if (bdata[i])  odata[numElements++] = idata[i];
+            }
+            return numElements;
         }
 
         /**
@@ -42,9 +58,24 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            // Create boolean mask
+            int* buffer = new int[n];
+            for (int i = 0; i < n; ++i) {
+                buffer[i] = (idata[i] != 0);
+            }
+
+            // Scan (calling timed function leads to error)
+            int partialSum = 0;
+            for (int i = 0; i < n; ++i) {
+                odata[i] = partialSum;
+                partialSum += buffer[i];
+            }
+
+            int numElements = scatter(n, odata, buffer, idata);
+
+            delete[] buffer;
             timer().endCpuTimer();
-            return -1;
+            return numElements;
         }
     }
 }
