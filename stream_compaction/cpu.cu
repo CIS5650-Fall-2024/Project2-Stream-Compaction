@@ -43,7 +43,7 @@ namespace StreamCompaction {
                 }
             }
             timer().endCpuTimer();
-            return -1;
+            return pos;
         }
 
         /**
@@ -76,7 +76,9 @@ namespace StreamCompaction {
             delete[] bools;
             delete[] indices;
             timer().endCpuTimer();
-            return -1;
+            return cnt;
         }
+
+
     }
 }
