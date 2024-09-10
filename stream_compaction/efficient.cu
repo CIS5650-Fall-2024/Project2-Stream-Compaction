@@ -2,6 +2,15 @@
 #include <cuda_runtime.h>
 #include "common.h"
 #include "efficient.h"
+#include "device_launch_parameters.h"
+
+__device__ inline int twoPow(int d) {
+    return (1 << (d));
+}
+
+inline int twoPow_Host(int d) {
+    return (1 << (d));
+}
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -12,12 +21,51 @@ namespace StreamCompaction {
             return timer;
         }
 
+        __global__ void kernUpSweep(int n, int d, int* x) {
+            int idx = blockDim.x * blockIdx.x + threadIdx.x;
+            if (idx >= n) return;
+            if (idx % twoPow(d + 1) == 0)
+                x[idx + twoPow(d + 1) - 1] += x[idx + twoPow(d) - 1];
+        }
+
+        __global__ void kernDownSweep(int n, int d, int* x) {
+            int idx = blockDim.x * blockIdx.x + threadIdx.x;
+            if (idx >= n) return;
+            if (idx % twoPow(d + 1) == 0) {
+                int tmp = x[idx + twoPow(d) - 1];
+                x[idx + twoPow(d) - 1] = x[idx + twoPow(d + 1) - 1];
+                x[idx + twoPow(d + 1) - 1] += tmp;
+            }
+        }
+
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
             // TODO
+            int size = twoPow_Host(ilog2ceil(n));
+            dim3 blockPerGrids((size + blockSize - 1) / blockSize);
+            int* dev_idata;
+            cudaMalloc((void**)&dev_idata, size * sizeof(int));
+            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+
+            // UpSweep
+            for (int d = 0; d < ilog2ceil(size); d++) {
+                kernUpSweep << <blockPerGrids, blockSize >> > (n, d, dev_idata);
+                cudaDeviceSynchronize();
+            }
+            cudaMemset(dev_idata + size - 1, 0, sizeof(int));
+
+            // DownSweep
+            for (int d = ilog2ceil(size) - 1; d >= 0; d--) {
+                kernDownSweep << <blockPerGrids, blockSize >> > (n, d, dev_idata);
+                cudaDeviceSynchronize();
+            }
+            
+            cudaMemcpy(odata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
+
+            cudaFree(dev_idata);
             timer().endGpuTimer();
         }
 
@@ -32,9 +80,51 @@ namespace StreamCompaction {
          */
         int compact(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
+            int* dev_bools;
+            int* dev_indices;
+            int* dev_idata;
+            int* dev_odata;
+            int size = twoPow_Host(ilog2ceil(n));
+            int cnt = 0;
+
+            dim3 blockPerGrids((n + blockSize - 1) / blockSize);
+            dim3 fullBlockPerGrids((size + blockSize - 1) / blockSize);
+
+            cudaMalloc((void**)&dev_bools, size * sizeof(int));
+            cudaMalloc((void**)&dev_indices, size * sizeof(int));
+            cudaMalloc((void**)&dev_idata, size * sizeof(int));
+            cudaMalloc((void**)&dev_odata, size * sizeof(int));
+
+            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+
+            
             // TODO
+            Common::kernMapToBoolean << <blockPerGrids, blockSize >> > (n, dev_bools, dev_idata);
+            cudaDeviceSynchronize();
+            cudaMemcpy(dev_indices, dev_bools, n * sizeof(int), cudaMemcpyDeviceToDevice);
+
+            // scan
+            for (int d = 0; d < ilog2ceil(size); d++) {
+                kernUpSweep << <fullBlockPerGrids, blockSize >> > (n, d, dev_indices);
+                cudaDeviceSynchronize();
+            }
+            cudaMemset(dev_indices + size - 1, 0, sizeof(int));
+
+            for (int d = ilog2ceil(size) - 1; d >= 0; d--) {
+                kernDownSweep << <fullBlockPerGrids, blockSize >> > (n, d, dev_indices);
+                cudaDeviceSynchronize();
+            }
+            Common::kernScatter << <blockPerGrids, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_indices);
+            cudaMemcpy(&cnt, dev_indices + size - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(odata, dev_odata, cnt * sizeof(int), cudaMemcpyDeviceToHost);
+
+            cudaFree(dev_idata);
+            cudaFree(dev_odata);
+            cudaFree(dev_indices);
+            cudaFree(dev_bools);
             timer().endGpuTimer();
-            return -1;
+
+            return cnt;
         }
     }
 }
