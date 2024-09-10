@@ -22,6 +22,7 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
 #if GPU_ALGO
+            // TODO (Optional)
 #else
             odata[0] = 0; 
             for (int i = 1; i < n; ++i) {
@@ -71,7 +72,7 @@ namespace StreamCompaction {
 
             // scatter
             for (int i = 0; i <= n - 2; ++i) {
-              if (scanArr[i] != scanArr[i + 1]) {
+              if (idata[i] != 0) {
                 odata[scanArr[i]] = idata[i]; 
               }
             }
