@@ -59,7 +59,7 @@ namespace StreamCompaction {
 
             // map
             for (int i = 0; i < n; i++) {
-                bidata[i] = (bool)idata[i];
+                bidata[i] = idata[i] ? 1 : 0;
             }
 
             // scan
@@ -71,6 +71,10 @@ namespace StreamCompaction {
                     odata[bodata[i]] = idata[i];
                 }
             }
+
+            delete[] bidata;
+            delete[] bodata;
+
             timer().endCpuTimer();
             return bodata[n - 1];
         }
