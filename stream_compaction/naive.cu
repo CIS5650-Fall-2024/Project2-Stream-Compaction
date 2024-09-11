@@ -3,6 +3,7 @@
 #include "common.h"
 #include "naive.h"
 #include <algorithm>
+#include <iostream>
 
 namespace StreamCompaction {
     namespace Naive {
@@ -20,29 +21,36 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
 
+            // Pad input data to be a power of two, if needed.
+            int nearestPowerOfTwo = pow(2, ilog2ceil(n));
+
             int* outputBuf;
             int* inputBuf;
-            cudaMalloc((void**)&outputBuf, n * sizeof(int));
-            cudaMalloc((void**)&inputBuf, n * sizeof(int));
-            cudaMemcpy(inputBuf, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMalloc((void**)&outputBuf, nearestPowerOfTwo * sizeof(int));
+            cudaMalloc((void**)&inputBuf, nearestPowerOfTwo * sizeof(int));
+            cudaMemcpy(inputBuf, idata, nearestPowerOfTwo * sizeof(int), cudaMemcpyHostToDevice);
             
-            for (int depth = 1; depth <= ilog2ceil(n); ++depth) {
+            if (n < nearestPowerOfTwo) {
+                cudaMemset(inputBuf + n, 0, (nearestPowerOfTwo - n) * sizeof(int));
+            }
+
+            for (int depth = 1; depth <= ilog2ceil(nearestPowerOfTwo); ++depth) {
                 int stride = static_cast<int>(pow(2, depth - 1));
                 cudaMemcpy(outputBuf, inputBuf, sizeof(int) * stride, cudaMemcpyDeviceToDevice);
 
-                int blockSize = std::min(n - stride, 1024); // cap at 1024 threads, hardware limitation.
-                dim3 blocksPerGrid((n + blockSize - 1) / blockSize); // note integer division
-                naiveScan<<<blocksPerGrid, blockSize>>>(n, depth, inputBuf, outputBuf);
+                int blockSize = std::min(nearestPowerOfTwo - stride, 1024); // cap at 1024 threads, hardware limitation.
+                dim3 blocksPerGrid((nearestPowerOfTwo + blockSize - 1) / blockSize); // note integer division
+                naiveScan<<<blocksPerGrid, blockSize>>>(nearestPowerOfTwo, depth, inputBuf, outputBuf);
 
                 std::swap(outputBuf, inputBuf);
             }
 
             // Convert inclusive scan to exclusive scan
             int blockSize = std::min(n, 1024);
-            dim3 blocksForShift((n + blockSize - 1) / blockSize);
+            dim3 blocksForShift((nearestPowerOfTwo + blockSize - 1) / blockSize);
             shiftRight<<<blocksForShift, blockSize>>>(n, inputBuf, outputBuf);
 
-            cudaMemcpy(odata, outputBuf, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(odata, outputBuf, nearestPowerOfTwo * sizeof(int), cudaMemcpyDeviceToHost);
             cudaFree(outputBuf);
             cudaFree(inputBuf);
             timer().endGpuTimer();
