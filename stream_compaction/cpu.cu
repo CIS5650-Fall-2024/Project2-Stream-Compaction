@@ -18,9 +18,13 @@ namespace StreamCompaction {
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
+            //timer().startCpuTimer();
             // TODO
-            timer().endCpuTimer();
+			odata[0] = 0;
+			for (int i = 1; i < n; i++) {
+				odata[i] = odata[i - 1] + idata[i];
+			}
+            //timer().endCpuTimer();
         }
 
         /**
@@ -31,8 +35,15 @@ namespace StreamCompaction {
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+			int count = 0;
+			for (int i = 0; i < n; i++) {
+				if (idata[i] != 0) {
+					odata[count] = idata[i];
+					count++;
+				}
+			}
             timer().endCpuTimer();
-            return -1;
+            return count;
         }
 
         /**
@@ -43,8 +54,23 @@ namespace StreamCompaction {
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+			int *bools = new int[n];
+            for (int i = 0; i < n; i++) {
+                bools[i] = (idata[i] != 0) ? 1 : 0;
+            }
+            int* scanResult = new int[n];
+            scan(n, scanResult, bools);
+            // scatter
+			int count = bools[n - 1] == 1 ? scanResult[n - 1] : scanResult[n - 1] + 1;
+			for (int i = 0; i < n; i++) {
+				if (bools[i] == 1) {
+					odata[scanResult[i]] = idata[i];
+				}
+			}
             timer().endCpuTimer();
-            return -1;
+            delete[] bools;
+            delete[] scanResult;
+            return count;
         }
     }
 }
