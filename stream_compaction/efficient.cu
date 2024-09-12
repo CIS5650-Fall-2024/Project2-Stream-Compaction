@@ -49,7 +49,7 @@ namespace StreamCompaction {
             {
                 dim3 threadsPerBlock(blockSize);
                 dim3 blocksPerGrid(((n >> (d + 1)) + blockSize - 1) / blockSize);
-                kernReduce <<<blocksPerGrid, threadsPerBlock >>> ((n >> (d + 1)), d, dev_data);
+                kernReduce <<<blocksPerGrid, threadsPerBlock>>> ((n >> (d + 1)), d, dev_data);
                 checkCUDAError("kernReduce launch failed!");
             }
 
@@ -71,16 +71,17 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
+            int nCeil = 1 << ilog2ceil(n);
             // Up-sweep
             int *dev_data;
-            cudaMalloc((void**)&dev_data, n * sizeof(int));
+            cudaMalloc((void**)&dev_data, nCeil * sizeof(int));
             checkCUDAError("cudaMalloc dev_data failed!");
 
             cudaMemcpy(dev_data, idata, n * sizeof(int), cudaMemcpyHostToDevice);
             checkCUDAError("cudaMemcpy idata->dev_data failed!");
 
             timer().startGpuTimer();
-            scan_gpu(n, dev_data);
+            scan_gpu(nCeil, dev_data);
             timer().endGpuTimer();
 
             cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
@@ -101,27 +102,26 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
+            int nCeil = 1 << ilog2ceil(n);
+            size_t sizeOfArrays = nCeil * sizeof(int);
 
             int* dev_bools;
-            cudaMalloc((void**)&dev_bools, n * sizeof(int));
+            cudaMalloc((void**)&dev_bools, sizeOfArrays);
             checkCUDAError("cudaMalloc dev_bools failed!");
 
             int* dev_indices;
-            if (n == 1 << ilog2ceil(n))
-                cudaMalloc((void**)&dev_indices, n * sizeof(int));
-            else
-                cudaMalloc((void**)&dev_indices, n * 2 * sizeof(int));
+            cudaMalloc((void**)&dev_indices, sizeOfArrays);
             checkCUDAError("cudaMalloc dev_indices failed!");
 
             thrust::device_ptr<int> dev_thrust_indices(dev_indices);
             thrust::device_ptr<int> dev_thrust_bools(dev_bools);
 
             int* dev_idata;
-            cudaMalloc((void**)&dev_idata, n * sizeof(int));
+            cudaMalloc((void**)&dev_idata, sizeOfArrays);
             checkCUDAError("cudaMalloc dev_idata failed!");
 
             int* dev_odata;
-            cudaMalloc((void**)&dev_odata, n * sizeof(int));
+            cudaMalloc((void**)&dev_odata, sizeOfArrays);
             checkCUDAError("cudaMalloc dev_odata failed!");
 
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
@@ -131,16 +131,16 @@ namespace StreamCompaction {
             dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
 
             timer().startGpuTimer();
-            Common::kernMapToBoolean <<<blocksPerGrid, threadsPerBlock>>> (n, dev_bools, dev_idata);
+            Common::kernMapToBoolean <<<blocksPerGrid, threadsPerBlock>>> (nCeil, dev_bools, dev_idata);
             checkCUDAError("kernMapToBoolean launch failed!");
 
-            cudaMemcpy(dev_indices, dev_bools, n * sizeof(int), cudaMemcpyDeviceToDevice);
+            cudaMemcpy(dev_indices, dev_bools, sizeOfArrays, cudaMemcpyDeviceToDevice);
             checkCUDAError("cudaMemcpy dev_bools->dev_indices failed!");
-            scan_gpu(n, dev_indices);
+            scan_gpu(nCeil, dev_indices);
 
             int numRemaining = dev_thrust_indices[n - 1] + dev_thrust_bools[n - 1];
 
-            Common::kernScatter <<<blocksPerGrid, threadsPerBlock>>> (n, dev_odata, dev_idata, dev_bools, dev_indices);
+            Common::kernScatter <<<blocksPerGrid, threadsPerBlock>>> (nCeil, dev_odata, dev_idata, dev_bools, dev_indices);
             checkCUDAError("kernScatter launch failed!");
             timer().endGpuTimer();
 
