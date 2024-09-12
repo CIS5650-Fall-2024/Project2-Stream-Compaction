@@ -12,7 +12,13 @@ namespace StreamCompaction {
             return timer;
         }
 
-        void serialScan(int n, int *odata, const int *idata) {
+        /**
+         * CPU scan (prefix sum).
+         * For performance analysis, this is supposed to be a simple for loop.
+         * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
+         * Exclusive prefix sum.
+         */
+        void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
 
             // Put addition identity in first element.
@@ -25,13 +31,8 @@ namespace StreamCompaction {
             timer().endCpuTimer();
         }
 
-        /**
-         * CPU scan (prefix sum).
-         * For performance analysis, this is supposed to be a simple for loop.
-         * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
-         * Exclusive prefix sum.
-         */
-        void scan(int n, int *odata, const int *idata) {
+        // CPU version of parallel algorithm. Incorrect.
+        void scan2(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
 
             // Each new iteration should update k in [2^d, ...] only.
@@ -41,14 +42,15 @@ namespace StreamCompaction {
             int *iterInput = auxBuffer;
             int *iterOutput = odata;
 
-            odata[0] = idata[0];
+            odata[0] = 0;
 
             for (int d = 1; d <= ilog2ceil(n); ++d) {
                 // At the beginning of each new iteration:
                 //  - partial sums [0, 2^(d-1) - 1] are complete;
                 //  - the rest are of the form x[k - 2^d - 1] + ... + x[k].
-                for (int k = pow(2, d-1); k < n; ++k) {
-                    iterOutput[k] = iterInput[k - (int)pow(2, d-1)] + iterInput[k];
+                for (int k = pow(2, d-1) + 1; k < n; ++k) {
+                    int left = (k-1) - (int)pow(2, d-1);
+                    iterOutput[k] = (left < 0 ? 0 : iterInput[left]) + iterInput[k-1];
                     // y[k] is now:
                     // = x[k] + x[k - 1] + x[k - 2] + ... + x[k - 4] + .... + x[k - 2^(d-1)]
                     // = x[max(0, k - 2^(d) + 1), k - 2^(d-1)] + x[k - 2^(d-1) + 1, k] 
