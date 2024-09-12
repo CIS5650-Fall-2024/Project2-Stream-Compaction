@@ -12,13 +12,26 @@ namespace StreamCompaction {
             return timer;
         }
         // TODO: __global__
+        __global__ void kernNaiveScan(int n, int *odata, const int *idata) {
+
+        }
 
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
-            // TODO
+            int arrSize = n; 
+            if (!((n & (n - 1)) == 0)) {  // if n is not a power of 2, pad the array to next power of 2
+              arrSize = 1 << ilog2ceil(n); 
+            }
+
+            // allocate some arrays on device
+
+            // run kernel
+
+            // copy from device to host
+
             timer().endGpuTimer();
         }
     }
