@@ -21,14 +21,18 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
 
+            scanNoTimer(n, odata, idata);
+
+            timer().endCpuTimer();
+        }
+
+        void scanNoTimer(int n, int *odata, const int *idata) {
             // Put addition identity in first element.
             odata[0] = 0;
             // Serial version.
             for (int i = 1; i < n; ++i) {
                 odata[i] = odata[i-1] + idata[i-1];
             }
-
-            timer().endCpuTimer();
         }
 
         // CPU version of parallel algorithm. Incorrect.
@@ -88,7 +92,7 @@ namespace StreamCompaction {
             }
 
             timer().endCpuTimer();
-            
+
             return nonzeroCount;
         }
 
@@ -99,9 +103,29 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+
+            int *nonzeroMask = new int[n];
+            for (int i = 0; i < n; ++i) {
+                nonzeroMask[i] = (idata[i] != 0) ? 1 : 0;
+            }
+
+            int *nonzeroMaskPrefixSum = new int[n];
+            scanNoTimer(n, nonzeroMaskPrefixSum, nonzeroMask);
+
+            int nonzeroCount = 0;
+            for (int i = 0; i < n; ++i) {
+                if (nonzeroMask[i]) {
+                    odata[nonzeroMaskPrefixSum[i]] = idata[i];
+                    nonzeroCount++;
+                }
+            }
+
+            free(nonzeroMaskPrefixSum);
+            free(nonzeroMask);
+
             timer().endCpuTimer();
-            return -1;
+
+            return nonzeroCount;
         }
     }
 }
