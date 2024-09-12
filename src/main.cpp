@@ -18,6 +18,7 @@ const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
 int *c = new int[SIZE];
+int *d = new int[SIZE];
 
 int main(int argc, char* argv[]) {
     // Scan tests
@@ -40,12 +41,26 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     printArray(SIZE, b, true);
 
+    zeroArray(SIZE, d);
+    printDesc("cpu scan, power-of-two, serial");
+    StreamCompaction::CPU::serialScan(SIZE, d, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(SIZE, d, true);
+    printCmpResult(SIZE, b, d);
+
     zeroArray(SIZE, c);
     printDesc("cpu scan, non-power-of-two");
     StreamCompaction::CPU::scan(NPOT, c, a);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
-    printArray(NPOT, b, true);
+    printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
+
+    zeroArray(SIZE, d);
+    printDesc("cpu scan, non-power-of-two, serial");
+    StreamCompaction::CPU::serialScan(NPOT, d, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(NPOT, d, true);
+    printCmpResult(NPOT, b, d);
 
     zeroArray(SIZE, c);
     printDesc("naive scan, power-of-two");

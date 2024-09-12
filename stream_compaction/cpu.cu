@@ -12,6 +12,19 @@ namespace StreamCompaction {
             return timer;
         }
 
+        void serialScan(int n, int *odata, const int *idata) {
+            timer().startCpuTimer();
+
+            // Put addition identity in first element.
+            odata[0] = 0;
+            // Serial version.
+            for (int i = 1; i < n; ++i) {
+                odata[i] = odata[i-1] + idata[i-1];
+            }
+
+            timer().endCpuTimer();
+        }
+
         /**
          * CPU scan (prefix sum).
          * For performance analysis, this is supposed to be a simple for loop.
@@ -20,12 +33,39 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // Put addition identity in first element.
-            odata[0] = 0;
-            // Serial version.
-            for (int i = 1; i < n; ++i) {
-                odata[i] = odata[i-1] + idata[i-1];
+
+            // Each new iteration should update k in [2^d, ...] only.
+
+            int *auxBuffer = (int *)malloc(n * sizeof(int));
+            memcpy(auxBuffer, idata, n * sizeof(int));
+            int *iterInput = auxBuffer;
+            int *iterOutput = odata;
+
+            odata[0] = idata[0];
+
+            for (int d = 1; d <= ilog2ceil(n); ++d) {
+                // At the beginning of each new iteration:
+                //  - partial sums [0, 2^(d-1) - 1] are complete;
+                //  - the rest are of the form x[k - 2^d - 1] + ... + x[k].
+                for (int k = pow(2, d-1); k < n; ++k) {
+                    iterOutput[k] = iterInput[k - (int)pow(2, d-1)] + iterInput[k];
+                    // y[k] is now:
+                    // = x[k] + x[k - 1] + x[k - 2] + ... + x[k - 4] + .... + x[k - 2^(d-1)]
+                    // = x[max(0, k - 2^(d) + 1), k - 2^(d-1)] + x[k - 2^(d-1) + 1, k] 
+                    // for d >= 1. 
+                }
+                 // Processing [2^d, n) completely before moving on to next d is equivalent
+                // to waiting on a barrier for all threads to reach it, in the parallel case.
+
+                memcpy(iterInput, iterOutput, n * sizeof(int));
             }
+
+            if (iterInput != odata) {
+                memcpy(odata, iterInput, n * sizeof(int));
+            }
+
+            free(auxBuffer);
+
             timer().endCpuTimer();
         }
 
