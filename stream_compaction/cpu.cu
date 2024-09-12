@@ -38,7 +38,7 @@ namespace StreamCompaction {
             timer().startCpuTimer();
             // TODO
             int j = 0;
-            for (int i = 0; i < n; ++ i)
+            for (int i = 0; i < n; ++i)
             {
                 if (idata[i] != 0)
                 {
@@ -83,7 +83,7 @@ namespace StreamCompaction {
             }
 
             // Retrieve the number of elements remaining
-            int elementCount = indices[n - 1];
+            int elementCount = indices[n - 1] + mask[n - 1];
 
             // Clean up
             delete[] mask;

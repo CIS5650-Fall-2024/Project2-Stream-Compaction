@@ -1,4 +1,6 @@
 #include "common.h"
+
+#include <cassert>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
@@ -45,6 +47,7 @@ namespace StreamCompaction {
 
             if (bools[index])
             {
+                assert(indices[index] < n && indices[index] >= 0);
                 odata[indices[index]] = idata[index];
             }
         }
