@@ -17,13 +17,21 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
+            int n_padded = pow(2, ilog2ceil(n)); // pad array to neared power of two
+
             int* dev_data;
-            cudaMalloc((void**) &dev_data, n * sizeof(int));
+            cudaMalloc((void**) &dev_data, n_padded * sizeof(int));
             cudaMemcpy(dev_data, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+
+            // Pad input data to be a power of two, if needed.
+            if (n < n_padded) {
+                cudaMemset(dev_data + n, 0, (n_padded - n) * sizeof(int));
+            }
+
             timer().startGpuTimer();
             
-            for (int depth = 0; depth < ilog2ceil(n); ++depth) {
-                int totalOperations = n / (1 << depth);
+            for (int depth = 0; depth < ilog2ceil(n_padded); ++depth) {
+                int totalOperations = n_padded / (1 << depth);
                 int blockSize = std::min(totalOperations, 1024); // 1024 is a hardware limitation
                 dim3 blocksPerGrid = (totalOperations + blockSize - 1 / blockSize);
 
@@ -32,10 +40,10 @@ namespace StreamCompaction {
             }
 
             // Pre-step for downsweep
-            cudaMemset(dev_data + n - 1, 0, sizeof(int));
+            cudaMemset(dev_data + n_padded - 1, 0, sizeof(int));
 
-            for (int depth = ilog2ceil(n) - 1; depth >= 0; --depth) {
-                int totalOperations = n / (1 << depth);
+            for (int depth = ilog2ceil(n_padded) - 1; depth >= 0; --depth) {
+                int totalOperations = n_padded / (1 << depth);
                 int blockSize = std::min(totalOperations, 1024); // 1024 is a hardware limitation
                 dim3 blocksPerGrid = (totalOperations + blockSize - 1 / blockSize);
 
@@ -44,7 +52,7 @@ namespace StreamCompaction {
             }
 
             timer().endGpuTimer();
-            cudaMemcpy(odata, dev_data, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(odata, dev_data, n_padded * sizeof(int), cudaMemcpyDeviceToHost);
             cudaFree(dev_data);
         }
 
