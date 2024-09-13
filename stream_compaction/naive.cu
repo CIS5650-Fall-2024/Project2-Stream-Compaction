@@ -3,7 +3,6 @@
 #include "common.h"
 #include "naive.h"
 #include <algorithm>
-#include <iostream>
 
 namespace StreamCompaction {
     namespace Naive {
