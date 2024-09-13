@@ -23,7 +23,7 @@ namespace StreamCompaction {
             int* inputBuf;
             cudaMalloc((void**)&outputBuf, nearestPowerOfTwo * sizeof(int));
             cudaMalloc((void**)&inputBuf, nearestPowerOfTwo * sizeof(int));
-            cudaMemcpy(inputBuf, idata, nearestPowerOfTwo * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(inputBuf, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
 
             // Pad input data to be a power of two, if needed.
