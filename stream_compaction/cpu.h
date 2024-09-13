@@ -10,7 +10,9 @@ namespace StreamCompaction {
 
         void scanNoTimer(int n, int *odata, const int *idata);
 
-        void scan2(int n, int *odata, const int *idata);
+        void scanExclusive(int n, int *odata, const int *idata);
+
+        void scanInclusive(int n, int *odata, const int *idata);
 
         int compactWithoutScan(int n, int *odata, const int *idata);
 

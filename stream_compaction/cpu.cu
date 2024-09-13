@@ -36,7 +36,7 @@ namespace StreamCompaction {
         }
 
         // CPU version of parallel algorithm. Incorrect.
-        void scan2(int n, int *odata, const int *idata) {
+        void scanExclusive(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
 
             // Each new iteration should update k in [2^d, ...] only.
@@ -47,6 +47,7 @@ namespace StreamCompaction {
             int *iterOutput = odata;
 
             odata[0] = 0;
+            odata[1] = idata[0];
 
             for (int d = 1; d <= ilog2ceil(n); ++d) {
                 // At the beginning of each new iteration:
@@ -64,6 +65,49 @@ namespace StreamCompaction {
                 // to waiting on a barrier for all threads to reach it, in the parallel case.
 
                 memcpy(iterInput, iterOutput, n * sizeof(int));
+            }
+
+            if (iterInput != odata) {
+                memcpy(odata, iterInput, n * sizeof(int));
+            }
+
+            free(auxBuffer);
+
+            timer().endCpuTimer();
+        }
+
+        void scanInclusive(int n, int *odata, const int *idata) {
+            timer().startCpuTimer();
+
+            // Each new iteration should update k in [2^d, ...] only.
+
+            int *auxBuffer = (int *)malloc(n * sizeof(int));
+            memcpy(auxBuffer, idata, n * sizeof(int));
+            int *iterInput = auxBuffer;
+            int *iterOutput = odata;
+
+            odata[0] = idata[0];
+
+            for (int d = 1; d <= ilog2ceil(n); ++d) {
+                // At the beginning of each new iteration:
+                //  - partial sums [0, 2^(d-1) - 1] are complete;
+                //  - the rest are of the form x[k - 2^d - 1] + ... + x[k].
+                for (int k = 0; k < n; ++k) {
+                    if (k >= pow(2, d-1)) {
+                        iterOutput[k] = iterInput[k - (int)pow(2, d-1)] + iterInput[k];
+                    } else {
+                        iterOutput[k] = iterInput[k];
+                    }
+
+                    // y[k] is now:
+                    // = x[k] + x[k - 1] + x[k - 2] + ... + x[k - 4] + .... + x[k - 2^(d-1)]
+                    // = x[max(0, k - 2^(d) + 1), k - 2^(d-1)] + x[k - 2^(d-1) + 1, k] 
+                    // for d >= 1. 
+                }
+                 // Processing [2^d, n) completely before moving on to next d is equivalent
+                // to waiting on a barrier for all threads to reach it, in the parallel case.
+
+                std::swap(iterInput, iterOutput);
             }
 
             if (iterInput != odata) {

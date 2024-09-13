@@ -50,14 +50,28 @@ int main(int argc, char* argv[]) {
 
     zeroArray(SIZE, d);
     printDesc("cpu scan, power-of-two, version 2");
-    StreamCompaction::CPU::scan2(SIZE, d, a);
+    StreamCompaction::CPU::scanExclusive(SIZE, d, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(SIZE, d, true);
+    printCmpResult(SIZE, b, d);
+
+    zeroArray(SIZE, d);
+    printDesc("cpu scan, power-of-two, inclusive");
+    StreamCompaction::CPU::scanInclusive(SIZE, d, a);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     printArray(SIZE, d, true);
     printCmpResult(SIZE, b, d);
 
     zeroArray(SIZE, d);
     printDesc("cpu scan, non-power-of-two, version 2");
-    StreamCompaction::CPU::scan2(NPOT, d, a);
+    StreamCompaction::CPU::scanExclusive(NPOT, d, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(NPOT, d, true);
+    printCmpResult(NPOT, c, d);
+
+    zeroArray(SIZE, d);
+    printDesc("cpu scan, non-power-of-two, inclusive");
+    StreamCompaction::CPU::scanInclusive(NPOT, d, a);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     printArray(NPOT, d, true);
     printCmpResult(NPOT, c, d);
