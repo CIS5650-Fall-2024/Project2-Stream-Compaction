@@ -12,8 +12,20 @@ namespace StreamCompaction {
             return timer;
         }
         // TODO: __global__
-        __global__ void kernNaiveScan(int n, int *odata, const int *idata) {
+        __global__ void kernNaiveScan(int n, int d, int *out, const int *in) {
+          int k = index1D; 
+          if (k >= n) {
+            return; 
+          }
 
+          int offset = static_cast<int>(powf(2, d - 1)); 
+
+          if (k >= offset) {
+            out[k] = in[k - offset] + in[k];
+          }
+          else {
+            out[k] = in[k]; 
+          }
         }
 
         /**
@@ -21,17 +33,54 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
+
             int arrSize = n; 
             if (!((n & (n - 1)) == 0)) {  // if n is not a power of 2, pad the array to next power of 2
               arrSize = 1 << ilog2ceil(n); 
             }
 
+            int* dev_A = nullptr; 
+            int* dev_B = nullptr; 
+
             // allocate some arrays on device
+            cudaMalloc((void**)&dev_A, arrSize * sizeof(int));
+            checkCUDAError("cudaMalloc dev_A failed!");
 
-            // run kernel
+            cudaMalloc((void**)&dev_B, arrSize * sizeof(int));
+            checkCUDAError("cudaMalloc dev_B failed!");
 
-            // copy from device to host
+            cudaMemset(dev_A, 0, arrSize * sizeof(int)); 
+            checkCUDAError("cudaMemset dev_A failed!");
 
+            cudaMemset(dev_B, 0, arrSize * sizeof(int));
+            checkCUDAError("cudaMemset dev_B failed!");
+
+            // copy to A, which initially has input data
+            int offset = arrSize - n; 
+            cudaMemcpy(dev_A + offset, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy dev_A failed!");
+            
+            // run kernel over depth
+            for (int d = 1; d <= ilog2ceil(arrSize); d++) { 
+              kernNaiveScan <<<blocksPerGrid(arrSize), BLOCKSIZE>>>(arrSize, d, dev_B, dev_A);
+              checkCUDAError("kernNaiveScan failed!");
+
+              // swap the buffers
+              int* swap = dev_A; 
+              dev_A = dev_B; 
+              dev_B = swap; 
+            }
+
+            odata[0] = 0; // first element is always the identity
+
+            // copy from device to host. shifting one to the right to do an exclusive shift
+            cudaMemcpy(odata + 1, dev_A + offset, (n - 1) * sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAError("cudaMemcpy dev_A to odata failed!");
+            cudaDeviceSynchronize(); 
+
+            // free device memory
+            cudaFree(dev_A);
+            cudaFree(dev_B); 
             timer().endGpuTimer();
         }
     }
