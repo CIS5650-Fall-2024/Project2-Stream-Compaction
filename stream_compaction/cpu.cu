@@ -42,20 +42,25 @@ namespace StreamCompaction {
             // Each new iteration should update k in [2^d, ...] only.
 
             int *auxBuffer = (int *)malloc(n * sizeof(int));
-            memcpy(auxBuffer, idata, n * sizeof(int));
             int *iterInput = auxBuffer;
             int *iterOutput = odata;
 
-            odata[0] = 0;
-            odata[1] = idata[0];
+            iterInput[0] = 0;
+            for (int k = 1; k < n; ++k) {
+                iterInput[k] = idata[k-1]; 
+            }
 
             for (int d = 1; d <= ilog2ceil(n); ++d) {
                 // At the beginning of each new iteration:
                 //  - partial sums [0, 2^(d-1) - 1] are complete;
                 //  - the rest are of the form x[k - 2^d - 1] + ... + x[k].
-                for (int k = pow(2, d-1) + 1; k < n; ++k) {
-                    int left = (k-1) - (int)pow(2, d-1);
-                    iterOutput[k] = (left < 0 ? 0 : iterInput[left]) + iterInput[k-1];
+                for (int k = 0; k < n; ++k) {
+                    if (k >= pow(2, d-1)) {
+                        iterOutput[k] = iterInput[k - (int)pow(2, d-1)] + iterInput[k];
+                    } else {
+                        iterOutput[k] = iterInput[k];
+                    }
+
                     // y[k] is now:
                     // = x[k] + x[k - 1] + x[k - 2] + ... + x[k - 4] + .... + x[k - 2^(d-1)]
                     // = x[max(0, k - 2^(d) + 1), k - 2^(d-1)] + x[k - 2^(d-1) + 1, k] 
@@ -64,7 +69,7 @@ namespace StreamCompaction {
                  // Processing [2^d, n) completely before moving on to next d is equivalent
                 // to waiting on a barrier for all threads to reach it, in the parallel case.
 
-                memcpy(iterInput, iterOutput, n * sizeof(int));
+                std::swap(iterInput, iterOutput);
             }
 
             if (iterInput != odata) {
