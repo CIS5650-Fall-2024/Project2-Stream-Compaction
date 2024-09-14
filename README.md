@@ -89,6 +89,3 @@ Here is the output of the program with array size 2^16 and block size 128
     passed
 ```
 
-Include analysis, etc. (Remember, this is public, so don't put
-anything here that you don't want to share with the world.)
-
