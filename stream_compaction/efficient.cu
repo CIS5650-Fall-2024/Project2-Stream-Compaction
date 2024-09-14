@@ -67,7 +67,7 @@ namespace StreamCompaction {
         }
 
         /**
-         * Wrapper around scan (to facilitate gpu timing and allocating things)
+         * Wrapper method (to facilitate gpu timing and allocating things)
          */
         void scan(int n, int *odata, const int *idata) {
             int n_padded = pow(2, ilog2ceil(n)); // pad array to nearest power of two
@@ -95,7 +95,7 @@ namespace StreamCompaction {
             int twoToDepthPlusOne = (1 << (depth + 1));
             int twoToDepth = (1 << depth);
             // Since each block is a self contained scan, we calculate these indices w.r.t the local block thread index.
-            // But then we offset by (blockDim.x * blockIdx.x) because the dev_data is for ALL blocks, so we need to access the right part.
+            // But then we offset by (stride * blockIdx.x) because the dev_data is for ALL blocks, so we need to access the right part.
             int leftChildIdx = (threadId * twoToDepthPlusOne) + twoToDepth - 1 + (stride * blockIdx.x);
             int rightChildIdx = (threadId * twoToDepthPlusOne) + twoToDepthPlusOne - 1 + (stride * blockIdx.x);
 
@@ -155,10 +155,42 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
+            int n_padded = pow(2, ilog2ceil(n)); // pad array to nearest power of two
+            int* trueFalseArray, *dev_idata, *dev_odata;
+            cudaMalloc((void**)&trueFalseArray, n_padded * sizeof(int));
+            cudaMalloc((void**)&dev_idata, n * sizeof(int));
+            cudaMalloc((void**)&dev_odata, n * sizeof(int)); // allocate for worst-case scenario
+            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+
+            if (n < n_padded) {
+                // Note that if we wanted to *retain* 0s in the compacted array, we'd need to pad
+                // trueFalseArray with a different value here.
+                cudaMemset(trueFalseArray + n, 0, (n_padded - n) * sizeof(int));
+            }
+
             timer().startGpuTimer();
-            // TODO
+            
+            int threadsPerBlock = 128;
+            dim3 blocksPerGrid = (n + threadsPerBlock - 1 / threadsPerBlock);
+            StreamCompaction::Common::kernMapToBoolean<<<blocksPerGrid, threadsPerBlock>>>(n, trueFalseArray, dev_idata);
+            cudaDeviceSynchronize();
+
+            scan(n_padded, trueFalseArray); // scan happens in-place, so trueFalseArray is now scanned
+
+            StreamCompaction::Common::kernScatter<<<blocksPerGrid, threadsPerBlock>>>(n, dev_odata, dev_idata, trueFalseArray);
+            cudaDeviceSynchronize();
+
             timer().endGpuTimer();
-            return -1;
+
+            int compactArraySize;
+            cudaMemcpy(&compactArraySize, trueFalseArray + n_padded - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            compactArraySize += (idata[n - 1] != 0); // necessary because scan was exclusive
+
+            cudaMemcpy(odata, dev_odata, compactArraySize * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaFree(dev_odata);
+            cudaFree(dev_idata);
+            cudaFree(trueFalseArray);
+            return compactArraySize;
         }
     }
 }
