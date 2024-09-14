@@ -65,7 +65,7 @@ namespace StreamCompaction {
             }
             
             // above result is inclusive, need to convert to exclusive scan
-            // because of the sawp, latest result is in dev_idata
+            // because of the swap, latest result is in dev_idata
             kernToExclusive<<<blocksPerGrid, blockSize>>>(n, dev_odata, dev_idata);
 
             timer().endGpuTimer();
