@@ -2,7 +2,6 @@
 #include <cuda_runtime.h>
 #include "common.h"
 #include "efficient.h"
-#include "device_launch_parameters.h"
 
 __device__ inline int twoPow(int d) {
     return (1 << (d));
@@ -21,14 +20,14 @@ namespace StreamCompaction {
             return timer;
         }
 
-        __global__ void kernUpSweep(int n, int d, int* x) {
+        __global__ void upSweep(int n, int d, int* x) {
             int idx = blockDim.x * blockIdx.x + threadIdx.x;
             if (idx >= n) return;
             if (idx % twoPow(d + 1) == 0)
                 x[idx + twoPow(d + 1) - 1] += x[idx + twoPow(d) - 1];
         }
 
-        __global__ void kernDownSweep(int n, int d, int* x) {
+        __global__ void downSweep(int n, int d, int* x) {
             int idx = blockDim.x * blockIdx.x + threadIdx.x;
             if (idx >= n) return;
             if (idx % twoPow(d + 1) == 0) {
@@ -52,14 +51,14 @@ namespace StreamCompaction {
 
             // UpSweep
             for (int d = 0; d < ilog2ceil(size); d++) {
-                kernUpSweep << <blockPerGrids, blockSize >> > (n, d, dev_idata);
+                upSweep << <blockPerGrids, blockSize >> > (n, d, dev_idata);
                 cudaDeviceSynchronize();
             }
             cudaMemset(dev_idata + size - 1, 0, sizeof(int));
 
             // DownSweep
             for (int d = ilog2ceil(size) - 1; d >= 0; d--) {
-                kernDownSweep << <blockPerGrids, blockSize >> > (n, d, dev_idata);
+                downSweep << <blockPerGrids, blockSize >> > (n, d, dev_idata);
                 cudaDeviceSynchronize();
             }
             
@@ -94,7 +93,6 @@ namespace StreamCompaction {
             cudaMalloc((void**)&dev_indices, size * sizeof(int));
             cudaMalloc((void**)&dev_idata, size * sizeof(int));
             cudaMalloc((void**)&dev_odata, size * sizeof(int));
-
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
             
@@ -105,15 +103,14 @@ namespace StreamCompaction {
 
             // scan
             for (int d = 0; d < ilog2ceil(size); d++) {
-                kernUpSweep << <fullBlockPerGrids, blockSize >> > (n, d, dev_indices);
-                cudaDeviceSynchronize();
+                upSweep << <fullBlockPerGrids, blockSize >> > (n, d, dev_indices);
             }
             cudaMemset(dev_indices + size - 1, 0, sizeof(int));
 
             for (int d = ilog2ceil(size) - 1; d >= 0; d--) {
-                kernDownSweep << <fullBlockPerGrids, blockSize >> > (n, d, dev_indices);
-                cudaDeviceSynchronize();
+                downSweep << <fullBlockPerGrids, blockSize >> > (n, d, dev_indices);
             }
+            
             Common::kernScatter << <blockPerGrids, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_indices);
             cudaMemcpy(&cnt, dev_indices + size - 1, sizeof(int), cudaMemcpyDeviceToHost);
             cudaMemcpy(odata, dev_odata, cnt * sizeof(int), cudaMemcpyDeviceToHost);

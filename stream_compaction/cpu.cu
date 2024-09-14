@@ -79,6 +79,11 @@ namespace StreamCompaction {
             return cnt;
         }
 
-
+        void sort(int n, int* odata, const int* idata) {
+            timer().startCpuTimer();
+            memcpy(odata, idata, n * sizeof(int));
+            std::sort(odata, odata + n, [](int a, int b) { return a > b; });
+            timer().endCpuTimer();
+        }
     }
 }
