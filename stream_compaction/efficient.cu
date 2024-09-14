@@ -86,11 +86,11 @@ namespace StreamCompaction {
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
-        void scan(int n, int *odata, const int *idata) {
+        void scan(int n, int *odata, const int *idata, int block_size) {
             thrust::device_vector<int> input_data(idata, idata + n);
 
             timer().startGpuTimer();
-            _scan(n, input_data.data());
+            _scan(n, input_data.data(), block_size);
             timer().endGpuTimer();
 
             thrust::copy(input_data.begin(), input_data.end(), odata);
@@ -137,7 +137,12 @@ namespace StreamCompaction {
             timer().endGpuTimer();
 
             thrust::copy(output_data.begin(), output_data.end(), odata);
-            return indices[n - 1];
+            
+            // NOTE(rahul): we add is_not_zero[n - 1] because we do 
+            // an exclusive sum here. If the final element is not zero
+            // we will not notice that we actually compact one more element
+            // than the last element tells us.
+            return indices[n - 1] + is_not_zero[n - 1];
         }
     }
 }

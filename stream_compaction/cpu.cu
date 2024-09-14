@@ -42,7 +42,7 @@ namespace StreamCompaction {
                 }
             }
             timer().endCpuTimer();
-            return j - 1;
+            return j;
         }
 
         /**
@@ -60,7 +60,7 @@ namespace StreamCompaction {
             // NOTE(rahul): we reuse the odata buffer here.
             scan(n, odata, is_not_zero.data(), false);
 
-            const auto num_elements = odata[n - 1] - 1;
+            const auto num_elements = odata[n - 1] + is_not_zero[n - 1];
 
             // scatter 
             // NOTE(rahul): this works because we know that odata[i]

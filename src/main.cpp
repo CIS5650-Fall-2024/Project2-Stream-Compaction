@@ -20,13 +20,19 @@ int main(int argc, char* argv[]) {
 
     auto SIZE = 1 << 8;
     auto NPOT = SIZE - 3;
+    auto block_size = 128;
 
-    if (argc >= 1) {
+    if (argc > 1) {
         SIZE = 1 << atoi(argv[1]);
         NPOT = SIZE - 3; // Non-Power-Of-Two
     }
 
+    if (argc > 2) {
+        block_size = atoi(argv[2]);
+    }
+
     printf("SIZE: %d\n", SIZE);
+    printf("block_size: %d\n", block_size);
 
     int *a = new int[SIZE];
     int *b = new int[SIZE];
@@ -59,7 +65,7 @@ int main(int argc, char* argv[]) {
 
     zeroArray(SIZE, c);
     printDesc("naive scan, power-of-two");
-    StreamCompaction::Naive::scan(SIZE, c, a);
+    StreamCompaction::Naive::scan(SIZE, c, a, block_size);
     printElapsedTime(StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(SIZE, c, true);
     printCmpResult(SIZE, b, c);
@@ -72,21 +78,21 @@ int main(int argc, char* argv[]) {
 
     zeroArray(SIZE, c);
     printDesc("naive scan, non-power-of-two");
-    StreamCompaction::Naive::scan(NPOT, c, a);
+    StreamCompaction::Naive::scan(NPOT, c, a, block_size);
     printElapsedTime(StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(SIZE, c, true);
     printCmpResult(NPOT, b, c);
 
     zeroArray(SIZE, c);
     printDesc("work-efficient scan, power-of-two");
-    StreamCompaction::Efficient::scan(SIZE, c, a);
+    StreamCompaction::Efficient::scan(SIZE, c, a, block_size);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(SIZE, c, true);
     printCmpResult(SIZE, b, c);
 
     zeroArray(SIZE, c);
     printDesc("work-efficient scan, non-power-of-two");
-    StreamCompaction::Efficient::scan(NPOT, c, a);
+    StreamCompaction::Efficient::scan(NPOT, c, a, block_size);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
@@ -157,7 +163,7 @@ int main(int argc, char* argv[]) {
     printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
 
-    system("pause"); // stop Win32 console from closing on exit
+    // system("pause"); // stop Win32 console from closing on exit
     delete[] a;
     delete[] b;
     delete[] c;
