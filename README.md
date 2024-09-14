@@ -33,7 +33,8 @@ Finally, we compare the input array size with the speed of calculation under com
 ### Output of test program
 
 Here is the output of the program with array size 2^16 and block size 128
-'''
+
+```
 ****************
 ** SCAN TESTS **
 ****************
@@ -86,7 +87,7 @@ Here is the output of the program with array size 2^16 and block size 128
 ==== work-efficient compact, non-power-of-two ====
    elapsed time: 0.29184ms    (CUDA Measured)
     passed
-'''
+```
 
 Include analysis, etc. (Remember, this is public, so don't put
 anything here that you don't want to share with the world.)
