@@ -13,14 +13,24 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 8; // feel free to change the size of array
-const int NPOT = SIZE - 3; // Non-Power-Of-Two
-int *a = new int[SIZE];
-int *b = new int[SIZE];
-int *c = new int[SIZE];
-
+// const int SIZE = 1 << 8; // feel free to change the size of array
+// const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int main(int argc, char* argv[]) {
     // Scan tests
+
+    auto SIZE = 1 << 8;
+    auto NPOT = SIZE - 3;
+
+    if (argc >= 1) {
+        SIZE = 1 << atoi(argv[1]);
+        NPOT = SIZE - 3; // Non-Power-Of-Two
+    }
+
+    printf("SIZE: %d\n", SIZE);
+
+    int *a = new int[SIZE];
+    int *b = new int[SIZE];
+    int *c = new int[SIZE];
 
     printf("\n");
     printf("****************\n");
@@ -137,14 +147,14 @@ int main(int argc, char* argv[]) {
     printDesc("work-efficient compact, power-of-two");
     count = StreamCompaction::Efficient::compact(SIZE, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    //printArray(count, c, true);
+    printArray(count, c, true);
     printCmpLenResult(count, expectedCount, b, c);
 
     zeroArray(SIZE, c);
     printDesc("work-efficient compact, non-power-of-two");
     count = StreamCompaction::Efficient::compact(NPOT, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    //printArray(count, c, true);
+    printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
 
     system("pause"); // stop Win32 console from closing on exit

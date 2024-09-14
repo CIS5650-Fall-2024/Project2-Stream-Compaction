@@ -20,20 +20,11 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata, bool time) {
             if (time) timer().startCpuTimer();
-            odata[0] = idata[0];
+            odata[0] = 0;
             for (auto i = 1; i < n; i++) {
-                odata[i] = odata[i - 1] + idata[i];
+                odata[i] = odata[i - 1] + idata[i - 1];
             }
             if (time) timer().endCpuTimer();
-        }
-
-        static inline void inclusive_to_exclusive(int n, int *odata, const int *idata) {
-            // NOTE(rahul): because odata can alias to idata, we need to 
-            // iterate over the array backwards
-            for (auto i = n - 1; i > 0; i--) {
-                odata[i] = idata[i - 1];
-            }
-            odata[0] = 0;
         }
 
         /**
@@ -68,13 +59,13 @@ namespace StreamCompaction {
             
             // NOTE(rahul): we reuse the odata buffer here.
             scan(n, odata, is_not_zero.data(), false);
-            inclusive_to_exclusive(n, odata, odata);
 
             const auto num_elements = odata[n - 1] - 1;
 
             // scatter 
             // NOTE(rahul): this works because we know that odata[i]
-            // will always be <= i,
+            // will always be <= i, This only works in the sequential
+            // case.
             for (auto i = 0; i < n; i++) {
                 if (is_not_zero[i] == 1) {
                     odata[odata[i]] = idata[i];
