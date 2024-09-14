@@ -12,13 +12,12 @@ namespace StreamCompaction {
             return timer;
         }
         // TODO: __global__
-        __global__ void kernNaiveScan(int n, int d, int *out, const int *in) {
+        __global__ void kernNaiveScan(int n, int offset, int *out, const int *in) {
           int k = index1D; 
+
           if (k >= n) {
             return; 
           }
-
-          int offset = static_cast<int>(powf(2, d - 1)); 
 
           if (k >= offset) {
             out[k] = in[k - offset] + in[k];
@@ -61,7 +60,7 @@ namespace StreamCompaction {
             checkCUDAError("cudaMemcpy dev_A failed!");
             
             // run kernel over depth
-            for (int d = 1; d <= ilog2ceil(arrSize); d++) { 
+            for (int d = 1; d <= arrSize; d <<= 1) { 
               kernNaiveScan <<<blocksPerGrid(arrSize), BLOCKSIZE>>>(arrSize, d, dev_B, dev_A);
               checkCUDAError("kernNaiveScan failed!");
 
