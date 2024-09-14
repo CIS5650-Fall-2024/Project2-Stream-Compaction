@@ -17,7 +17,7 @@ namespace StreamCompaction {
         int* dev_idata;
         int* dev_tempdata;
 
-        const int blockSize = 64;
+        const int blockSize = 128;
 
         // TODO: __global__
         __global__ void scanInGPU(int n, int logVal, int* odata, int* idata) {
@@ -39,7 +39,7 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            int* tempdata = (int*)malloc(n);
+            int* tempdata = (int*)malloc(n * sizeof(int));
             cudaMalloc((void**)&dev_odata, n * sizeof(int));
             checkCUDAError("cudaMalloc dev_odata failed!");
             cudaMalloc((void**)&dev_idata, n * sizeof(int));
@@ -50,11 +50,10 @@ namespace StreamCompaction {
             cudaMemcpy(dev_odata, odata, sizeof(int) * n, cudaMemcpyHostToDevice);
             cudaMemcpy(dev_idata, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
             cudaMemcpy(dev_tempdata, tempdata, sizeof(int) * n, cudaMemcpyHostToDevice);
-            timer().startGpuTimer();
-            
-            // TODO
-            //scanInGPU << <1, n >> > (n, dev_tempdata, dev_odata, dev_idata);
             dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+
+            timer().startGpuTimer();
+            // TODO
             for (int i = 1; i < ilog2ceil(n) + 1; i++) {
                 scanInGPU << <fullBlocksPerGrid, blockSize >> > (n, i - 1, dev_odata, dev_idata);
                 std::swap(dev_odata, dev_idata);

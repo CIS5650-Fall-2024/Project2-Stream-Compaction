@@ -19,7 +19,7 @@ namespace StreamCompaction {
         int* dev_odata;
         int* dev_idata;
         int* dev_origin;
-        const int blockSize = 64;
+        const int blockSize = 128;
 
         //GPU scan
         __global__ void upSweep(int n, int logVal, int* idata) {
@@ -93,9 +93,8 @@ namespace StreamCompaction {
                 checkCUDAError("cudaFunc downSweep failed!");
             }
 
-            shiftArray << <fullBlocksPerGrid, blockSize >> > (size, dev_origin, dev_idata);
-
             timer().endGpuTimer();
+            shiftArray << <fullBlocksPerGrid, blockSize >> > (size, dev_origin, dev_idata);
             cudaMemcpy(odata, dev_idata, sizeof(int) * n, cudaMemcpyDeviceToHost);
             cudaFree(dev_idata);
             cudaFree(dev_origin);
