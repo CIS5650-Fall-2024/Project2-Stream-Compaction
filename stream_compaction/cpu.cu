@@ -52,16 +52,16 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* trueFalseArray = new int[n];
+            int* scannedTFArray = new int[n];
+
             timer().startCpuTimer();
-            int trueFalseArray[n];
             for (int i = 0; i < n; ++i) {
                 int input = idata[i];
                 trueFalseArray[i] = (input == 0) ? 0 : 1;
             }
 
-            int scannedTFArray[n];
             scan(n, scannedTFArray, trueFalseArray, false);
-            timer().endCpuTimer();
 
             // Scatter
             int numOutputElements = 0;
@@ -73,6 +73,11 @@ namespace StreamCompaction {
                 odata[scannedTFArray[i]] = input;
                 ++numOutputElements;
             }
+
+            timer().endCpuTimer();
+
+            delete[] trueFalseArray;
+            delete[] scannedTFArray;
             return numOutputElements;
         }
     }
