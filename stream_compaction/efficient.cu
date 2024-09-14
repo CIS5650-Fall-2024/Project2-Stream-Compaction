@@ -32,19 +32,6 @@ namespace StreamCompaction {
             idata[k + (1 << (d + 1)) - 1] += t;
         }
 
-        __global__ void kernToExclusive(int n, int* odata, int* idata) {
-            int idx = blockIdx.x * blockDim.x + threadIdx.x;
-            if (idx >= n) return;
-
-            if (idx == 0) {
-                odata[idx] = 0;
-            }
-            else {
-                odata[idx] = idata[idx - 1];
-            }
-            return;
-        }
-
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
@@ -114,10 +101,60 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
+            int* dev_odata;
+            int* dev_idata;
+
+            cudaMalloc((void**)&dev_odata, n * sizeof(int));
+            checkCUDAError("cudaMalloc dev_odata failed");
+            cudaMalloc((void**)&dev_idata, n * sizeof(int));
+            checkCUDAError("cudaMalloc dev_idata failed");
+
+            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy to dev_idata failed");
+
+            int* dev_bodata;
+            int* dev_bidata;
+
+            cudaMalloc((void**)&dev_bodata, n * sizeof(int));
+            checkCUDAError("cudaMalloc dev_bodata failed");
+            cudaMalloc((void**)&dev_bidata, n * sizeof(int));
+            checkCUDAError("cudaMalloc dev_bidata failed");
+
+            dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
+
             timer().startGpuTimer();
             // TODO
+
+            // map
+            Common::kernMapToBoolean<<<blocksPerGrid, blockSize>>>(n, dev_bidata, dev_idata);
+
+            // scan
+            scan(n, dev_bodata, dev_bidata, false);
+
+            // scatter
+            Common::kernScatter<<<blocksPerGrid, blockSize>>>(n, dev_odata, dev_idata, dev_bidata, dev_bodata);
+
             timer().endGpuTimer();
-            return -1;
+
+            // make sure to count the last element
+            int numElems;
+            cudaMemcpy(&numElems, dev_bodata + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            numElems += (int)(bool)idata[n - 1];
+
+            cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAError("cudaMemcpy from dev_odata failed");
+
+            cudaFree(dev_odata);
+            checkCUDAError("cudaFree dev_odata failed");
+            cudaFree(dev_idata);
+            checkCUDAError("cudaFree dev_idata failed");
+
+            cudaFree(dev_bodata);
+            checkCUDAError("cudaFree dev_odata failed");
+            cudaFree(dev_bidata);
+            checkCUDAError("cudaFree dev_idata failed");
+
+            return numElems;
         }
     }
 }
