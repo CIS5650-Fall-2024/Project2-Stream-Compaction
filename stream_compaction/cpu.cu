@@ -22,7 +22,7 @@ namespace StreamCompaction {
             // TODO
 			odata[0] = 0;
 			for (int i = 1; i < n; i++) {
-				odata[i] = odata[i - 1] + idata[i];
+				odata[i] = odata[i - 1] + idata[i - 1];
 			}
             //timer().endCpuTimer();
         }
@@ -61,7 +61,7 @@ namespace StreamCompaction {
             int* scanResult = new int[n];
             scan(n, scanResult, bools);
             // scatter
-			int count = bools[n - 1] == 1 ? scanResult[n - 1] : scanResult[n - 1] + 1;
+			int count = bools[n - 1] == 1 ? scanResult[n - 1] : scanResult[n - 1];
 			for (int i = 0; i < n; i++) {
 				if (bools[i] == 1) {
 					odata[scanResult[i]] = idata[i];
