@@ -19,20 +19,34 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            
+            odata[0] = 0;
+            for (int i = 0; i < n - 1; i++) {
+                odata[i + 1] = odata[i] + idata[i];
+            }
+
             timer().endCpuTimer();
         }
 
         /**
          * CPU stream compaction without using the scan function.
+         * remove 0s from an array of ints
          *
          * @returns the number of elements remaining after compaction.
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
+            int idx = 0;
             timer().startCpuTimer();
-            // TODO
+           
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    odata[idx] = idata[i];
+                    idx++;
+                }
+            }
+
             timer().endCpuTimer();
-            return -1;
+            return idx;
         }
 
         /**
@@ -41,10 +55,33 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* tmp = new int[n];
+            int* scanned = new int[n];
             timer().startCpuTimer();
-            // TODO
+            
+            // temporary array
+            for (int i = 0; i < n; i++) {
+                tmp[i] = (idata[i] == 0) ? 0 : 1;
+            }
+            
+            // copied scan function (to not call timer twice)
+            scanned[0] = 0;
+            for (int i = 0; i < n - 1; i++) {
+                scanned[i + 1] = scanned[i] + tmp[i];
+            }
+
+            // scatter
+            for (int i = 0; i < n; i++) {
+                if (tmp[i] == 1) {
+                    odata[scanned[i]] = idata[i];
+                }
+            }
+
             timer().endCpuTimer();
-            return -1;
+            int num = scanned[n - 1] + tmp[n - 1];
+            delete[] tmp;
+            delete[] scanned;
+            return num;
         }
     }
 }

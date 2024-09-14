@@ -102,8 +102,8 @@ int main(int argc, char* argv[]) {
 
     // Compaction tests
 
-    genArray(SIZE - 1, a, 4);  // Leave a 0 at the end to test that edge case
-    a[SIZE - 1] = 0;
+    genArray(SIZE - 1, a, 4);  
+    a[SIZE - 1] = 1; // Leave a 1 at the end to test that edge case
     printArray(SIZE, a, true);
 
     int count, expectedCount, expectedNPOT;
