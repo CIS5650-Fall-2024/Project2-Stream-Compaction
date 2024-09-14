@@ -57,7 +57,9 @@ namespace StreamCompaction {
         void _scan(int n, const thrust::device_ptr<int> &data, int block_size = 128) {
             const auto num_blocks = (n + block_size - 1) / block_size;
 
+            timer().endGpuTimerCummulative();
             thrust::device_vector<int> block_sums(num_blocks);
+            timer().startGpuTimer();
 
             naive_scan_block<<<num_blocks, block_size, 2 * block_size * sizeof(int)>>>(
                 n, thrust::raw_pointer_cast(data),

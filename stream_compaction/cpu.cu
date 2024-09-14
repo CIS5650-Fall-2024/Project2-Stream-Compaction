@@ -51,8 +51,8 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
             std::vector<int> is_not_zero(n);
+            timer().startCpuTimer();
             for (auto i = 0; i < n; i++) {
                 is_not_zero[i] = idata[i] != 0;
             }
