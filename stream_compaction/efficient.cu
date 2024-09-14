@@ -14,6 +14,9 @@ namespace StreamCompaction {
         }
 
         //variable initialization
+        int* dev_sdata;
+        int* dev_bdata;
+        int* dev_odata;
         int* dev_idata;
         int* dev_origin;
         const int blockSize = 64;
@@ -108,11 +111,80 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
+            int size = pow(2, ilog2ceil(n));
+            int* test = (int*)malloc(sizeof(int) * size);
+
+            cudaMalloc((void**)&dev_idata, size * sizeof(int));
+            checkCUDAError("cudaMalloc dev_idata failed!");
+            cudaMemset(dev_idata, 0, size * sizeof(int));
+            checkCUDAError("cudaMemset dev_idata failed!");
+            cudaMemcpy(dev_idata, idata, size * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy dev_idata failed!");
+
+            cudaMalloc((void**)&dev_odata, size * sizeof(int));
+            checkCUDAError("cudaMalloc dev_odata failed!");
+            cudaMemset(dev_odata, 0, size * sizeof(int));
+            checkCUDAError("cudaMemset dev_odata failed!");
+            cudaMalloc((void**)&dev_bdata, size * sizeof(int));
+            checkCUDAError("cudaMalloc dev_bdata failed!");
+            cudaMemset(dev_bdata, 0, size * sizeof(int));
+            checkCUDAError("cudaMemset dev_bdata failed!");
+            cudaMalloc((void**)&dev_sdata, size * sizeof(int));
+            checkCUDAError("cudaMalloc dev_sdata failed!");
+            cudaMemset(dev_sdata, 0, size * sizeof(int));
+            checkCUDAError("cudaMemset dev_sdata failed!");
+
+            dim3 fullBlocksPerGrid((size + blockSize - 1) / blockSize);
             timer().startGpuTimer();
             // TODO
-            
+            StreamCompaction::Common::kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (n, dev_bdata, dev_idata);
+
+            cudaMemcpy(dev_sdata, dev_bdata, size * sizeof(int), cudaMemcpyDeviceToDevice);
+
+            for (int i = 0; i <= ilog2ceil(n) - 1; i++) {
+                upSweep << <fullBlocksPerGrid, blockSize >> > (size, i, dev_sdata);
+                checkCUDAError("cudaFunc upSweep failed!");
+            }
+
+            cudaMemset(dev_sdata + size - 1, 0, sizeof(int));
+            checkCUDAError("cudaMemset dev_idata + size - 1 failed!");
+
+            for (int i = ilog2ceil(n) - 1; i >= 0; i--) {
+                downSweep << <fullBlocksPerGrid, blockSize >> > (size, i, dev_sdata);
+                checkCUDAError("cudaFunc downSweep failed!");
+            }
+            StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (size, dev_odata, dev_idata, dev_bdata, dev_sdata);
+
             timer().endGpuTimer();
-            return -1;
+            int num1 = 0;
+            int num2 = 0;
+            cudaMemcpy(&num1, dev_sdata + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(&num2, dev_bdata + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(odata, dev_odata, (num1 + num2 ) * sizeof(int), cudaMemcpyDeviceToHost);
+            
+            //test
+            //for (int i = 0; i < n; i++) {
+            //    std::cout << idata[i] << " ";
+            //}
+            //std::cout << std::endl;
+            //cudaMemcpy(test, dev_sdata, sizeof(int) * size, cudaMemcpyDeviceToHost);
+            //for (int i = 0; i < size; i++) {
+            //    std::cout << test[i] << " ";
+            //}
+            //std::cout << std::endl;
+            //cudaMemcpy(test, dev_bdata, sizeof(int) * size, cudaMemcpyDeviceToHost);
+            //for (int i = 0; i < size; i++) {
+            //    std::cout << test[i] << " ";
+            //}
+            //std::cout << std::endl;
+
+            //free
+            cudaFree(dev_idata);
+            cudaFree(dev_odata);
+            cudaFree(dev_bdata);
+            cudaFree(dev_sdata);
+            free(test);
+            return num1 + num2;
         }
     }
 }
