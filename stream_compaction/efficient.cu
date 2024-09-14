@@ -19,11 +19,7 @@ namespace StreamCompaction {
             int k = (1 << (d + 1)) * idx;
             if (k >= n) return;
 
-            int prev_first = idata[k + 1 << d - 1];
-            int prev_second = idata[k + 1 << (d + 1) - 1];
-            idata[k + 1 << (d + 1) - 1] += idata[k + 1 << d - 1];
-            int new_second = idata[k + 1 << (d + 1) - 1];
-            idata[k + 1 << (d + 1) - 1] = idata[k + 1 << (d + 1) - 1];
+            idata[k + (1 << (d + 1)) - 1] += idata[k + (1 << d) - 1];
         }
 
         __global__ void kernDownSweep(int n, int d, int* idata) {
@@ -31,9 +27,9 @@ namespace StreamCompaction {
             int k = (1 << (d + 1)) * idx;
             if (k >= n) return;
 
-            int t = idata[k + 1 << d - 1];
-            idata[k + 1 << d - 1] = idata[k + 1 << (d + 1) - 1];
-            idata[k + 1 << (d + 1) - 1] += t;
+            int t = idata[k + (1 << d) - 1];
+            idata[k + (1 << d) - 1] = idata[k + (1 << (d + 1)) - 1];
+            idata[k + (1 << (d + 1)) - 1] += t;
         }
 
         __global__ void kernToExclusive(int n, int* odata, int* idata) {
@@ -85,8 +81,7 @@ namespace StreamCompaction {
             }
 
             // set root to zero
-            cudaMemset(&dev_idata[n_padded - 1], 0, sizeof(int));
-            cudaMemcpy(odata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemset(dev_idata + n_padded - 1, 0, sizeof(int));
 
             // downseep
             for (int d = log2CeilN - 1; d >= 0; d--) {
@@ -95,16 +90,11 @@ namespace StreamCompaction {
                 kernDownSweep<<<blocksPerGrid, blockSize>>>(n, d, dev_idata);
             }
 
-            //dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
-            //kernToExclusive<<<blocksPerGrid, blockSize>>>(n, dev_odata, dev_idata);
-
             if (time)
                 timer().endGpuTimer();
 
             std::swap(dev_idata, dev_odata);
 
-            int* temp_idata = new int[1 << 8];
-            cudaMemcpy(temp_idata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
             cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy from dev_odata failed");
 
