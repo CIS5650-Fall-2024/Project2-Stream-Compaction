@@ -19,7 +19,11 @@ namespace StreamCompaction {
             int k = (1 << (d + 1)) * idx;
             if (k >= n) return;
 
+            int prev_first = idata[k + 1 << d - 1];
+            int prev_second = idata[k + 1 << (d + 1) - 1];
             idata[k + 1 << (d + 1) - 1] += idata[k + 1 << d - 1];
+            int new_second = idata[k + 1 << (d + 1) - 1];
+            idata[k + 1 << (d + 1) - 1] = idata[k + 1 << (d + 1) - 1];
         }
 
         __global__ void kernDownSweep(int n, int d, int* idata) {
@@ -81,7 +85,8 @@ namespace StreamCompaction {
             }
 
             // set root to zero
-            cudaMemset(dev_idata + n_padded - 1, 0, sizeof(int));
+            cudaMemset(&dev_idata[n_padded - 1], 0, sizeof(int));
+            cudaMemcpy(odata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             // downseep
             for (int d = log2CeilN - 1; d >= 0; d--) {
@@ -96,6 +101,10 @@ namespace StreamCompaction {
             if (time)
                 timer().endGpuTimer();
 
+            std::swap(dev_idata, dev_odata);
+
+            int* temp_idata = new int[1 << 8];
+            cudaMemcpy(temp_idata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
             cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy from dev_odata failed");
 
