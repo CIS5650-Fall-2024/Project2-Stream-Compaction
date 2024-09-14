@@ -26,7 +26,7 @@ namespace StreamCompaction {
             int index = threadIdx.x + (blockIdx.x * blockDim.x);
             if (index >= n) return;
 
-            bools[index] = (idata[index] == 0);
+            bools[index] = (idata[index] != 0);
         }
 
         /**

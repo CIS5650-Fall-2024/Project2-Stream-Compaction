@@ -171,7 +171,7 @@ namespace StreamCompaction {
             timer().startGpuTimer();
             
             int threadsPerBlock = 128;
-            dim3 blocksPerGrid = (n + threadsPerBlock - 1 / threadsPerBlock);
+            dim3 blocksPerGrid = ((n + threadsPerBlock - 1) / threadsPerBlock);
             StreamCompaction::Common::kernMapToBoolean<<<blocksPerGrid, threadsPerBlock>>>(n, trueFalseArray, dev_idata);
             cudaDeviceSynchronize();
 
@@ -183,7 +183,7 @@ namespace StreamCompaction {
             timer().endGpuTimer();
 
             int compactArraySize;
-            cudaMemcpy(&compactArraySize, trueFalseArray + n_padded - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(&compactArraySize, trueFalseArray + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
             compactArraySize += (idata[n - 1] != 0); // necessary because scan was exclusive
 
             cudaMemcpy(odata, dev_odata, compactArraySize * sizeof(int), cudaMemcpyDeviceToHost);
