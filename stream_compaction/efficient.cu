@@ -123,12 +123,7 @@ namespace StreamCompaction {
             }
         }
 
-        /**
-         * Performs prefix-sum (aka scan) on idata, storing the result into odata.
-         */
-        void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
-
+        void scanNoTimer(int n, int *odata, const int *idata) {
             int nNextPow2 = nextPow2(n);
 
             const int blockSize = 256;
@@ -195,6 +190,15 @@ namespace StreamCompaction {
 
             cudaFree(idataDevice);
             checkCUDAError("failed to free idataDevice");
+        }
+
+        /**
+         * Performs prefix-sum (aka scan) on idata, storing the result into odata.
+         */
+        void scan(int n, int *odata, const int *idata) {
+            timer().startGpuTimer();
+
+            scanNoTimer(n, odata, idata);
 
             timer().endGpuTimer();
         }
@@ -210,9 +214,63 @@ namespace StreamCompaction {
          */
         int compact(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
-            // TODO
+
+            int blockSize = 256;
+            int blockCount = (n + blockSize - 1) / blockSize;
+
+            int *idataDevice = nullptr;
+            cudaMalloc(&idataDevice, n * sizeof(int));
+            checkCUDAError("failed to malloc idataDevice");
+            cudaMemcpy(idataDevice, idata, n * sizeof(int), ::cudaMemcpyHostToDevice);
+            checkCUDAError("failed to memcpy idataDevice");
+
+            int *nonzeroMaskDevice = nullptr;
+            cudaMalloc(&nonzeroMaskDevice, n * sizeof(int));
+            checkCUDAError("failed to malloc nonzeroMaskDevice");
+
+            int *nonzeroMaskPrefixSumDevice = nullptr;
+            cudaMalloc(&nonzeroMaskPrefixSumDevice, n * sizeof(int));
+            checkCUDAError("failed to malloc nonzeroMaskPrefixSumDevice");
+
+            int *reducedNonzeroMaskDevice = nullptr;
+            cudaMalloc(&reducedNonzeroMaskDevice, n * sizeof(int));
+            checkCUDAError("failed to malloc reducedNonzeroMaskDevice");
+            
+            StreamCompaction::Common::kernMapToBoolean<<<blockCount, blockSize>>>(n, nonzeroMaskDevice, idataDevice);
+
+            scanNoTimer(n, nonzeroMaskPrefixSumDevice, nonzeroMaskDevice);
+
+            reductionKernel<<<blockCount, blockSize>>>(n, reducedNonzeroMaskDevice, nonzeroMaskDevice);
+            int nonzeroCount = 0;
+            cudaMemcpy(&nonzeroCount, &reducedNonzeroMaskDevice[n-1], sizeof(int), ::cudaMemcpyDeviceToHost);
+
+            if (nonzeroCount > 0) {
+                int *odataDevice = nullptr;
+                cudaMalloc(&odataDevice, nonzeroCount * sizeof(int));
+                checkCUDAError("failed to malloc odataDevice");
+
+                StreamCompaction::Common::kernScatter<<<blockCount, blockSize>>>(
+                    n, odataDevice, idataDevice, nonzeroMaskDevice, nonzeroMaskPrefixSumDevice
+                );
+
+                cudaMemcpy(odata, odataDevice, nonzeroCount * sizeof(int), ::cudaMemcpyDeviceToHost);
+                checkCUDAError("failed to memcpy odataDevice");
+
+                cudaFree(odataDevice);
+                checkCUDAError("failed to free odataDevice");
+            }
+
+            cudaFree(reducedNonzeroMaskDevice);
+            checkCUDAError("failed to free reducedNonzeroMaskDevice");
+            cudaFree(nonzeroMaskPrefixSumDevice);
+            checkCUDAError("failed to free nonzeroMaskPrefixSumDevice");
+            cudaFree(nonzeroMaskDevice);
+            checkCUDAError("failed to free nonzeroMaskDevice");
+            cudaFree(idataDevice);
+            checkCUDAError("failed to free idataDevice");
+
             timer().endGpuTimer();
-            return -1;
+            return nonzeroCount;
         }
     }
 }
