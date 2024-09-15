@@ -14,28 +14,28 @@ namespace StreamCompaction {
 
         __global__ void kernUpSweep(int n, int d, int* data) {
             int index = threadIdx.x + (blockIdx.x * blockDim.x);
-            if (index >= n) {
+            int offset = 1 << (d + 1); // 2^(d+1)
+            int pos = index * offset;
+
+            if (pos >= n) {
                 return;
             }
 
-            int offset = 1 << (d + 1); // 2^(d+1)
-            if (index % offset == 0) {
-                data[index + offset - 1] += data[index + (offset >> 1) - 1];
-            }
+            data[pos + offset - 1] += data[pos + (offset >> 1) - 1];
         }
 
         __global__ void kernDownSweep(int n, int d, int* data) {
             int index = threadIdx.x + (blockIdx.x * blockDim.x);
-            if (index >= n) {
+            int offset = 1 << (d + 1); // 2^(d+1)
+            int pos = index * offset;
+
+            if (pos >= n) {
                 return;
             }
 
-            int offset = 1 << (d + 1); // 2^(d+1)
-            if (index % offset == 0) {
-                int t = data[index + (offset >> 1) - 1];
-                data[index + (offset >> 1) - 1] = data[index + offset - 1];
-                data[index + offset - 1] += t;
-            }
+            int t = data[pos + (offset >> 1) - 1];
+            data[pos + (offset >> 1) - 1] = data[pos + offset - 1];
+            data[pos + offset - 1] += t;
         }
 
         /**
@@ -44,14 +44,10 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             int enlargedSize = 1 << ilog2ceil(n); // enlarge the size to the nearest power of 2
             int* dev_idata;
-            int* dev_odata;
-            int blockSize = 128;
-            int fullBlocksPerGrid = (enlargedSize + blockSize - 1) / blockSize;
+            int blockSize = 64;
 
             cudaMalloc((void**)&dev_idata, enlargedSize * sizeof(int));
             checkCUDAError("cudaMalloc dev_idata failed!");
-            cudaMalloc((void**)&dev_odata, enlargedSize * sizeof(int));
-            checkCUDAError("cudaMalloc dev_odata failed!");
 
             // copy the input to GPU (size n data)
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
@@ -59,12 +55,14 @@ namespace StreamCompaction {
             timer().startGpuTimer();
             // up-sweep
             for (int d = 0; d <= ilog2ceil(enlargedSize) - 1; d++) {
+                int fullBlocksPerGrid = (enlargedSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
                 kernUpSweep<<<fullBlocksPerGrid, blockSize>>> (enlargedSize, d, dev_idata);
             }
 
             // down-sweep
             cudaMemset(dev_idata + enlargedSize - 1, 0, sizeof(int));
             for (int d = ilog2ceil(enlargedSize) - 1; d >= 0; d--) {
+                int fullBlocksPerGrid = (enlargedSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
                 kernDownSweep<<<fullBlocksPerGrid, blockSize>>> (enlargedSize, d, dev_idata);
             }
             timer().endGpuTimer();
@@ -74,7 +72,6 @@ namespace StreamCompaction {
 
             // free memory
             cudaFree(dev_idata);
-            cudaFree(dev_odata);
         }
 
         /**
@@ -95,7 +92,6 @@ namespace StreamCompaction {
             int fullBlocksPerGrid = (n + blockSize - 1) / blockSize;
 
             int enlargedSize = 1 << ilog2ceil(n); // enlarge the size to the nearest power of 2
-            int fullBlocksPerGridEnlarged = (enlargedSize + blockSize - 1) / blockSize;
 
             cudaMalloc((void**)&dev_idata, n * sizeof(int));
             checkCUDAError("cudaMalloc dev_idata failed!");
@@ -117,12 +113,14 @@ namespace StreamCompaction {
             cudaMemcpy(dev_scan, dev_temp, n * sizeof(int), cudaMemcpyDeviceToDevice);
             // up-sweep
             for (int d = 0; d <= ilog2ceil(enlargedSize) - 1; d++) {
+                int fullBlocksPerGridEnlarged = (enlargedSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
                 kernUpSweep<<<fullBlocksPerGridEnlarged, blockSize>>> (enlargedSize, d, dev_scan);
             }
 
             // down-sweep
             cudaMemset(dev_scan + enlargedSize - 1, 0, sizeof(int));
             for (int d = ilog2ceil(enlargedSize) - 1; d >= 0; d--) {
+                int fullBlocksPerGridEnlarged = (enlargedSize / (1 << (d + 1)) + blockSize - 1) / blockSize;
                 kernDownSweep<<<fullBlocksPerGridEnlarged, blockSize>>> (enlargedSize, d, dev_scan);
             }
 

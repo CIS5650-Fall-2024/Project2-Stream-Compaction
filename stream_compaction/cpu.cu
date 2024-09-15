@@ -78,7 +78,7 @@ namespace StreamCompaction {
                     count++;
                 }
             }
-            count = temp[n - 1] == 1 ? count + 1 : count;
+            count = scanResult[n - 1] + temp[n - 1];
             timer().endCpuTimer();
 
             // free memory
