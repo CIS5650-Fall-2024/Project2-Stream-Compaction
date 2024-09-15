@@ -75,11 +75,13 @@ namespace StreamCompaction {
                 }
             }
 
+            int res = bodata[n - 1];
+
             delete[] bidata;
             delete[] bodata;
 
             timer().endCpuTimer();
-            return bodata[n - 1];
+            return res;
         }
     }
 }
