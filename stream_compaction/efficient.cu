@@ -20,7 +20,8 @@ namespace StreamCompaction {
             dim3 blocksPerGrid = ((n_padded / 2) + blockSize - 1) / blockSize;
 
             int* stored_sums; // temp array used to store last entry per block during upsweep. See kernZeroEntries and kernIncrement for use info.
-            cudaMalloc((void**)&stored_sums, blocksPerGrid.x * sizeof(int));
+            // Allocate with pinned memory
+            cudaHostAlloc((void**)&stored_sums, blocksPerGrid.x * sizeof(int), cudaHostAllocDefault);
 
             kernScan<<<blocksPerGrid, blockSize, 2 * sizeof(int) * blockSize>>>(n_padded, ilog2ceil(2 * blockSize), dev_data, stored_sums);
             cudaDeviceSynchronize();
@@ -41,7 +42,7 @@ namespace StreamCompaction {
                 cudaDeviceSynchronize();
             }
 
-            cudaFree(stored_sums);
+            cudaFreeHost(stored_sums);
         }
 
         /**
