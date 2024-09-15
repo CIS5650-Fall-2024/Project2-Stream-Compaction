@@ -61,8 +61,8 @@ void printArray(int n, int *a, bool abridged = false) {
     printf("    [ ");
     for (int i = 0; i < n; i++) {
         if (abridged && i + 2 == 15 && n > 16) {
-            i = n - 2;
-            printf("... ");
+            //i = n - 2;
+            //printf("... ");
         }
         printf("%3d ", a[i]);
     }
