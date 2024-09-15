@@ -19,7 +19,10 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            odata[0] = 0;
+            for (int i = 1; i < n; ++i) {
+                odata[i] = odata[i - 1] + idata[i - 1];
+            }
             timer().endCpuTimer();
         }
 
@@ -30,9 +33,15 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int index = 0; //index to keep track of where we are currently at in odata
+            for (int i = 0; i < n; ++i) {
+                if (idata[i] != 0) {
+                    odata[index] = idata[i];
+                    index++;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return index;
         }
 
         /**
@@ -42,9 +51,33 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            //Step 1: Compute temporary array
+            int* temp = new int[n];
+            for (int i = 0; i < n; ++i) {
+                temp[i] = (idata[i] != 0);
+            }
+
+            //Step 2: Run exclusive scan on temp array
+            //Had to copy code from scan to avoid duplicate timer
+            int* exclusiveScan = new int[n];
+            exclusiveScan[0] = 0;
+            for (int i = 1; i < n; ++i) {
+                exclusiveScan[i] = exclusiveScan[i - 1] + temp[i - 1];
+            }
+
+            //Step 3: Scatter
+            for (int i = 0; i < n; ++i) {
+                if (temp[i] == 1) {
+                    odata[exclusiveScan[i]] = idata[i];
+                }
+            }
+
             timer().endCpuTimer();
-            return -1;
+
+            int numElements = exclusiveScan[n - 1] + temp[n - 1];
+            delete[] temp;
+            delete[] exclusiveScan;
+            return numElements;
         }
     }
 }
