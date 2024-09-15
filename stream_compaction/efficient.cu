@@ -24,6 +24,31 @@ namespace StreamCompaction {
             return x == 1 ? 0 : ilog2(x - 1) + 1;
         }
 
+        __global__ void reductionKernel(int n, int *odata, int *idata) {
+            extern __shared__ int blockSharedMem[];
+
+            int globalThreadIdx = blockIdx.x*blockDim.x + threadIdx.x;
+            if (globalThreadIdx >= n) {
+                return;
+            }
+
+            blockSharedMem[threadIdx.x] = idata[globalThreadIdx];
+
+            __syncthreads();
+
+            for (int d = 0; d < ilog2(n); ++d) {
+                if ((threadIdx.x + 1) % (1 << (d+1)) == 0) {
+                    int leftChildValue = blockSharedMem[threadIdx.x - (1 << d)];
+                    int rightChildValue = blockSharedMem[threadIdx.x];
+                    blockSharedMem[threadIdx.x] = leftChildValue + rightChildValue;
+                }
+
+                __syncthreads();
+            }
+
+            odata[globalThreadIdx] = blockSharedMem[threadIdx.x];
+        }
+
         __global__ void exclusiveScanKernel(int n, int *odata, int *idata, int *blockSumDevice = nullptr) {
             
         }
@@ -35,6 +60,18 @@ namespace StreamCompaction {
             }
 
             odata[globalThreadIdx] += blockSums[blockIdx.x];
+        }
+
+        void reduce(int n, int *odata, const int *idata) {
+            for (int i = 0; i < n; ++i) {
+                odata[i] = idata[i];
+            }
+
+            for (int d = 0; d < ::ilog2(n); ++d) {
+                for (int k = 0; k < n; k += (1 << (d+1))) {
+                    odata[k + (1 << (d+1)) - 1] += odata[k + (1 << d) - 1];
+                }
+            }
         }
 
         /**
@@ -76,20 +113,22 @@ namespace StreamCompaction {
 
             cudaMemcpy(idataDevice, idata, n * sizeof(int), ::cudaMemcpyHostToDevice);
 
-            exclusiveScanKernel<<<blockCount, blockSize, blockSharedMemSize>>>(n, odataDevice, idataDevice, iblockSumDevice);
+            reductionKernel<<<blockCount, blockSize, blockSharedMemSize>>>(n, odataDevice, idataDevice);
 
-            // Debug.
-            cudaMemcpy(odataDeviceDebug, odataDevice, n * sizeof(int), ::cudaMemcpyDeviceToHost);
-            cudaMemcpy(iblockSumDeviceDebug, iblockSumDevice, blockCount.x * sizeof(int), ::cudaMemcpyDeviceToHost);
-            // Debug.
+            // exclusiveScanKernel<<<blockCount, blockSize, blockSharedMemSize>>>(n, odataDevice, idataDevice, iblockSumDevice);
 
-            exclusiveScanKernel<<<blockSumBlockCount, blockSumBlockSize, blockSumSharedMemSize>>>(blockCount.x, oblockSumDevice, iblockSumDevice);
+            // // Debug.
+            // cudaMemcpy(odataDeviceDebug, odataDevice, n * sizeof(int), ::cudaMemcpyDeviceToHost);
+            // cudaMemcpy(iblockSumDeviceDebug, iblockSumDevice, blockCount.x * sizeof(int), ::cudaMemcpyDeviceToHost);
+            // // Debug.
 
-            // Debug.
-            cudaMemcpy(oblockSumDeviceDebug, oblockSumDevice, blockCount.x * sizeof(int), ::cudaMemcpyDeviceToHost);
-            // Debug.
+            // exclusiveScanKernel<<<blockSumBlockCount, blockSumBlockSize, blockSumSharedMemSize>>>(blockCount.x, oblockSumDevice, iblockSumDevice);
 
-            addBlockSumsKernel<<<blockCount, blockSize>>>(n, odataDevice, oblockSumDevice);
+            // // Debug.
+            // cudaMemcpy(oblockSumDeviceDebug, oblockSumDevice, blockCount.x * sizeof(int), ::cudaMemcpyDeviceToHost);
+            // // Debug.
+
+            // addBlockSumsKernel<<<blockCount, blockSize>>>(n, odataDevice, oblockSumDevice);
 
             cudaMemcpy(odata, odataDevice, n * sizeof(int), ::cudaMemcpyDeviceToHost);
 
