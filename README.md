@@ -33,6 +33,32 @@ There are some interesting things to talk about here. Firstly, the reason we can
 
 In addition, we notice that the GPU implementations finally become efficient around $2^{18}$ to $2^{20}$ elements, which will likely vary heavily across computers.
 
+##### Thrust
+
+One thing I noticed when doing a Nsight systems analysis is that the thrust implementation does not actually use a recursive implementation of scan to handle larger arrays. Instead, they implement a decoupled lookback approach (for more details read here: [https://research.nvidia.com/sites/default/files/pubs/2016-03_Single-pass-Parallel-Prefix/nvr-2016-002.pdf](https://research.nvidia.com/sites/default/files/pubs/2016-03_Single-pass-Parallel-Prefix/nvr-2016-002.pdf)). This allows them to use just one kernel and eliminate intermediate allocations like we use.
+
+![thrust_timeline](img/thrust_timeline.png)
+
+##### Kernel Latency
+
+One problem with the scan-and-then-reduce paradigm is that kernel latency starts ocurring
+
+![kernel_latency](img/kernel_latency.png)
+
+Here, we see that there are gaps between successive recursive kernel executions that may cause issues with performance.
+
+##### Compute vs Memory Throughput
+
+One interesting thing to note is that while our efficient scan algorithm has higher compute throughput (on the first recursion), the thrust version has lower compute throughout while having higher memory throughput. We see this makes a significant difference in the runtime, meaning that our algorithm is memory bounded. One thing we can do to fix this is optimize our shared memory access patterns by removing bank conflicts.
+
+![compute_vs_memory_throughput](img/compute_vs_memory_throughput.png)
+
+#### Stream Compaction
+
+For sake of completeness, I have included a graph comparing stream compaction performance between CPU and GPU implementations at different array sizes. These follow a similar trend as the scan comparisons, with CPU being an order of magnitude worse due to requiring many more iterations over the elements. The graph is on a log-log scale.
+
+![elapsed_time_vs_array_size_stream_compaction](img/elapsed_time_vs_array_size_stream_compaction.png)
+
 #### Extra Credit
 
 I implemented the shared memory versions of both the naive and work-efficient versions of the scan algorithm, which allowed my GPU implementations to drastically improve on the CPU versions, especially as array sizes increase.
