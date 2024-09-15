@@ -20,7 +20,7 @@ namespace StreamCompaction {
             int stride = 2 * maxBlockSize; // since each thread works on two entries of dev_data, 2x block size gives the stride to get between blocks of data in dev_data.
             dim3 blocksPerGrid = ((n_padded / 2) + maxBlockSize - 1) / maxBlockSize;
 
-            int* stored_sums; // temp array used to last entry per block during upsweep. See kernZeroEntries and kernIncrement for use info.
+            int* stored_sums; // temp array used to store last entry per block during upsweep. See kernZeroEntries and kernIncrement for use info.
             cudaMalloc((void**)&stored_sums, blocksPerGrid.x * sizeof(int));
 
             int blockSize_i = maxBlockSize;
@@ -44,14 +44,14 @@ namespace StreamCompaction {
                 kernDownSweep<<<blocksPerGrid, blockSize_i>>>(n_padded, stride, depth, dev_data);
 
                 blockSize_i *= 2; // need more threads each iteration
-                cudaDeviceSynchronize();
+                cudaDeviceSynchronize(); 
             }
 
             // If the array didn't fit within a single block, we need to collect the individual block scan results, 
             // put them in an array, and scan that array. Then add the twice-scanned array as increments back to the original results.
             //
             // This needs to be done recursively to handle arbitrarily large arrays.
-            if (n_padded > 2 * MAX_BLOCK_SIZE) {
+            if (n_padded > 2 * maxBlockSize) {
                 // (Recursively) scan the summed blocks array
                 // Can use sum_data as both the input and output pointers for the scan. No issue writing over it.
                 scan(blocksPerGrid.x, stored_sums);
@@ -59,7 +59,7 @@ namespace StreamCompaction {
                 // Finally, add scanned sum values back to the original dev_data
                 // In original scan, each thread handled 2 elements. In this step, each handles one, so we need 2x the blocks.
                 dim3 kernBlocksPerGrid = 2 * blocksPerGrid.x;
-                kernIncrement<<<kernBlocksPerGrid, maxBlockSize>>> (n_padded, dev_data, stored_sums);
+                kernIncrement<<<kernBlocksPerGrid, maxBlockSize>>>(n_padded, dev_data, stored_sums);
                 cudaDeviceSynchronize();
             }
 
@@ -140,7 +140,7 @@ namespace StreamCompaction {
             if (threadId >= n) return;
 
             // The extra factor of 2 comes from the fact that we're using twice as many block here as in the original scan.
-            int sum_data_idx = gridDim.x * threadId / (2 * n); // note: integer division here
+            int sum_data_idx = (long) gridDim.x * threadId / (2 * n); // note: integer division here
 
             dev_data[threadId] += sum_data[sum_data_idx];
         }
