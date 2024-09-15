@@ -24,8 +24,8 @@ namespace StreamCompaction {
             return x == 1 ? 0 : ilog2(x - 1) + 1;
         }
 
-        __device__ int nextPowerOfTwo(int n) {
-            return 1 << (ilog2ceil(n));
+        int nextPow2(int n) {
+            return 1 << (::ilog2ceil(n));
         }
 
         __global__ void reductionKernel(int n, int *odata, int *idata) {
@@ -56,6 +56,8 @@ namespace StreamCompaction {
         __global__ void exclusiveScanKernel(int n, int *odata, int *idata, int *blockSumDevice = nullptr) {
             extern __shared__ int blockSharedMem[];
 
+            int actualBlockSize = n < blockDim.x ? n : blockDim.x;
+
             int globalThreadIdx = blockIdx.x*blockDim.x + threadIdx.x;
             if (globalThreadIdx >= n) {
                 blockSharedMem[threadIdx.x] = 0;
@@ -75,7 +77,7 @@ namespace StreamCompaction {
                 __syncthreads();
             }
 
-            if (threadIdx.x == blockDim.x - 1) {
+            if (threadIdx.x == actualBlockSize - 1) {
                 blockSharedMem[threadIdx.x] = 0;
             }
 
@@ -95,8 +97,8 @@ namespace StreamCompaction {
 
             odata[globalThreadIdx] = blockSharedMem[threadIdx.x];
 
-            if (blockSumDevice != nullptr && threadIdx.x == blockDim.x - 1) {
-                blockSumDevice[blockIdx.x] = blockSharedMem[blockDim.x - 1] + idata[globalThreadIdx];
+            if (blockSumDevice != nullptr && threadIdx.x == actualBlockSize - 1) {
+                blockSumDevice[blockIdx.x] = blockSharedMem[actualBlockSize - 1] + idata[globalThreadIdx];
             }
         }
 
@@ -127,8 +129,11 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
 
+            int nNextPow2 = nextPow2(n);
+
             const int blockSize = 256;
-            dim3 blockCount = (n + blockSize - 1) / blockSize;
+            dim3 blockCount = (nNextPow2 + blockSize - 1) / blockSize;
+            // TODO: don't need this much shared memory.
             const int blockSharedMemSize = 2 * blockSize * sizeof(int);
 
             const int blockSumBlockSize = blockCount.x;
@@ -136,11 +141,11 @@ namespace StreamCompaction {
             const int blockSumSharedMemSize = 2 * blockSumBlockSize * sizeof(int);
 
             int *idataDevice = nullptr;
-            cudaMalloc(&idataDevice, n * sizeof(int));
+            cudaMalloc(&idataDevice, nNextPow2 * sizeof(int));
             checkCUDAError("failed to malloc idataDevice");
 
             int *odataDevice = nullptr;
-            cudaMalloc(&odataDevice, n * sizeof(int));
+            cudaMalloc(&odataDevice, nNextPow2 * sizeof(int));
             checkCUDAError("failed to malloc odataDevice");
 
             int *iblockSumDevice = nullptr;
@@ -162,7 +167,7 @@ namespace StreamCompaction {
 
             // reductionKernel<<<blockCount, blockSize, blockSharedMemSize>>>(n, odataDevice, idataDevice);
 
-            exclusiveScanKernel<<<blockCount, blockSize, blockSharedMemSize>>>(n, odataDevice, idataDevice, iblockSumDevice);
+            exclusiveScanKernel<<<blockCount, blockSize, blockSharedMemSize>>>(nNextPow2, odataDevice, idataDevice, iblockSumDevice);
 
             // Debug.
             cudaMemcpy(odataDeviceDebug, odataDevice, n * sizeof(int), ::cudaMemcpyDeviceToHost);
@@ -175,7 +180,7 @@ namespace StreamCompaction {
             cudaMemcpy(oblockSumDeviceDebug, oblockSumDevice, blockCount.x * sizeof(int), ::cudaMemcpyDeviceToHost);
             // Debug.
 
-            addBlockSumsKernel<<<blockCount, blockSize>>>(n, odataDevice, oblockSumDevice);
+            addBlockSumsKernel<<<blockCount, blockSize>>>(nNextPow2, odataDevice, oblockSumDevice);
 
             cudaMemcpy(odata, odataDevice, n * sizeof(int), ::cudaMemcpyDeviceToHost);
 
