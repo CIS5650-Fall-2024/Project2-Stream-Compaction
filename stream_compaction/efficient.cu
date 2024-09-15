@@ -232,17 +232,15 @@ namespace StreamCompaction {
             cudaMalloc(&nonzeroMaskPrefixSumDevice, n * sizeof(int));
             checkCUDAError("failed to malloc nonzeroMaskPrefixSumDevice");
 
-            int *reducedNonzeroMaskDevice = nullptr;
-            cudaMalloc(&reducedNonzeroMaskDevice, n * sizeof(int));
-            checkCUDAError("failed to malloc reducedNonzeroMaskDevice");
-            
             StreamCompaction::Common::kernMapToBoolean<<<blockCount, blockSize>>>(n, nonzeroMaskDevice, idataDevice);
 
             scanNoTimer(n, nonzeroMaskPrefixSumDevice, nonzeroMaskDevice);
 
-            reductionKernel<<<blockCount, blockSize>>>(n, reducedNonzeroMaskDevice, nonzeroMaskDevice);
-            int nonzeroCount = 0;
-            cudaMemcpy(&nonzeroCount, &reducedNonzeroMaskDevice[n-1], sizeof(int), ::cudaMemcpyDeviceToHost);
+            int lastScanValue = 0;
+            int lastMaskValue = 0;
+            cudaMemcpy(&lastScanValue, &nonzeroMaskPrefixSumDevice[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(&lastMaskValue, &nonzeroMaskDevice[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
+            int nonzeroCount = lastScanValue + lastMaskValue;
 
             if (nonzeroCount > 0) {
                 int *odataDevice = nullptr;
@@ -260,8 +258,6 @@ namespace StreamCompaction {
                 checkCUDAError("failed to free odataDevice");
             }
 
-            cudaFree(reducedNonzeroMaskDevice);
-            checkCUDAError("failed to free reducedNonzeroMaskDevice");
             cudaFree(nonzeroMaskPrefixSumDevice);
             checkCUDAError("failed to free nonzeroMaskPrefixSumDevice");
             cudaFree(nonzeroMaskDevice);
