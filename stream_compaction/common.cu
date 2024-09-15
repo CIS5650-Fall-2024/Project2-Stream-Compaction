@@ -23,7 +23,11 @@ namespace StreamCompaction {
          * which map to 0 will be removed, and elements which map to 1 will be kept.
          */
         __global__ void kernMapToBoolean(int n, int *bools, const int *idata) {
-            // TODO
+            int globalThreadIdx = blockIdx.x*blockDim.x + threadIdx.x;
+            if (globalThreadIdx >= n) {
+                return;
+            }
+            bools[globalThreadIdx] = idata[globalThreadIdx] != 0 ? 1 : 0;
         }
 
         /**
