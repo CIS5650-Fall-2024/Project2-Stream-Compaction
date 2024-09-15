@@ -60,8 +60,8 @@ namespace StreamCompaction {
 
             odata[globalThreadIdx] = iterInput[threadIdx.x];
 
-            if (blockSumDevice != nullptr && threadIdx.x == 0) {
-                blockSumDevice[blockIdx.x] = iterInput[blockDim.x - 1];
+            if (blockSumDevice != nullptr && threadIdx.x == blockDim.x - 1) {
+                blockSumDevice[blockIdx.x] = iterInput[blockDim.x - 1] + idata[globalThreadIdx];
             }
         }
 
