@@ -125,9 +125,6 @@ namespace StreamCompaction {
 			cudaFree(dev_idata);
 			cudaFree(dev_odata);
 
-
-
-
             timer().endGpuTimer();
         }
 
@@ -143,8 +140,38 @@ namespace StreamCompaction {
         int compact(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
             // TODO
+			// compute bool array
+			int* dev_bools;
+			int* dev_idata;
+			int* dev_indices;
+			int* dev_odata;
+			int* bools = new int[n];
+			int* indices = new int[n];
+			cudaMalloc((void**)&dev_bools, n * sizeof(int));
+			cudaMalloc((void**)&dev_idata, n * sizeof(int));
+			cudaMalloc((void**)&dev_indices, n * sizeof(int));
+			cudaMalloc((void**)&dev_odata, n * sizeof(int));
+			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+			StreamCompaction::Common::kernMapToBoolean << <1, n >> > (n, dev_bools, dev_idata);
+			// scan
+			int t = ilog2ceil(n) - 1;
+			kernScan << <1, n >> > (n, dev_indices, dev_bools, t);
+			// scatter
+			StreamCompaction::Common::kernScatter << <1, n >> > (n, dev_odata, dev_idata, dev_bools, dev_indices);
+			cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(bools, dev_bools, n * sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(indices, dev_indices, n * sizeof(int), cudaMemcpyDeviceToHost);
+			int count = bools[n - 1] ? indices[n - 1] + 1 : indices[n - 1];
+			cudaFree(dev_bools);
+			cudaFree(dev_idata);
+			cudaFree(dev_indices);
+			cudaFree(dev_odata);
+			delete[] bools;
+			delete[] indices;
+
+
             timer().endGpuTimer();
-            return -1;
+            return count;
         }
     }
 }
