@@ -19,7 +19,20 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            
+            // declare the variable that stores the sum
+            int sum {0};
+
+            // iterate through all indices
+            for (int index {0}; index < n; index += 1) {
+
+                // update the output
+                odata[index] = sum;
+
+                // increase the sum
+                sum += idata[index];
+            }
+
             timer().endCpuTimer();
         }
 
@@ -30,7 +43,31 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            
+            // declare the number of elements in the output buffer
+            int count {0};
+
+            // iterate through all indices
+            for (int index {0}; index < n; index += 1) {
+
+                // read the next input from the buffer
+                const int input {idata[index]};
+
+                // store the input if it is a non-zero integer
+                if (input != 0) {
+                    odata[count] = input;
+
+                    // increase the number of output elements
+                    count += 1;
+                }
+            }
+
+            // stop the timer
+            timer().endCpuTimer();
+
+            // return the number of output elements
+            return count;
+
             timer().endCpuTimer();
             return -1;
         }
@@ -42,7 +79,67 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            
+            // allocate a temporary buffer that stores the conditions
+            int* condition_buffer {reinterpret_cast<int*>(std::malloc(sizeof(int) * n))};
+
+            // abort when the allocation is not successful
+            if (!condition_buffer) {
+                std::abort();
+            }
+
+            // allocate another temporary buffer that stores the scan results
+            int* index_buffer {reinterpret_cast<int*>(std::malloc(sizeof(int) * n))};
+
+            // abort when the allocation is not successful
+            if (!index_buffer) {
+                std::abort();
+            }
+
+            // iterate through all indices to compute the conditions
+            for (int index {0}; index < n; index += 1) {
+
+                // compute the condition based on the corresponding input value
+                condition_buffer[index] = static_cast<int>(idata[index] != 0);
+            }
+
+            // declare the variable that stores the sum
+            int sum {0};
+
+            // iterate through all indices to perform a scan
+            for (int index {0}; index < n; index += 1) {
+
+                // update the output
+                index_buffer[index] = sum;
+
+                // increase the sum
+                sum += condition_buffer[index];
+            }
+
+            // iterate through all indices to compute the final output
+            for (int index {0}; index < n; index += 1) {
+
+                // store the output only when the condition is true
+                if (condition_buffer[index] == 1) {
+
+                    // store the output at the correct index
+                    odata[index_buffer[index]] = idata[index];
+                }
+            }
+
+            // obtain the number of elements from the index buffer
+            const int count {index_buffer[n - 1]};
+
+            // free the allocated buffers
+            std::free(condition_buffer);
+            std::free(index_buffer);
+
+            // stop the timer
+            timer().endCpuTimer();
+
+            // return the number of output elements
+            return count;
+
             timer().endCpuTimer();
             return -1;
         }
