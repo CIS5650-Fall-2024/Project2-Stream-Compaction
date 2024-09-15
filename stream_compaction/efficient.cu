@@ -13,45 +13,23 @@ namespace StreamCompaction {
             return timer;
         }
 
-        const int MAX_BLOCK_SIZE = 1024;
+        const int MAX_BLOCK_SIZE = 1024; // keep this as a power of 2
 
         void scan(int n_padded, int* dev_data) {
-            int maxBlockSize = std::min((n_padded / 2), MAX_BLOCK_SIZE);
-            int stride = 2 * maxBlockSize; // since each thread works on two entries of dev_data, 2x block size gives the stride to get between blocks of data in dev_data.
-            dim3 blocksPerGrid = ((n_padded / 2) + maxBlockSize - 1) / maxBlockSize;
+            int blockSize = std::min((n_padded / 2), MAX_BLOCK_SIZE);
+            dim3 blocksPerGrid = ((n_padded / 2) + blockSize - 1) / blockSize;
 
             int* stored_sums; // temp array used to store last entry per block during upsweep. See kernZeroEntries and kernIncrement for use info.
             cudaMalloc((void**)&stored_sums, blocksPerGrid.x * sizeof(int));
 
-            int blockSize_i = maxBlockSize;
-            for (int depth = 0; depth < ilog2ceil(2 * maxBlockSize); ++depth) {
-                kernUpSweep<<<blocksPerGrid, blockSize_i>>>(n_padded, stride, depth, dev_data);
-
-                blockSize_i /= 2; // need fewer threads each iteration
-                cudaDeviceSynchronize();
-            }
-
-            // Between upsweep and downsweep, zero out the last entry of every block (first storing off those entries for later use)
-            int zeroEntriesBlockSize = 128;
-            dim3 zeroEntriesBlocksPerGrid = (blocksPerGrid.x + zeroEntriesBlockSize - 1) / zeroEntriesBlockSize;
-            kernZeroEntries<<<zeroEntriesBlocksPerGrid, zeroEntriesBlockSize>>> (blocksPerGrid.x, stride, dev_data, stored_sums);
+            kernScan<<<blocksPerGrid, blockSize, 2 * sizeof(int) * blockSize>>>(n_padded, ilog2ceil(2 * blockSize), dev_data, stored_sums);
             cudaDeviceSynchronize();
-
-            // Keep blocks per grid constant, so we can handle arbitrarily sized arrays.
-            // But grow blockSize on each iteration since we need more threads on each depth layer.
-            blockSize_i = 1;
-            for (int depth = ilog2ceil(2 * maxBlockSize) - 1; depth >= 0; --depth) {
-                kernDownSweep<<<blocksPerGrid, blockSize_i>>>(n_padded, stride, depth, dev_data);
-
-                blockSize_i *= 2; // need more threads each iteration
-                cudaDeviceSynchronize(); 
-            }
 
             // If the array didn't fit within a single block, we need to collect the individual block scan results, 
             // put them in an array, and scan that array. Then add the twice-scanned array as increments back to the original results.
             //
             // This needs to be done recursively to handle arbitrarily large arrays.
-            if (n_padded > 2 * maxBlockSize) {
+            if (n_padded > 2 * blockSize) {
                 // (Recursively) scan the summed blocks array
                 // Can use sum_data as both the input and output pointers for the scan. No issue writing over it.
                 scan(blocksPerGrid.x, stored_sums);
@@ -59,7 +37,7 @@ namespace StreamCompaction {
                 // Finally, add scanned sum values back to the original dev_data
                 // In original scan, each thread handled 2 elements. In this step, each handles one, so we need 2x the blocks.
                 dim3 kernBlocksPerGrid = 2 * blocksPerGrid.x;
-                kernIncrement<<<kernBlocksPerGrid, maxBlockSize>>>(n_padded, dev_data, stored_sums);
+                kernIncrement<<<kernBlocksPerGrid, blockSize>>>(n_padded, dev_data, stored_sums);
                 cudaDeviceSynchronize();
             }
 
@@ -89,45 +67,59 @@ namespace StreamCompaction {
             cudaFree(dev_data);
         }
 
-        __global__ void kernUpSweep(int n, int stride, int depth, int* dev_data) {
-            int threadId = threadIdx.x; 
+        /**
+         * n is the size of dev_data
+         */
+        __global__ void kernScan(int n, int numLevels, int* dev_data, int* stored_sums) {
+            if (threadIdx.x + (blockDim.x * blockIdx.x) >= n/2) return;
 
-            int twoToDepthPlusOne = (1 << (depth + 1));
-            int twoToDepth = (1 << depth);
-            // Since each block is a self contained scan, we calculate these indices w.r.t the local block thread index.
-            // But then we offset by (stride * blockIdx.x) because the dev_data is for ALL blocks, so we need to access the right part.
-            int leftChildIdx = (threadId * twoToDepthPlusOne) + twoToDepth - 1 + (stride * blockIdx.x);
-            int rightChildIdx = (threadId * twoToDepthPlusOne) + twoToDepthPlusOne - 1 + (stride * blockIdx.x);
+            extern __shared__ int s_dev_data[];
 
-            if (rightChildIdx >= n) return;
+            // Put the right and left children into shared memory.
+            // Index from dev_data based on *global* position, but put into shared memory as local position (w.r.t. this block)
+            s_dev_data[2 * threadIdx.x + 1] = 
+                dev_data[2 * threadIdx.x + 1 + (2 * blockDim.x * blockIdx.x)];
 
-            dev_data[rightChildIdx] += dev_data[leftChildIdx];
-        }
+            s_dev_data[2 * threadIdx.x] =
+                dev_data[2 * threadIdx.x + (2 * blockDim.x * blockIdx.x)];
 
-        __global__ void kernZeroEntries(int n, int stride, int* dev_data, int* stored_sums) {
-            int threadId = threadIdx.x + (blockDim.x * blockIdx.x);
-            if (threadId >= n) return;
+            for (int depth = 0; depth < numLevels; ++depth) {
+                __syncthreads();
+                // Make sure the local right-child index this thread will access is in bounds of this block.
+                if ((threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1 >= 2 * blockDim.x) continue;
+                
+                s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1] +=
+                    s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1];
+            }
+            __syncthreads();
 
-            int dev_data_idx = (threadId + 1) * stride - 1;
-            stored_sums[threadId] = dev_data[dev_data_idx];
-            dev_data[dev_data_idx] = 0;
-        }
+            // Save off the last entry of s_dev_data to a temporary stored_sums buffer. This temp buffer is used if our initial
+            // input data is too large to be scanned in a single block.
+            // Then zero out the last entry for the downsweep.
+            if (threadIdx.x == 0) {
+                stored_sums[blockIdx.x] = s_dev_data[2 * blockDim.x - 1];
+                s_dev_data[2 * blockDim.x - 1] = 0;
+            }
+            
+            for (int depth = numLevels - 1; depth >= 1; --depth) {
+                __syncthreads();
+                // Make sure the local right-child index this thread will access is in bounds of this block.
+                if ((threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1 >= 2 * blockDim.x) continue;
 
-        __global__ void kernDownSweep(int n, int stride, int depth, int* dev_data) {
-            int threadId = threadIdx.x; 
+                int leftVal = s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1];
+                s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1] = 
+                    s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1];
+                
+                s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1] += leftVal;
+            }
 
-            int twoToDepthPlusOne = (1 << (depth + 1));
-            int twoToDepth = (1 << depth);
-            int blockLeftChildIdx = (threadId * twoToDepthPlusOne) + twoToDepth - 1;
-            int globalLeftChildIdx = blockLeftChildIdx + (stride * blockIdx.x);
-            int blockRightChildIdx = (threadId * twoToDepthPlusOne) + twoToDepthPlusOne - 1;
-            int globalRightChildIdx = blockRightChildIdx + (stride * blockIdx.x);
-
-            if (globalRightChildIdx >= n) return;
-
-            int leftVal = dev_data[globalLeftChildIdx];
-            dev_data[globalLeftChildIdx] = dev_data[globalRightChildIdx];
-            dev_data[globalRightChildIdx] += leftVal;
+            __syncthreads();
+            // On the last iteration, depth = 0, we write to global memory.
+            dev_data[2 * threadIdx.x + (2 * blockDim.x * blockIdx.x)] = 
+                s_dev_data[2 * threadIdx.x + 1];
+            
+            dev_data[2 * threadIdx.x + 1 + (2 * blockDim.x * blockIdx.x)] = 
+                (s_dev_data[2 * threadIdx.x] + s_dev_data[2 * threadIdx.x + 1]);
         }
 
         /**
