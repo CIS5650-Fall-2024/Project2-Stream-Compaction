@@ -29,6 +29,14 @@ endif(UNIX)
 
 add_subdirectory(stream_compaction)
 
+if(CMAKE_VERSION VERSION_LESS "3.23.0")
+    set_target_properties(stream_compaction PROPERTIES CUDA_ARCHITECTURES OFF)
+elseif(CMAKE_VERSION VERSION_LESS "3.24.0")
+    set_target_properties(stream_compaction PROPERTIES CUDA_ARCHITECTURES all-major)
+else()
+    set_target_properties(stream_compaction PROPERTIES CUDA_ARCHITECTURES native)
+endif()
+
 include_directories(.)
 
 set(headers
