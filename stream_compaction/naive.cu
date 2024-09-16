@@ -21,13 +21,14 @@ namespace StreamCompaction {
 		}
 
 		__global__ void kernScan(int n, int* odata, const int* idata, int log2_n) {
-			int index = threadIdx.x + (blockIdx.x * blockDim.x);
-			if (index >= n) {
+			int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+			int pedding = 1 << log2_n;
+			if (index >= pedding) {
 				return;
 			}
 			// exclusive scan
 			odata[index] = (index > 0) ? idata[index - 1] : 0;
-			__syncthreads();
+			__syncthreads(); // odata with first element as 0 is ready
 
 			for (int d = 1; d <= log2_n; ++d) {
 				int t = 1 << (d - 1);
@@ -39,28 +40,119 @@ namespace StreamCompaction {
 			}
 		}
 
+		__global__ void kernBlockWiseExclusiveScan(int n, int* odata, const int* idata, int blockSize) {
+			extern __shared__ int sdata[];
+
+			int idx = threadIdx.x;
+			int blockStartIndex = blockIdx.x * blockDim.x;
+			int index = blockStartIndex + idx;
+
+			// Load data into shared memory
+			if (index < n) {
+				sdata[idx] = idata[index];//(idx > 0) ? idata[index - 1] : 0;
+			}
+			else {
+				sdata[idx] = 0;  // Out-of-range threads
+			}
+			__syncthreads();
+
+			// Perform in-block scan
+			for (int d = 1; d < blockDim.x; d *= 2) {
+				int t = idx >= d ? sdata[idx - d] : 0;
+				__syncthreads();
+				if (idx >= d) {
+					sdata[idx] += t;
+				}
+				__syncthreads();
+			}
+
+			// Write results to global memory
+			if (index < n) {
+				odata[index] = sdata[idx];
+			}
+		}
+
+
+
+		// kernel for write total sum of each block into a new array
+		__global__ void kernWriteBlockSum(int n, const int* odata, int* blockSum) {
+			int index = threadIdx.x + (blockIdx.x * blockDim.x);
+			if (index >= n) {
+				return;
+			}
+
+			if ((index + 1) % (blockDim.x) == 0) {
+				int i = (index + 1) / (blockDim.x) - 1;
+				blockSum[i] = odata[index];
+			}
+		}
+
+		// kernel for add block increments to each element in the corresponding block
+		__global__ void kernAddBlockSum(int n, int* odata, const int* blockSum) {
+			int index = threadIdx.x + (blockIdx.x * blockDim.x);
+			if (index >= n) {
+				return;
+			}
+
+			// exclusive scan
+			// set first element to 0
+			if (index == 0) {
+				odata[index] = 0;
+			}
+			else {
+				// Add the block sum from the previous blocks to the current element, except the very first element
+				odata[index] = odata[index - 1] + blockSum[blockIdx.x];
+			}
+		}
+
+		
+
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
-            // TODO
+			// TODO
 			int log2_n = getLog2(n);
+			int t = ilog2ceil(n);
 			//printf("n: %d\n", n);
-			//printf("log2_n: %d\n", log2_n);
+			printf("log2_n: %d\n", t);
+			int blockSize = 4;
+			int numBlocks = (n + blockSize - 1) / blockSize;
+			dim3 fullBlocksPerGrid(numBlocks);
+			printf("block size: %d\n", blockSize);
+			printf("numBlocks: %d\n", numBlocks);
 			// call kernel
 			int* dev_idata;
 			int* dev_odata;
+			int* dev_blockSum;
+			int* dev_blockIncrements;
+			int* blockSum = new int[n];
 			cudaMalloc((void**)&dev_idata, n * sizeof(int));
 			cudaMalloc((void**)&dev_odata, n * sizeof(int));
+			cudaMalloc((void**)&dev_blockSum, n * sizeof(int));
+			cudaMalloc((void**)&dev_blockIncrements, n * sizeof(int));
 			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-			kernScan << <1, n >> > (n, dev_odata, dev_idata, log2_n);
+			cudaMemcpy(dev_blockSum, blockSum, blockSize * sizeof(int), cudaMemcpyHostToDevice);
+			timer().startGpuTimer();
+			// scan on each block
+			//kernScan << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, t);
+			kernBlockWiseExclusiveScan << <fullBlocksPerGrid, blockSize, blockSize * sizeof(int) >> > (n, dev_odata, dev_idata, blockSize);
+			// write total sum of each block to blockSum
+			kernWriteBlockSum << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_blockSum);
+			// scan on blockSum
+			int blockSumSize = ilog2ceil(numBlocks);
+			kernScan << <1, numBlocks >> > (numBlocks, dev_blockIncrements, dev_blockSum, blockSumSize);
+			// add block increments to each element in the corresponding block
+			kernAddBlockSum << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_blockIncrements);
+			//dev_odata = dev_blockIncrements;
+			timer().endGpuTimer();
 			cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 			cudaFree(dev_idata);
 			cudaFree(dev_odata);
+			cudaFree(dev_blockSum);
+			delete[] blockSum;
 
-
-            timer().endGpuTimer();
+          
         }
     }
 }

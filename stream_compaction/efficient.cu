@@ -108,8 +108,10 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
+            
             // TODO
+			const int blockSize = 128;
+			dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
 			// call kernel
 			int* dev_idata;
 			int* dev_odata;
@@ -118,14 +120,16 @@ namespace StreamCompaction {
 			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
             int t = ilog2ceil(n) - 1;
             printf("log2_n - 1: %d\n", t);
+			timer().startGpuTimer();
             //kernUpSweep << <1, n >> > (n, dev_odata, dev_idata, t);
 			//kernDownSweep << <1, n >> > (n, dev_odata, dev_idata, t);
-			kernScan << <1, n >> > (n, dev_odata, dev_idata, t);
+			kernScan << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, t);
+			timer().endGpuTimer();
 			cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 			cudaFree(dev_idata);
 			cudaFree(dev_odata);
 
-            timer().endGpuTimer();
+            
         }
 
         /**
