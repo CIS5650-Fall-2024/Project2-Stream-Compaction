@@ -20,6 +20,10 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            odata[0] = 0;
+            for (int i = 1; i < n; i++) {
+                odata[i] = odata[i - 1] + idata[i - 1];
+            }
             timer().endCpuTimer();
         }
 
@@ -31,8 +35,16 @@ namespace StreamCompaction {
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int index = 0;
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    odata[index] = idata[i];
+                    index++;
+                }
+            }
+
             timer().endCpuTimer();
-            return -1;
+            return index;
         }
 
         /**
@@ -41,10 +53,33 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
             // TODO
+            int* bitArray = new int[n];
+            int* scanBitArray = new int[n];
+
+            // 1. Populate scanBitArray
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    bitArray[i] = 1;
+                }
+                else {
+                    bitArray[i] = 0;
+                }
+            }
+            scan(n, scanBitArray, bitArray);
+            //
+            timer().startCpuTimer();
+            // 2. Scatter
+            int numElem = scanBitArray[n - 1];
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    odata[scanBitArray[i]] = idata[i];
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            delete[] bitArray;
+            delete[] scanBitArray;
+            return numElem;
         }
     }
 }
