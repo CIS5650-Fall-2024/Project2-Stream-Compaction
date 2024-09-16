@@ -29,6 +29,7 @@ int main(int argc, char* argv[]) {
 
     genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
     a[SIZE - 1] = 0;
+    printDesc("Input");
     printArray(SIZE, a, true);
 
     // initialize b using StreamCompaction::CPU::scan you implement
@@ -51,34 +52,34 @@ int main(int argc, char* argv[]) {
     printDesc("naive scan, power-of-two");
     StreamCompaction::Naive::scan(SIZE, c, a);
     printElapsedTime(StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    //printArray(SIZE, c, true);
+    printArray(SIZE, c, true);
     printCmpResult(SIZE, b, c);
 
-    /* For bug-finding only: Array of 1s to help find bugs in stream compaction or scan
-    onesArray(SIZE, c);
-    printDesc("1s array for finding bugs");
-    StreamCompaction::Naive::scan(SIZE, c, a);
-    printArray(SIZE, c, true); */
+    /* For bug-finding only: Array of 1s to help find bugs in stream compaction or scan */
+    // onesArray(SIZE, c);
+    // printDesc("1s array for finding bugs");
+    // StreamCompaction::Naive::scan(SIZE, c, a);
+    // printArray(SIZE, c, true); 
 
     zeroArray(SIZE, c);
     printDesc("naive scan, non-power-of-two");
     StreamCompaction::Naive::scan(NPOT, c, a);
     printElapsedTime(StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    //printArray(SIZE, c, true);
+    printArray(SIZE, c, true);
     printCmpResult(NPOT, b, c);
 
     zeroArray(SIZE, c);
     printDesc("work-efficient scan, power-of-two");
     StreamCompaction::Efficient::scan(SIZE, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    //printArray(SIZE, c, true);
+    printArray(SIZE, c, true);
     printCmpResult(SIZE, b, c);
 
     zeroArray(SIZE, c);
     printDesc("work-efficient scan, non-power-of-two");
     StreamCompaction::Efficient::scan(NPOT, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    //printArray(NPOT, c, true);
+    printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
 
     zeroArray(SIZE, c);
