@@ -14,7 +14,7 @@ namespace StreamCompaction {
         }
 
         __global__ void kernEfficientScan(int n, int* data) {
-          int idx = index1D; 
+          int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
           if (idx >= n) {
             return; 
           }

@@ -15,7 +15,7 @@ namespace StreamCompaction {
         __global__ void kernNaiveScan(int n, int offset, int *out, const int *in) {
           int k = index1D; 
 
-          if (k >= n) {
+          if (k < 1 || k >= n) {
             return; 
           }
 
@@ -55,8 +55,8 @@ namespace StreamCompaction {
             checkCUDAError("cudaMemset dev_B failed!");
 
             // copy to A, which initially has input data
-            int offset = arrSize - n; 
-            cudaMemcpy(dev_A + offset, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            // also offset by one to do an exclusive scan
+            cudaMemcpy(dev_A + 1, idata, (n - 1) * sizeof(int), cudaMemcpyHostToDevice);
             checkCUDAError("cudaMemcpy dev_A failed!");
             
             // run kernel over depth
@@ -72,8 +72,8 @@ namespace StreamCompaction {
 
             odata[0] = 0; // first element is always the identity
 
-            // copy from device to host. shifting one to the right to do an exclusive shift
-            cudaMemcpy(odata + 1, dev_A + offset, (n - 1) * sizeof(int), cudaMemcpyDeviceToHost);
+            // copy from device to host. shifting one to the right to do an exclusive scan
+            cudaMemcpy(odata, dev_A, n * sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy dev_A to odata failed!");
             cudaDeviceSynchronize(); 
 
