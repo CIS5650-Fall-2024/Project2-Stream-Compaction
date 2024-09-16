@@ -13,14 +13,19 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 3; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
-int *a = new int[SIZE];
-int *b = new int[SIZE];
-int *c = new int[SIZE];
+
+auto a_shared = std::make_unique<int[]>(SIZE); 
+auto b_shared = std::make_unique<int[]>(SIZE);
+auto c_shared = std::make_unique<int[]>(SIZE);
 
 int main(int argc, char* argv[]) {
     // Scan tests
+
+    int* a = a_shared.get(); 
+    int* b = b_shared.get(); 
+    int* c = c_shared.get(); 
 
     printf("\n");
     printf("****************\n");
@@ -61,22 +66,12 @@ int main(int argc, char* argv[]) {
     printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
 
-
-    // TODO: for debug only
-    system("pause"); // stop Win32 console from closing on exit
-    delete[] a;
-    delete[] b;
-    delete[] c;
-    return 0; 
-
-    
-
     zeroArray(SIZE, c);
     printDesc("work-efficient scan, power-of-two");
     StreamCompaction::Efficient::scan(SIZE, c, a);
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    //printArray(SIZE, c, true);
-    printCmpResult(SIZE, b, c);
+    printArray(SIZE, c, true);
+    printCmpResult(SIZE, b, c); 
 
     zeroArray(SIZE, c);
     printDesc("work-efficient scan, non-power-of-two");
@@ -150,9 +145,4 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
-
-    system("pause"); // stop Win32 console from closing on exit
-    delete[] a;
-    delete[] b;
-    delete[] c;
 }
