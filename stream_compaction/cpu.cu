@@ -78,7 +78,6 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
             
             // allocate a temporary buffer that stores the conditions
             int* condition_buffer {reinterpret_cast<int*>(std::malloc(sizeof(int) * n))};
@@ -95,6 +94,9 @@ namespace StreamCompaction {
             if (!index_buffer) {
                 std::abort();
             }
+
+            // start the timer after memory operations
+            timer().startCpuTimer();
 
             // iterate through all indices to compute the conditions
             for (int index {0}; index < n; index += 1) {
@@ -130,12 +132,12 @@ namespace StreamCompaction {
             // obtain the number of elements from the index buffer
             const int count {index_buffer[n - 1]};
 
+            // stop the timer before memory operations
+            timer().endCpuTimer();
+
             // free the allocated buffers
             std::free(condition_buffer);
             std::free(index_buffer);
-
-            // stop the timer
-            timer().endCpuTimer();
 
             // return the number of output elements
             return count;
