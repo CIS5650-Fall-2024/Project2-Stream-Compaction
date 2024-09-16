@@ -3,7 +3,7 @@
 #include "common.h"
 #include "naive.h"
 
-#define blockSize 128 // Default is 128
+#define blockSize 128 
 
 namespace StreamCompaction {
     namespace Naive {
@@ -40,7 +40,7 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
-            
+
             int *dev_buff1, *dev_buff2;
 
             // Allocate memory on the device

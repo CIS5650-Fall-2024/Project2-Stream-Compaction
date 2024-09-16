@@ -3,7 +3,7 @@
 #include "common.h"
 #include "efficient.h"
 
-#define blockSize 128 // Default is 128
+#define blockSize 128 
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -152,6 +152,7 @@ namespace StreamCompaction {
          */
         int compact(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
+
             // Initialise host variables for returning
             int *scanResult = new int[n];
             
@@ -171,10 +172,11 @@ namespace StreamCompaction {
 
             // Scan the boolean array
             scan_without_timer(n); // n will be rounded in the scan function
-            cudaMemcpy(scanResult, dev_scanResult, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             // Perform scatter
             Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_scanResult);
+
+            cudaMemcpy(scanResult, dev_scanResult, n * sizeof(int), cudaMemcpyDeviceToHost);
             cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             // Clean up device memory
@@ -184,6 +186,7 @@ namespace StreamCompaction {
             cudaFree(dev_odata);
 
             timer().endGpuTimer();
+
             return n == 0 ? 0 : scanResult[n - 1] + (idata[n - 1] != 0 ? 1 : 0);
         }
     }
