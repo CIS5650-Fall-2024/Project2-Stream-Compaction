@@ -135,7 +135,7 @@ namespace StreamCompaction {
                 cudaMemcpy(&fCount, dev_odata + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
                 fCount += tempCount;
 
-                // scatter to get 'f' and 'e' arrays
+                // scatter to output array from 'f', 'e', and 'i' arrays respectively
                 kernScatter<<<blocksPerGrid, blockSize>>>(n, fCount, dev_odata_scat, dev_odata, dev_idata, dev_idata_const);
 
                 // pass scatter result to next iteration
