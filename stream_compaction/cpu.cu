@@ -88,9 +88,7 @@ namespace StreamCompaction {
                     if (scannedFlag[i] < n) {
                         odata[scannedFlag[i]] = idata[i];
                     }
-                    else {
-                        std::cerr << "Error: scannedFlag[" << i << "] out of bounds!" << std::endl;
-                    }
+                    
                     count++;
                 }
             }
