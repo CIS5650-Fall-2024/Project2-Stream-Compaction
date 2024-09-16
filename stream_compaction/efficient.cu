@@ -3,7 +3,9 @@
 #include "common.h"
 #include "efficient.h"
 
-#define blockSize 512
+#include <thrust/device_ptr.h>
+
+#define blockSize 128
 
 namespace StreamCompaction {
 	namespace Efficient {
@@ -43,8 +45,11 @@ namespace StreamCompaction {
 			timer().startGpuTimer();
 
 			int* dev_indices;
-			cudaMalloc((void**)&dev_indices, n * sizeof(int));
+			//cudaMalloc((void**)&dev_indices, n * sizeof(int));
+			if (n == 1 << ilog2ceil(n)) cudaMalloc((void**)&dev_indices, n * sizeof(int));
+			else cudaMalloc((void**)&dev_indices, 2 * n * sizeof(int));
 			cudaMemcpy(dev_indices, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+			thrust::device_ptr<int> thrust_indices(dev_indices);
 
 			//upsweep
 			dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
@@ -56,9 +61,7 @@ namespace StreamCompaction {
 			}
 
 			//downsweep
-			cudaMemcpy(odata, dev_indices, n * sizeof(int), cudaMemcpyDeviceToHost);
-			odata[n - 1] = 0;
-			cudaMemcpy(dev_indices, odata, n * sizeof(int), cudaMemcpyHostToDevice);
+			thrust_indices[n - 1] = 0;
 
 			for (int d = ilog2ceil(n) - 1; d >= 0; d--)
 			{
@@ -85,14 +88,13 @@ namespace StreamCompaction {
 		 */
 		int compact(int n, int* odata, const int* idata) {
 			timer().startGpuTimer();
-			//a buffer used to r/w single element of device ptr
-			int* buffer = new int[n];
 
 			int* dev_idata;
 			int* dev_label;
 			cudaMalloc((void**)&dev_idata, n * sizeof(int));
 			cudaMalloc((void**)&dev_label, n * sizeof(int));
 			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+			cudaMemcpy(dev_label, dev_idata, n * sizeof(int), cudaMemcpyDeviceToDevice);
 
 			//get labels
 			dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
@@ -100,8 +102,10 @@ namespace StreamCompaction {
 
 			//scan begin
 			int* dev_indices;
-			cudaMalloc((void**)&dev_indices, n * sizeof(int));
+			if (n == 1 << ilog2ceil(n)) cudaMalloc((void**)&dev_indices, n * sizeof(int));
+			else cudaMalloc((void**)&dev_indices, 2 * n * sizeof(int));
 			cudaMemcpy(dev_indices, dev_label, n * sizeof(int), cudaMemcpyDeviceToDevice);
+			thrust::device_ptr<int> thrust_indices(dev_indices);
 
 			//upsweep
 			for (int d = 0; d < ilog2ceil(n); d++)
@@ -112,9 +116,7 @@ namespace StreamCompaction {
 			}
 
 			//downsweep
-			cudaMemcpy(buffer, dev_indices, n * sizeof(int), cudaMemcpyDeviceToHost);
-			buffer[n - 1] = 0;
-			cudaMemcpy(dev_indices, buffer, n * sizeof(int), cudaMemcpyHostToDevice);
+			thrust_indices[n - 1] = 0;
 
 			for (int d = ilog2ceil(n) - 1; d >= 0; d--)
 			{
@@ -126,10 +128,8 @@ namespace StreamCompaction {
 			}
 
 			//calculate total numbers
-			cudaMemcpy(buffer, dev_indices, n * sizeof(int), cudaMemcpyDeviceToHost);
-			int count = buffer[n - 1];
-			cudaMemcpy(buffer, dev_label, n * sizeof(int), cudaMemcpyDeviceToHost);
-			count += buffer[n - 1];
+			thrust::device_ptr<int> thrust_label(dev_label);
+			int count = thrust_indices[n - 1] + thrust_label[n - 1];
 
 			//scatter to labeled data
 			int* dev_odata;
@@ -140,7 +140,6 @@ namespace StreamCompaction {
 			//copy to cpu output
 			cudaMemcpy(odata, dev_odata, count * sizeof(int), cudaMemcpyDeviceToHost);
 
-			delete[] buffer;
 			cudaFree(dev_idata);
 			cudaFree(dev_odata);
 			cudaFree(dev_label);
