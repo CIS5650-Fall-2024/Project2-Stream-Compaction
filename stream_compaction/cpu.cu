@@ -68,7 +68,14 @@ namespace StreamCompaction {
             for (int i = 0; i < n; i++) {
                 bools[i] = idata[i] != 0 ? 1 : 0;
             }
-            scan(n, scanResult, bools);
+
+            // NOTE: not calling scan() because don't want to double call timer().startCpuTimer()
+            int total = 0;
+            for (int i = 0; i < n; i++) {
+                scanResult[i] = total;
+                total += bools[i];
+            }
+            
             int numElements = scatter(n, odata, idata, bools, scanResult);
             timer().endCpuTimer();
             delete[] bools;
