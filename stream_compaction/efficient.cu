@@ -8,6 +8,10 @@
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
+
+        // Initialise device variables to use in compact()
+        int *dev_bools, *dev_idata, *dev_odata, *dev_scanResult;
+
         PerformanceTimer& timer()
         {
             static PerformanceTimer timer;
@@ -76,46 +80,66 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
-            int *dev_odata;
+            int *dev_odata_local;
             // Your intermediate array sizes will need to be rounded to the next power of two.
             int rounded_n = isPowerOf2(n) ? n : 1 << ilog2ceil(n);
    
-            cudaMalloc((void**)&dev_odata, rounded_n * sizeof(int));
+            cudaMalloc((void**)&dev_odata_local, rounded_n * sizeof(int));
 
-            // Copy idata to odata first
-            cudaMemcpy(dev_odata, idata, rounded_n * sizeof(int), cudaMemcpyHostToDevice);
+            // Copy idata to dev_odata_local first
+            // Although we might initialise dev_odata_local with more than n elements, idata only contains n elements
+            cudaMemcpy(dev_odata_local, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
             // Set up the grid and block sizes
             dim3 fullBlocksPerGrid((rounded_n + blockSize - 1) / blockSize);
 
             // upsweep
             for (int d = 0; d <= ilog2ceil(rounded_n) - 1; d++) {
-                upsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_odata);
+                upsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_odata_local);
             }
 
             // downsweep
-            init_downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, dev_odata);
+            init_downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, dev_odata_local);
 
-            for (int d = ilog2ceil(n) - 1; d >= 0; d--) {
-                downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_odata);
+            for (int d = ilog2ceil(rounded_n) - 1; d >= 0; d--) {
+                downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_odata_local);
             }
 
             // Copy the result back to the host
-            cudaMemcpy(odata, dev_odata, rounded_n * sizeof(int), cudaMemcpyDeviceToHost);
+            // Note that odata is only supposed to have n elements
+            cudaMemcpy(odata, dev_odata_local, n * sizeof(int), cudaMemcpyDeviceToHost);
 
-            cudaFree(dev_odata);
+            cudaFree(dev_odata_local);
 
             timer().endGpuTimer();
         }
 
-        // __global__ void scan_without_timer(int n, int *odata, const int *idata){
-        //     // Your intermediate array sizes will need to be rounded to the next power of two.
-        //     int rounded_n = isPowerOf2(n) ? n : 1 << ilog2ceil(n);
+        /************************************************************************************
+         * Define another scan function so that it can be called from compact()
+         * Here dev_bools has already been initialised in compact()
+         ************************************************************************************/
+        void scan_without_timer(int n) {
+            // Initialise dev_scanResult. dev_bools only has n elements.
+            cudaMemcpy(dev_scanResult, dev_bools, n * sizeof(int), cudaMemcpyDeviceToDevice);
 
-        //     for (int d = 0; d <= ilog2ceil(rounded_n) - 1; d++) {   
-        //         upsweep(rounded_n, d, odata);
-        //     }
-        // }
+            // Your intermediate array sizes will need to be rounded to the next power of two.
+            int rounded_n = isPowerOf2(n) ? n : 1 << ilog2ceil(n);
+
+            // Set up the grid and block sizes
+            dim3 fullBlocksPerGrid((rounded_n + blockSize - 1) / blockSize);
+
+            // upsweep
+            for (int d = 0; d <= ilog2ceil(rounded_n) - 1; d++) {
+                upsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_scanResult);
+            }
+
+            // downsweep
+            init_downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, dev_scanResult);
+
+            for (int d = ilog2ceil(rounded_n) - 1; d >= 0; d--) {
+                downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_scanResult);
+            }
+        }
  
         /**
          * Performs stream compaction on idata, storing the result into odata.
@@ -128,17 +152,14 @@ namespace StreamCompaction {
          */
         int compact(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
-            // TODO
-            // Initialise host variables
-            int *bools = new int[n]; 
-            int *scanResult = new int[n]; // Array to hold the scan result
-            // Initialise device variables
-            int *dev_bools, *dev_idata, *dev_odata, *dev_scanResult;
+            // Initialise host variables for returning
+            int *scanResult = new int[n];
+            
             // Allocate memory on the device
-            cudaMalloc((void**)&dev_bools, n * sizeof(int));
             cudaMalloc((void**)&dev_idata, n * sizeof(int));
-            cudaMalloc((void**)&dev_odata, n * sizeof(int));
+            cudaMalloc((void**)&dev_bools, n * sizeof(int));
             cudaMalloc((void**)&dev_scanResult, n * sizeof(int));
+            cudaMalloc((void**)&dev_odata, n * sizeof(int));
 
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
@@ -147,23 +168,23 @@ namespace StreamCompaction {
 
             // Map idata to a 0/1 array
             Common::kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (n, dev_bools, dev_idata);
-            cudaMemcpy(bools, dev_bools, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             // Scan the boolean array
-            scan(n, scanResult, bools); // The scan function will handle the rounding of n
-            cudaMemcpy(dev_scanResult, scanResult, n * sizeof(int), cudaMemcpyHostToDevice);
+            scan_without_timer(n); // n will be rounded in the scan function
+            cudaMemcpy(scanResult, dev_scanResult, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             // Perform scatter
             Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_scanResult);
+            cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             // Clean up device memory
-            cudaFree(dev_bools);
             cudaFree(dev_idata);
-            cudaFree(dev_odata);
+            cudaFree(dev_bools);
             cudaFree(dev_scanResult);
+            cudaFree(dev_odata);
 
             timer().endGpuTimer();
-            return -1;
+            return n == 0 ? 0 : scanResult[n - 1] + (idata[n - 1] != 0 ? 1 : 0);
         }
     }
 }
