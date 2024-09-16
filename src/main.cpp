@@ -10,6 +10,7 @@
 #include <stream_compaction/cpu.h>
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
+#include <stream_compaction/efficient-optimized.h>
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 

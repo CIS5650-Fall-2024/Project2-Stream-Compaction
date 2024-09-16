@@ -21,8 +21,6 @@ namespace StreamCompaction {
                 return;
             }
 
-            // (idx * 2^(d+1)) + 2^(d+1)-1     +=      (2 * idx * 2^(d)) + 2^d-1
-            // 2^(d+1) * (idx + 1) - 1        +=      2^(d+1) * (idx + 1) - 2^d - 1
             int pow2d = 1 << d;
             data[elemIndex] += data[elemIndex - pow2d];
         }
@@ -54,17 +52,17 @@ namespace StreamCompaction {
             checkCUDAError("cudaMemcpy failed");
 
             timer().startGpuTimer();
-            int theadsNeeded = nPowOf2;
+            int threadsNeeded = nPowOf2;
             for (int d = 0; d < numIters; d++) {
                 threadsNeeded >>= 1;
-                int numBlocks = (neededThreads + blockSize - 1) / blockSize;
+                int numBlocks = (threadsNeeded + blockSize - 1) / blockSize;
                 upSweep<<<numBlocks, blockSize>>>(nPowOf2, d, dev_data);
             }
             cudaMemset(dev_data + nPowOf2 - 1, 0, sizeof(int));
             for (int d = numIters - 1; d >= 0; d--) {
-                int numBlocks = (theadsNeeded + blockSize - 1) / blockSize;
+                int numBlocks = (threadsNeeded + blockSize - 1) / blockSize;
                 downSweep<<<numBlocks, blockSize>>>(nPowOf2, d, dev_data);
-                theadsNeeded <<= 1;
+                threadsNeeded <<= 1;
             }
             timer().endGpuTimer();
 
@@ -104,17 +102,17 @@ namespace StreamCompaction {
             Common::kernMapToBoolean<<<numBlocks, blockSize>>>(n, dev_scanResult, dev_idata);
 
             // NOTE: not calling scan() because don't want to double call timer().startCpuTimer()
-            int theadsNeeded = nPowOf2;
+            int threadsNeeded = nPowOf2;
             for (int d = 0; d < numIters; d++) {
                 threadsNeeded >>= 1;
-                int numBlocks = (neededThreads + blockSize - 1) / blockSize;
+                int numBlocks = (threadsNeeded + blockSize - 1) / blockSize;
                 upSweep<<<numBlocks, blockSize>>>(nPowOf2, d, dev_scanResult);
             }
             cudaMemset(dev_scanResult + nPowOf2 - 1, 0, sizeof(int));
             for (int d = numIters - 1; d >= 0; d--) {
-                int numBlocks = (theadsNeeded + blockSize - 1) / blockSize;
+                int numBlocks = (threadsNeeded + blockSize - 1) / blockSize;
                 downSweep<<<numBlocks, blockSize>>>(nPowOf2, d, dev_scanResult);
-                theadsNeeded <<= 1;
+                threadsNeeded <<= 1;
             }
             
             Common::kernScatter<<<numBlocks, blockSize>>>(n, dev_odata, dev_idata, dev_bools, dev_scanResult);
