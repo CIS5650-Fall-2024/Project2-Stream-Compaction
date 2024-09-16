@@ -46,6 +46,8 @@ namespace StreamCompaction {
             }
 
             cudaMemcpy(odata, dev_odata, numBytes, cudaMemcpyDeviceToHost);
+            cudaFree(dev_idata);
+            cudaFree(dev_odata);
         }
     }
 }

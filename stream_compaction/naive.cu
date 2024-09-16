@@ -60,8 +60,6 @@ namespace StreamCompaction
                 {
                     int exp2d = 1 << d;
                     kernScan<<<gridDim, g_blockSize>>>(n, dev_dst, dev_src, exp2d);
-                    int buf[256];
-                    cudaMemcpy(buf, dev_dst, numBytes, cudaMemcpyDeviceToHost);
                     std::swap(dev_src, dev_dst);
                 }
             }

@@ -148,12 +148,18 @@ namespace StreamCompaction
                 kernScatter<<<gridDim, g_blockSize>>>(n, dev_idata, dev_indices, dev_odata);
             }
 
+            cudaFree(dev_idata);
+
             int outSize;
             cudaMemcpy(&outSize, dev_indices + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
             if (idata[n - 1] != 0) {
                 outSize++;
             }
+            cudaFree(dev_indices);
+
             cudaMemcpy(odata, dev_odata, outSize * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaFree(dev_odata);
+            
             return outSize;
         }
     }
