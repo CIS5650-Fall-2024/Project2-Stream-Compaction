@@ -57,9 +57,9 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* buffer = new int[n];
             timer().startCpuTimer();
             // Create boolean mask
-            int* buffer = new int[n];
             for (int i = 0; i < n; ++i) {
                 buffer[i] = (idata[i] != 0);
             }
@@ -73,8 +73,8 @@ namespace StreamCompaction {
 
             int numElements = scatter(n, odata, buffer, idata);
 
-            delete[] buffer;
             timer().endCpuTimer();
+            delete[] buffer;
             return numElements;
         }
     }
