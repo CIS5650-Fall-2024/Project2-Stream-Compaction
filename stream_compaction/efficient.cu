@@ -14,12 +14,13 @@ namespace StreamCompaction {
         }
 
         __global__ void kernEfficientScan(int n, int* data) {
-          int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-          if (idx >= n) {
+          int idx = threadIdx.x;
+          if (idx >= (n >> 1)) {
             return; 
           }
           extern __shared__ int temp[]; 
-          temp[idx] = data[idx]; 
+          temp[2 * idx]     = data[2 * idx];
+          temp[2 * idx + 1] = data[2 * idx + 1];
           
           // up sweep 
           for (int depth = 1; depth < n; depth <<= 1) {
@@ -41,7 +42,8 @@ namespace StreamCompaction {
             }
           }
           __syncthreads(); 
-          data[idx] = temp[idx];
+          data[2 * idx] = temp[2 * idx];
+          data[2 * idx + 1] = temp[2 * idx + 1];
         }
 
         /**
@@ -55,8 +57,11 @@ namespace StreamCompaction {
             cudaMalloc((void**)&dev_data, sizeof(int) * n); 
             cudaMemcpy(dev_data, idata, sizeof(int) * n, cudaMemcpyHostToDevice); 
 
+            int numBlocks = blocksPerGrid((n >> 1));
+            int numThreads = BLOCKSIZE; 
+
             // call kernel 
-            kernEfficientScan<<<blocksPerGrid(n), BLOCKSIZE, n>>>(n, dev_data);
+            kernEfficientScan<<<numBlocks, numThreads, n>>>(n, dev_data);
 
             cudaMemcpy(odata, dev_data, sizeof(int) * n, cudaMemcpyDeviceToHost); 
             cudaFree(dev_data); 
