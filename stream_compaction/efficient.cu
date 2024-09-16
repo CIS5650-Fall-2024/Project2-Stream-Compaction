@@ -150,7 +150,7 @@ namespace StreamCompaction {
             checkCUDAError("cudaMemset failed");
 
             // Down-sweep phase
-            for (int offset = 1; offset < paddedSize; offset *= 2) {
+            for (int offset = paddedSize / 2; offset >= 1; offset /= 2) {
                 int numBlocks = (paddedSize / (offset * 2) + blockSize - 1) / blockSize;
                 if (numBlocks > 0) { // Only run if there is work to do
                     kern_downsweep << <numBlocks, blockSize >> > (dev_indices, offset, paddedSize);
@@ -166,13 +166,6 @@ namespace StreamCompaction {
             timer().endGpuTimer();
 
             // Step 4: Copy results and free memory
-            std::vector<int> a;
-            a.resize(paddedSize);
-            cudaMemcpy(a.data(), dev_indices, paddedSize * sizeof(int), cudaMemcpyDeviceToHost);
-            checkCUDAError("test failed");
-
-
-
             int compactedSize;
             cudaMemcpy(&compactedSize, dev_indices + paddedSize - 1, sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy compactedSize failed");
@@ -184,7 +177,6 @@ namespace StreamCompaction {
             cudaFree(dev_odata);
             cudaFree(dev_bools);
             cudaFree(dev_indices);
-
 
             return compactedSize;
         }
