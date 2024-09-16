@@ -28,16 +28,6 @@ namespace StreamCompaction
             }
         };
 
-        __global__ void kernZero(int n, int *data)
-        {
-            int index = blockIdx.x * blockDim.x + threadIdx.x;
-            if (index >= n)
-            {
-                return;
-            }
-            data[index] = 0;
-        }
-
         __global__ void kernUpsweep(int n, int *data, int exp2d)
         {
             int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -47,11 +37,6 @@ namespace StreamCompaction
                 return;
             }
             data[index] += data[index - exp2d];
-        }
-
-        __global__ void kernSetZeroSingle(int *data)
-        {
-            *data = 0;
         }
 
         __global__ void kernDownsweep(int n, int *data, int exp2d)
@@ -78,7 +63,8 @@ namespace StreamCompaction
                 dim3 gridDim((numThreads + g_blockSize - 1) / g_blockSize);
                 kernUpsweep<<<gridDim, g_blockSize>>>(nCeil, dev_data, exp2d);
             }
-            kernSetZeroSingle<<<1, 1>>>(dev_data + nCeil - 1);
+            int zero = 0;
+            cudaMemcpy(dev_data + nCeil - 1, &zero, sizeof(int), cudaMemcpyHostToDevice);
             for (int d = iterations - 1; d >= 0; d--)
             {
                 int exp2d = 1 << d;
