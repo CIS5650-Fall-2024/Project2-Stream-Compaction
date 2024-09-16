@@ -104,10 +104,7 @@ namespace StreamCompaction {
             int* test = new int[n];
 
             // find the maximum number (to set the number of iterations of bitmask)
-            int maxDigitLen = 31;
-            /*for (int i = 0; i < n; i++) {
-                maxDigitLen = std::max(maxDigitLen, ilog2ceil(idata[i]));
-            }*/
+            int maxDigitLen = ilog2ceil(n);
 
             if (time)
                 timer().startGpuTimer();

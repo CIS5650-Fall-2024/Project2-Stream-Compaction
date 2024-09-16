@@ -6,7 +6,11 @@
 
 ## CUDA Scan and Stream Compaction
 
-### CPU Scan and Stream Compaction
+This stream compaction method will remove `0`s from an array of `int`s.
+
+### CPU Implementation
+
+
 
 ### Naive CUDA Parallelization
 
@@ -14,7 +18,36 @@
 
 ### Thrust Library
 
+Thrust is an open-source C++ parallel algorithms library for CUDA based on the Standard Template Library (STL). We use [thrust library](https://nvidia.github.io/cccl/thrust/api/function_group__prefixsums_1ga8dbe92b545e14800f567c69624238d17.html#thrust-exclusive-scan)'s `exclusive_scan` function to better benchmark the performance of our own parallel exclusive scan.
+
 ### Radix Sort
+
+Radix sort is a non-comparative sorting algorithm. Radix is the number of unique digits used to represent a number. We perform multiple passes starting from the least significant bit to the most significant bit. In each pass, we shuffle the numbers in the input array around while maintaining order using a bit mask corresponding to the digit of the pass. That is, we perform unary test on each entry's `k`th digit, where if the `k`th digit is `0` we move the entry to the left bucket and if `1` to the right, all while maintaining order.
+
+In practice, parallel radix sort implementation can be broken down into the following steps:
+
+![](writeup/radix_diagram1.png)
+![](writeup/radix_diagram2.png)
+
+Let us consider above diagram for conceptual understanding.
+
+For `k = 0`, we are considering the least significant bit.
+`i` array is our input array in binary representation.
+`b` array contains the true/false result of applying an appropraite bit mask (for this example `0b1`).
+`e` array is `b` array negated.
+`f` array is the exclusive scan on `e` array.
+`t` array is populated such that `t[idx] = idx - f[idx] + totalFalses`, where `totalFalses = e[n - 1] + f[n - 1]`.
+`d` array is populated using `f` if the corresponding bit mask array's entry is true, and `t` otherwise.
+Lastly, the final `output` array is computed by scattering `i` array based on the destination indices stored in `d` array.
+
+Our implementation simplifies above procedure by combining multiple steps into single processes.
+`kernBitMaskNot` takes input array `i` and applies a negated bit mask to output array `e`.
+`kernScan` performs a naive parallel scan on `e` to output array `f`.
+Based on `e` and `f` arrays' last elements, we comput `totalFalses`.
+`kernScatter` takes these intermediate results and outputs final `output` array directly.
+
+Code for above algorithm can be found inside `radix.cu`.
+A basic cpu `sort` using the STL was used to compare our implementation's comparative performance gains.
 
 ## Running the Code
 
@@ -25,6 +58,8 @@ You should follow the regular setup guide as described in [Project 0](https://gi
 Note that there may be illegal memory accesses for those implementations that compute index `k` if the array size and block sizes are too big such that there is an integer overflow. The limit is `blockSize 2` for `SIZE = 1 << 30`. Reducing `SIZE` by a factor of 2 (one less bit shift) allows `blockSize` to be doubled at most. (e.g. limit is `blockSize 8` for `SIZE = 1 << 28`).
 
 ## Performance Analysis
+
+It should be noted that due to the randomness of array generation (the distribution of random numbers generated), the main program was ran *five* times, each time saving the recorded clock time for all configurations. The five runs were then averaged to be used for plotting of data below. The raw data stored in an excel file can be found at `writeup/rawdata.xlsx`.
 
 * Roughly optimize the block sizes of each of your implementations for minimal
   run time on your GPU.
