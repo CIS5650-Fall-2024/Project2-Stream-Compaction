@@ -13,19 +13,6 @@ namespace StreamCompaction {
             return timer;
         }
         // TODO: __global__
-
-        __global__ void shiftArrayElements(int n, const int* readBuffer, int* writeBuffer) {
-            int index = threadIdx.x + blockIdx.x * blockDim.x;
-            if (index >= n) return;
-
-            if (index == 0) {
-                writeBuffer[0] = 0;
-                return;
-            }
-
-            writeBuffer[index] = readBuffer[index - 1];
-        }
-
         __global__ void handleNonPower(int n, int d, int* buffer) {
             int index = threadIdx.x + blockIdx.x * blockDim.x;
             int pow2tod = 1 << d;
@@ -68,7 +55,7 @@ namespace StreamCompaction {
             cudaMemcpy(dev_buffer2, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
             timer().startGpuTimer();
-            shiftArrayElements<<<fullBlocksPerGrid, blockSize>>>(n, dev_buffer2, dev_buffer1);
+            StreamCompaction::Common::shiftArrayElements<<<fullBlocksPerGrid, blockSize>>>(n, 1, dev_buffer2, dev_buffer1);
             checkCUDAError("shiftArrayElements failed!");
             cudaDeviceSynchronize();
             // TODO
@@ -79,6 +66,7 @@ namespace StreamCompaction {
 
                 std::swap(dev_buffer1, dev_buffer2);
             }
+            // perform last step 
             if ((1 << ilog2(n)) != n) {
                 fullBlocksPerGrid.x = (n - (1 << ilog2(n)) + blockSize - 1) / blockSize;
                 handleNonPower<<<fullBlocksPerGrid, blockSize>>>(n, ilog2(n), dev_buffer1);
