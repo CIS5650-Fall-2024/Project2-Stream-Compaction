@@ -19,7 +19,13 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+
+            odata[0] = 0;
+            for (int k = 1; k < n; ++k)
+            {
+                odata[k] = odata[k - 1] + idata[k - 1];
+            }
+
             timer().endCpuTimer();
         }
 
@@ -30,9 +36,19 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            
+            int olength = 0;
+            for (int k = 0; k < n; ++k)
+            {
+                if (idata[k] != 0)
+                {
+                    odata[olength] = idata[k];
+                    ++olength;
+                }
+            }
+
             timer().endCpuTimer();
-            return -1;
+            return olength;
         }
 
         /**
@@ -42,9 +58,37 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+
+            int* tmpdata = new int[n];
+
+            // Compute the temporary array of pass/fail checks
+            for (int k = 0; k < n; ++k)
+            {
+                odata[k] = idata[k] != 0;
+            }
+            
+            // Scan the temporary array
+            tmpdata[0] = 0;
+            for (int k = 1; k < n; ++k)
+            {
+                tmpdata[k] = tmpdata[k - 1] + odata[k - 1];
+            }
+
+            // Scatter based on the found indices
+            int olength = 0;
+            for (int k = 0; k < n; ++k)
+            {
+                if (odata[k] == 1)
+                {
+                    odata[tmpdata[k]] = idata[k];
+                    ++olength;
+                }
+            }
+
+            delete[](tmpdata);
+
             timer().endCpuTimer();
-            return -1;
+            return olength;
         }
     }
 }
