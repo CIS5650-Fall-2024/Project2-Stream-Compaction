@@ -96,13 +96,17 @@ namespace StreamCompaction {
 
 			// exclusive scan
 			// set first element to 0
+			
+			int temp = 0;
 			if (index == 0) {
-				odata[index] = 0;
+				temp = 0;
 			}
 			else {
-				// Add the block sum from the previous blocks to the current element, except the very first element
-				odata[index] = odata[index - 1] + blockSum[blockIdx.x];
+				int blockIdx = (index - 1) / blockDim.x;
+				int sumToAdd = blockSum[blockIdx];
+				temp = odata[index - 1] + sumToAdd;
 			}
+			odata[index] = temp;
 		}
 
 		
@@ -116,7 +120,7 @@ namespace StreamCompaction {
 			int t = ilog2ceil(n);
 			//printf("n: %d\n", n);
 			printf("log2_n: %d\n", t);
-			int blockSize = 4;
+			int blockSize = 256;
 			int numBlocks = (n + blockSize - 1) / blockSize;
 			dim3 fullBlocksPerGrid(numBlocks);
 			printf("block size: %d\n", blockSize);
