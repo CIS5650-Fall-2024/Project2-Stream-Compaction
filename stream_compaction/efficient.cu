@@ -3,6 +3,8 @@
 #include "common.h"
 #include "efficient.h"
 
+#define BLOCK_SIZE 256
+
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
@@ -107,7 +109,7 @@ namespace StreamCompaction {
             int nNextPow2 = 1 << (::ilog2ceil(n));
 
             // Kernel configuration for the block-level scan and block sum computation.
-            const int blockSize = 256;
+            const int blockSize = BLOCK_SIZE;
             dim3 blockCount = (nNextPow2 + blockSize - 1) / blockSize;
             // No double buffering, so just one block-sized shared memory chunk is needed.
             const int blockSharedMemSize = blockSize * sizeof(int);

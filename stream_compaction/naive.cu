@@ -3,6 +3,8 @@
 #include "common.h"
 #include "naive.h"
 
+#define BLOCK_SIZE 1 << 10
+
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;
@@ -116,7 +118,7 @@ namespace StreamCompaction {
             timer().startGpuTimer();
 
             // Kernel configuration for the block-level scan and block sum computation.
-            const int blockSize = 256;
+            const int blockSize = BLOCK_SIZE;
             dim3 blockCount = (n + blockSize - 1) / blockSize;
             // For double buffering, shared memory must be able to host 2 block-sized buffers.
             const int blockSharedMemSize = 2 * blockSize * sizeof(int);

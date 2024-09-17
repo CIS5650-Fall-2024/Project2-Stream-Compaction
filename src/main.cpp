@@ -14,9 +14,12 @@
 #include "testing_helpers.hpp"
 
 #define MAX_SIZE 1 << 18
+// Must be 4 so that NPOT >= 1.
+#define MIN_SIZE 4
+#define MAX_ELEMENT_VALUE 50
 
 void scanTests(const int SIZE, const int NPOT, int *a, int *b, int *c, int *d) {
-    genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
+    genArray(SIZE - 1, a, MAX_ELEMENT_VALUE);  // Leave a 0 at the end to test that edge case
     a[SIZE - 1] = 0;
     printArray(SIZE, a, true);
 
@@ -91,7 +94,7 @@ void scanTests(const int SIZE, const int NPOT, int *a, int *b, int *c, int *d) {
 }
 
 void compactionTests(const int SIZE, const int NPOT, int *a, int *b, int *c, int *d) {
-    genArray(SIZE - 1, a, 4);  // Leave a 0 at the end to test that edge case
+    genArray(SIZE - 1, a, MAX_ELEMENT_VALUE);  // Leave a 0 at the end to test that edge case
     a[SIZE - 1] = 0;
     printArray(SIZE, a, true);
 
@@ -132,16 +135,36 @@ void compactionTests(const int SIZE, const int NPOT, int *a, int *b, int *c, int
     if (!printCmpLenResult(count, expectedNPOT, b, c)) printArray(count, c, true);
 }
 
+void profileScan(const int SIZE, bool testCorrectness = false) {
+    int *input = new int[SIZE];
+    int *output = new int[SIZE];
+    int *reference;
+    genArray(SIZE - 1, input, MAX_ELEMENT_VALUE);
+    input[SIZE - 1] = 0;
+
+    if (testCorrectness) {
+        reference = new int[SIZE];
+        StreamCompaction::CPU::scan(SIZE, reference, input, /*simulateGPUScan=*/false);
+    }
+    
+    StreamCompaction::Naive::scan(SIZE, output, input);
+    
+    if (testCorrectness) {
+        printCmpResult(SIZE, reference, output);
+        free(reference);
+    }
+
+    free(output);
+    free(input);
+}
+
 int main(int argc, char* argv[]) {
     printf("\n");
     printf("****************\n");
     printf("** SCAN TESTS **\n");
     printf("****************\n");
-    
-    // TODO: crashes for SIZE 1 and 2.
-    for (int SIZE = 4; SIZE <= MAX_SIZE; SIZE <<= 1) {
-        // TODO: work-efficient scan fails for size < 256.
-        // TODO: fails for 1 << 1.
+
+    for (int SIZE = MIN_SIZE; SIZE <= MAX_SIZE; SIZE <<= 1) {
         // Non-power-of-two.
         const int NPOT = SIZE - 3;
 
@@ -168,9 +191,7 @@ int main(int argc, char* argv[]) {
     printf("** STREAM COMPACTION TESTS **\n");
     printf("*****************************\n");
 
-    // TODO: crashes for SIZE 1 and 2.
-    for (int SIZE = 4; SIZE <= MAX_SIZE; SIZE <<= 1) {
-        // TODO: fails for 1 << 1.
+    for (int SIZE = MIN_SIZE; SIZE <= MAX_SIZE; SIZE <<= 1) {
         // Non-power-of-two.
         const int NPOT = SIZE - 3;
 
@@ -192,6 +213,9 @@ int main(int argc, char* argv[]) {
         delete[] a;
     }
 
-     // Stop Win32 console from closing on exit.
+    int SIZE = 1 << 18;
+    profileScan(SIZE, /*testCorrectness=*/true);
+
+    // Stop Win32 console from closing on exit.
     system("pause");
 }
