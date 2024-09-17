@@ -11,6 +11,7 @@
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
+#include <stream_compaction/sort.h>
 #include "testing_helpers.hpp"
 
 const int SIZE = 1 << 8; // feel free to change the size of array
@@ -149,8 +150,51 @@ int main(int argc, char* argv[]) {
     printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
 
+    printf("\n");
+    printf("*****************************\n");
+    printf("** RADIX SORT TESTS **\n");
+    printf("*****************************\n");
+
+    int *d = new int[8];
+
+    d[0] = 4; // 100
+    d[1] = 7; // 111
+    d[2] = 2; // 010
+    d[3] = 6; // 110
+    d[4] = 3; // 011
+    d[5] = 5; // 101
+    d[6] = 1; // 001
+    d[7] = 0; // 000
+
+    genArray(SIZE , a, 100);  
+    printDesc("Input");
+    printArray(SIZE, a, false);
+
+    zeroArray(8, b);
+    printDesc("radix sort thrust, easy case");
+    StreamCompaction::Sort::radix_sort_thrust(8, b, d);
+    printArray(8, b, false);
+
+    zeroArray(8, c);
+    printDesc("radix sort with work-efficient scan, easy case");
+    StreamCompaction::Sort::radix_sort(8, c, d);
+    printArray(8, c, false);
+    printCmpResult(8, b, c);
+
+    zeroArray(SIZE, b);
+    printDesc("radix sort thrust");
+    StreamCompaction::Sort::radix_sort_thrust(SIZE, b, a);
+    printArray(SIZE, b, true);
+    
+    zeroArray(SIZE, c);
+    printDesc("radix sort with work-efficient scan");
+    StreamCompaction::Sort::radix_sort(SIZE, c, a);
+    printArray(SIZE, c, true);
+    printCmpResult(SIZE, b, c);
+
     system("pause"); // stop Win32 console from closing on exit
     delete[] a;
     delete[] b;
     delete[] c;
+    delete[] d;
 }

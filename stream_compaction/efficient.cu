@@ -118,9 +118,9 @@ namespace StreamCompaction {
          * Define another scan function so that it can be called from compact()
          * Here dev_bools has already been initialised in compact()
          ************************************************************************************/
-        void scan_without_timer(int n) {
+        void scan_without_timer(int n, int *odata, const int *idata) {
             // Initialise dev_scanResult. dev_bools only has n elements.
-            cudaMemcpy(dev_scanResult, dev_bools, n * sizeof(int), cudaMemcpyDeviceToDevice);
+            cudaMemcpy(odata, idata, n * sizeof(int), cudaMemcpyDeviceToDevice);
 
             // Your intermediate array sizes will need to be rounded to the next power of two.
             int rounded_n = isPowerOf2(n) ? n : 1 << ilog2ceil(n);
@@ -130,14 +130,14 @@ namespace StreamCompaction {
 
             // upsweep
             for (int d = 0; d <= ilog2ceil(rounded_n) - 1; d++) {
-                upsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_scanResult);
+                upsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, odata);
             }
 
             // downsweep
-            init_downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, dev_scanResult);
+            init_downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, odata);
 
             for (int d = ilog2ceil(rounded_n) - 1; d >= 0; d--) {
-                downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_scanResult);
+                downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, odata);
             }
         }
  
@@ -171,13 +171,14 @@ namespace StreamCompaction {
             Common::kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (n, dev_bools, dev_idata);
 
             // Scan the boolean array
-            scan_without_timer(n); // n will be rounded in the scan function
+            scan_without_timer(n, dev_scanResult, dev_bools); // n will be rounded in the scan function
 
             // Perform scatter
             Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_scanResult);
 
             cudaMemcpy(scanResult, dev_scanResult, n * sizeof(int), cudaMemcpyDeviceToHost);
             cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+            int count = n == 0 ? 0 : scanResult[n - 1] + (idata[n - 1] != 0 ? 1 : 0);
 
             // Clean up device memory
             cudaFree(dev_idata);
@@ -185,9 +186,11 @@ namespace StreamCompaction {
             cudaFree(dev_scanResult);
             cudaFree(dev_odata);
 
+            delete[] scanResult;
+
             timer().endGpuTimer();
 
-            return n == 0 ? 0 : scanResult[n - 1] + (idata[n - 1] != 0 ? 1 : 0);
+            return count;
         }
     }
 }
