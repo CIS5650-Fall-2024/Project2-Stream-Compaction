@@ -144,8 +144,12 @@ namespace StreamCompaction {
             checkCUDAError("failed to malloc oblockSumDevice");
 
             cudaMemcpy(idataDevice, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("failed to mempcy idata to idataDevice");
 
-            // No need to synchronize here: the CPU blocks until the transfer is complete.
+            // No need to synchronize CPU-GPU here: the CPU blocks until the transfer is complete.
+            // "The function will return once the pageable buffer has been copied to the staging 
+            // memory for DMA transfer to device memory ...", according to 
+            // https://docs.nvidia.com/cuda/cuda-runtime-api/api-sync-behavior.html#api-sync-behavior__memcpy-sync.
 
             // Per-block exclusive scan of the original input. iblockSumDevice will store the
             // final prefix sums computed by each block.
@@ -162,6 +166,7 @@ namespace StreamCompaction {
             cudaDeviceSynchronize();
 
             cudaMemcpy(odata, odataDevice, n * sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAError("failed to mempcy odataDevice to odata");
 
             cudaFree(oblockSumDevice);
             checkCUDAError("failed to free oblockSumDevice");

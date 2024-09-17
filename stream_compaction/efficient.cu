@@ -112,6 +112,7 @@ namespace StreamCompaction {
             // No double buffering, so just one block-sized shared memory chunk is needed.
             const int blockSharedMemSize = blockSize * sizeof(int);
 
+            // TODO: block count should be just enough for n, not nNextPow2.
             // Kernel configuration for the block sum scan (all blocks' final prefix sums).
             const int blockSumBlockSize = blockCount.x;
             dim3 blockSumBlockCount = (blockCount.x + blockSumBlockSize - 1) / blockSumBlockSize;
@@ -136,8 +137,12 @@ namespace StreamCompaction {
 
             // If input needs to be padded with 0s, that'll be done in the kernel.
             cudaMemcpy(idataDevice, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("failed to mempcy idata to idataDevice");
 
-            // No need to synchronize here: the CPU blocks until the transfer is complete.
+            // No need to synchronize CPU-GPU here: the CPU blocks until the transfer is complete.
+            // "The function will return once the pageable buffer has been copied to the staging 
+            // memory for DMA transfer to device memory ...", according to 
+            // https://docs.nvidia.com/cuda/cuda-runtime-api/api-sync-behavior.html#api-sync-behavior__memcpy-sync.
 
             // Per-block exclusive scan of the original input. iblockSumDevice will store the
             // final prefix sums computed by each block.
@@ -154,6 +159,7 @@ namespace StreamCompaction {
             cudaDeviceSynchronize();
 
             cudaMemcpy(odata, odataDevice, n * sizeof(int), cudaMemcpyDeviceToHost);
+            checkCUDAError("failed to mempcy odataDevice to odata");
 
             cudaFree(oblockSumDevice);
             checkCUDAError("failed to free oblockSumDevice");
@@ -194,8 +200,6 @@ namespace StreamCompaction {
             int *idataDevice = nullptr;
             cudaMalloc(&idataDevice, n * sizeof(int));
             checkCUDAError("failed to malloc idataDevice");
-            cudaMemcpy(idataDevice, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-            checkCUDAError("failed to memcpy idataDevice");
 
             int *nonzeroMaskDevice = nullptr;
             cudaMalloc(&nonzeroMaskDevice, n * sizeof(int));
@@ -205,13 +209,26 @@ namespace StreamCompaction {
             cudaMalloc(&nonzeroMaskPrefixSumDevice, n * sizeof(int));
             checkCUDAError("failed to malloc nonzeroMaskPrefixSumDevice");
 
-            StreamCompaction::Common::kernMapToBoolean<<<blockCount, blockSize>>>(n, nonzeroMaskDevice, idataDevice);
+            cudaMemcpy(idataDevice, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("failed to memcpy idata to idataDevice");
 
+            // No need to synchronize CPU-GPU here: the CPU blocks until the transfer is complete.
+            // "The function will return once the pageable buffer has been copied to the staging 
+            // memory for DMA transfer to device memory ...", according to 
+            // https://docs.nvidia.com/cuda/cuda-runtime-api/api-sync-behavior.html#api-sync-behavior__memcpy-sync.
+
+            // Identify non-zero elements by marking them with 1 in the mask.
+            StreamCompaction::Common::kernMapToBoolean<<<blockCount, blockSize>>>(n, nonzeroMaskDevice, idataDevice);
+            cudaDeviceSynchronize();
+
+            // Exclusive scan the mask.
             scanNoTimer(n, nonzeroMaskPrefixSumDevice, nonzeroMaskDevice);
+            cudaDeviceSynchronize();
 
             int lastScanValue = 0;
             int lastMaskValue = 0;
             cudaMemcpy(&lastScanValue, &nonzeroMaskPrefixSumDevice[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
+            // An exclusive scan doesn't include the last element, so we need to add it.
             cudaMemcpy(&lastMaskValue, &nonzeroMaskDevice[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
             int nonzeroCount = lastScanValue + lastMaskValue;
 
@@ -220,16 +237,19 @@ namespace StreamCompaction {
                 cudaMalloc(&odataDevice, nonzeroCount * sizeof(int));
                 checkCUDAError("failed to malloc odataDevice");
 
+                // Scatter the non-zero elements.
                 StreamCompaction::Common::kernScatter<<<blockCount, blockSize>>>(
                     n, odataDevice, idataDevice, nonzeroMaskDevice, nonzeroMaskPrefixSumDevice
                 );
+                cudaDeviceSynchronize();
 
                 cudaMemcpy(odata, odataDevice, nonzeroCount * sizeof(int), cudaMemcpyDeviceToHost);
-                checkCUDAError("failed to memcpy odataDevice");
+                checkCUDAError("failed to memcpy odataDevice to odata");
 
                 cudaFree(odataDevice);
                 checkCUDAError("failed to free odataDevice");
             }
+            // odata will be left untouched if there are no nonzero elements.
 
             cudaFree(nonzeroMaskPrefixSumDevice);
             checkCUDAError("failed to free nonzeroMaskPrefixSumDevice");
