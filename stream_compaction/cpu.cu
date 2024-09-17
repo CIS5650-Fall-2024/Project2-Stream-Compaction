@@ -125,14 +125,17 @@ namespace StreamCompaction {
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
 
+            // Identify non-zero elements by marking them with 1 in the mask.
             int *nonzeroMask = new int[n];
             for (int i = 0; i < n; ++i) {
                 nonzeroMask[i] = (idata[i] != 0) ? 1 : 0;
             }
 
+            // Exclusive scan the mask.
             int *nonzeroMaskPrefixSum = new int[n];
             scanExclusiveSerial(n, nonzeroMaskPrefixSum, nonzeroMask);
 
+            // Scatter the non-zero elements.
             int nonzeroCount = 0;
             for (int i = 0; i < n; ++i) {
                 if (nonzeroMask[i]) {
