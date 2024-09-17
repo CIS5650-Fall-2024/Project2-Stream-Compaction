@@ -1,22 +1,25 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
+#include <iostream>
 #include "common.h"
+#include "radix_sort.h"
 #include "efficient_optimized.h"
 #include <device_functions.h>
 
-// https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda
-// https://github.com/mark-poscablo/gpu-prefix-sum/tree/master
 namespace StreamCompaction {
-    namespace EfficientOptimized {
+	namespace RadixSort
+	{
         using StreamCompaction::Common::PerformanceTimer;
         PerformanceTimer& timer()
         {
             static PerformanceTimer timer;
             return timer;
         }
+
+#pragma region GpuScan
         __global__
-        void gpu_add_block_sums(int* const d_out,
+            void gpu_add_block_sums(int* const d_out,
                 const int* const d_in,
                 int* const d_block_sums,
                 const size_t numElems)
@@ -41,7 +44,7 @@ namespace StreamCompaction {
         // Modified version of Mark Harris' implementation of the Blelloch scan
         // according to https://www.mimuw.edu.pl/~ps209291/kgkp/slides/scan.pdf
         __global__
-        void gpu_prescan(int* const d_out,
+            void gpu_prescan(int* const d_out,
                 int* const d_in,
                 int* const d_block_sums,
                 const unsigned int len,
@@ -144,11 +147,85 @@ namespace StreamCompaction {
             }
         }
 
-        void gpuScanOptimized(int *dev_odata,
-                              int *dev_idata,
-                              int *d_block_sums,
-                              int *d_dummy_blocks_sums,
-                              int n)
+        void gpuScanOptimized(int* dev_odata,
+            int* dev_idata,
+            int* d_block_sums,
+            int* d_dummy_blocks_sums,
+            int n);
+
+        /**
+         * Performs prefix-sum (aka scan) on idata, storing the result into odata.
+         */
+        void scan(int n, int* odata, const int* idata, bool startTimer, bool isHost)
+        {
+            int* dev_odata;
+            int* dev_idata;
+
+            unsigned int blockSize = MAX_BLOCK_SIZE / 2;
+            unsigned int maxElemsPerBlock = 2 * blockSize;
+
+            cudaMalloc((void**)&dev_odata, n * sizeof(int));
+            checkCUDAError("cudaMalloc dev_odata failed!");
+            cudaMemset(dev_odata, 0, n * sizeof(unsigned int));
+            checkCUDAError("cudaMemset dev_odata failed!");
+
+            cudaMalloc((void**)&dev_idata, n * sizeof(int));
+            checkCUDAError("cudaMalloc dev_idata failed!");
+            cudaMemset(dev_idata, 0, n * sizeof(unsigned int));
+            checkCUDAError("cudaMemset dev_idata failed!");
+            cudaMemcpy(dev_idata, idata, n * sizeof(int), isHost ? cudaMemcpyHostToDevice : cudaMemcpyDeviceToDevice);
+            checkCUDAError("cudaMemcpy dev_idata failed!");
+
+            unsigned int gridSize = (n + maxElemsPerBlock - 1) / maxElemsPerBlock;
+
+            // Conflict free padding requires that shared memory be more than 2 * block_sz
+            unsigned int shmemSize = maxElemsPerBlock + ((maxElemsPerBlock - 1) >> LOG_NUM_BANKS);
+
+            // Allocate memory for array of total sums produced by each block
+            // Array length must be the same as number of blocks
+            int* d_block_sums;
+            cudaMalloc(&d_block_sums, sizeof(unsigned int) * gridSize);
+            checkCUDAError("cudaMalloc d_block_sums failed!");
+            cudaMemset(d_block_sums, 0, sizeof(unsigned int) * gridSize);
+            checkCUDAError("cudaMemset d_block_sums failed!");
+
+            int gridSizeSums = (gridSize + maxElemsPerBlock - 1) / maxElemsPerBlock;
+
+            int* d_dummy_blocks_sums;
+            cudaMalloc(&d_dummy_blocks_sums, sizeof(unsigned int) * gridSizeSums);
+            checkCUDAError("cudaMalloc d_dummy_blocks_sums failed!");
+            cudaMemset(d_dummy_blocks_sums, 0, sizeof(unsigned int) * gridSizeSums);
+            checkCUDAError("cudaMemset d_dummy_blocks_sums failed!");
+
+            if (startTimer)
+            {
+                timer().startGpuTimer();
+            }
+
+            gpuScanOptimized(dev_odata, dev_idata, d_block_sums, d_dummy_blocks_sums, n);
+
+            if (startTimer)
+            {
+                timer().endGpuTimer();
+            }
+
+            cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToDevice);
+
+            cudaFree(dev_odata);
+            checkCUDAError("cudaFree dev_odata failed!");
+            cudaFree(dev_idata);
+            checkCUDAError("cudaFree dev_idata failed!");
+            cudaFree(d_block_sums);
+            checkCUDAError("cudaFree d_block_sums failed!");
+            cudaFree(d_dummy_blocks_sums);
+            checkCUDAError("cudaFree d_dummy_blocks_sums failed!");
+        }
+
+        void gpuScanOptimized(int* dev_odata,
+            int* dev_idata,
+            int* d_block_sums,
+            int* d_dummy_blocks_sums,
+            int n)
         {
             unsigned int blockSize = MAX_BLOCK_SIZE / 2;
             unsigned int maxElemsPerBlock = 2 * blockSize;
@@ -195,167 +272,164 @@ namespace StreamCompaction {
 
             gpu_add_block_sums << <gridSize, blockSize >> > (dev_odata, dev_odata, d_block_sums, n);
         }
+#pragma endregion
 
-        /**
-         * Performs prefix-sum (aka scan) on idata, storing the result into odata.
-         */
-        void scan(int n, int* odata, const int* idata, bool startTimer, bool isHost)
+        __global__ void kernMapToBool(int i, int n,
+                                       int* bitBuffer,
+                                       int* dev_idata, 
+                                       int* skip)
         {
-            int* dev_odata;
-            int* dev_idata;
-
-            unsigned int blockSize = MAX_BLOCK_SIZE / 2;
-            unsigned int maxElemsPerBlock = 2 * blockSize;
-
-            cudaMalloc((void**)&dev_odata, n * sizeof(int));
-            checkCUDAError("cudaMalloc dev_odata failed!");
-            cudaMemset(dev_odata, 0, n * sizeof(unsigned int));
-            checkCUDAError("cudaMemset dev_odata failed!");
-
-            cudaMalloc((void**)&dev_idata, n * sizeof(int));
-            checkCUDAError("cudaMalloc dev_idata failed!");
-            cudaMemset(dev_idata, 0, n * sizeof(unsigned int));
-            checkCUDAError("cudaMemset dev_idata failed!");
-            cudaMemcpy(dev_idata, idata, n * sizeof(int), isHost ? cudaMemcpyHostToDevice : cudaMemcpyDeviceToDevice);
-            checkCUDAError("cudaMemcpy dev_idata failed!");
-
-            unsigned int gridSize = (n + maxElemsPerBlock - 1) / maxElemsPerBlock;
-            
-            // Conflict free padding requires that shared memory be more than 2 * block_sz
-            unsigned int shmemSize = maxElemsPerBlock + ((maxElemsPerBlock - 1) >> LOG_NUM_BANKS);
-
-            // Allocate memory for array of total sums produced by each block
-            // Array length must be the same as number of blocks
-            int* d_block_sums;
-            cudaMalloc(&d_block_sums, sizeof(unsigned int) * gridSize);
-            checkCUDAError("cudaMalloc d_block_sums failed!");
-            cudaMemset(d_block_sums, 0, sizeof(unsigned int) * gridSize);
-            checkCUDAError("cudaMemset d_block_sums failed!");
-
-            int gridSizeSums = (gridSize + maxElemsPerBlock - 1) / maxElemsPerBlock;
-
-            int* d_dummy_blocks_sums;
-            cudaMalloc(&d_dummy_blocks_sums, sizeof(unsigned int) * gridSizeSums);
-            checkCUDAError("cudaMalloc d_dummy_blocks_sums failed!");
-            cudaMemset(d_dummy_blocks_sums, 0, sizeof(unsigned int) * gridSizeSums);
-            checkCUDAError("cudaMemset d_dummy_blocks_sums failed!");
-
-            if (startTimer)
+            int index = threadIdx.x + (blockIdx.x * blockDim.x);
+            if (index >= n) return;
+            int num = dev_idata[index];
+            int temp = (num & (1 << i)) >> i;
+            if (i == 0 || temp != ((num & (1 << (i - 1))) >> (i - 1)))
             {
-                timer().startGpuTimer();
+                *skip = 1;
             }
-
-            gpuScanOptimized(dev_odata, dev_idata, d_block_sums, d_dummy_blocks_sums, n);
-
-            if (startTimer)
-            {
-                timer().endGpuTimer();
-            }
-
-            cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
-
-            cudaFree(dev_odata);
-            checkCUDAError("cudaFree dev_odata failed!");
-            cudaFree(dev_idata);
-            checkCUDAError("cudaFree dev_idata failed!");
-            cudaFree(d_block_sums);
-            checkCUDAError("cudaFree d_block_sums failed!");
-            cudaFree(d_dummy_blocks_sums);
-            checkCUDAError("cudaFree d_dummy_blocks_sums failed!");
+            bitBuffer[index] = 1 - temp;
         }
 
-        /**
-         * Performs stream compaction on idata, storing the result into odata.
-         * All zeroes are discarded.
-         *
-         * @param n      The number of elements in idata.
-         * @param odata  The array into which to store elements.
-         * @param idata  The array of elements to compact.
-         * @returns      The number of elements remaining after compaction.
-         */
-        int compact(int n, int* odata, const int* idata) 
+        __global__ void kernScatter(int i, int n, int startIdx,
+                               int* scanBuffer,
+                               int* dev_idata,
+                               int* dev_odata)
         {
-            int* dev_odata;
-            int* dev_idata;
-            int* dev_mapdata;
-            int* dev_scan;
+            int index = threadIdx.x + (blockIdx.x * blockDim.x);
+            if (index >= n) return;
+            int num = dev_idata[index];
+            bool flag = (num & (1 << i)) >> i;
+            int t = index - scanBuffer[index] + startIdx;
+            dev_odata[flag ? t : scanBuffer[index]] = num;
+        }
+
+        __global__ void kernalCheckStop(int n, const int* idata, int* stop)
+        {
+            int index = threadIdx.x + (blockDim.x * blockIdx.x);
+            if (index >= n - 1) return;
+
+            if (idata[index] > idata[index + 1]) (*stop) = 1;
+        }
+
+        void radixSort(int i, int n,
+                       int* bitBuffer,
+                       int* dev_idata,
+                       int* dev_odata,
+                       int* d_block_sums,
+                       int* d_dummy_blocks_sums,
+                       int* dev_num)
+        {
+            int gridSize = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+
+            cudaMemset(dev_num, 0, sizeof(int));
+            kernMapToBool << < gridSize, BLOCK_SIZE >> > (i, n, bitBuffer, dev_idata, dev_num);
+
+            int last_num;
+            cudaMemcpy(&last_num, bitBuffer + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+
+            gpuScanOptimized(bitBuffer, bitBuffer, d_block_sums, d_dummy_blocks_sums, n);
+
+            int start_index;
+            cudaMemcpy(&start_index, bitBuffer + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            start_index += last_num;
+
+            // for debug
+            //int* odata = (int*)malloc(n * sizeof(int));
+            //cudaMemcpy(odata, bitBuffer, n * sizeof(int), cudaMemcpyDeviceToHost);
+            //for (int i = 0; i < n; ++i)
+            //{
+            //    std::cout << odata[i] << ", ";
+            //}
+            //std::cout << std::endl;
+
+            kernScatter << < gridSize, BLOCK_SIZE >> > (i, n, start_index, bitBuffer, dev_idata, dev_odata);
+            
+            // for debug
+            //cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+            //for (int i = 0; i < n; ++i)
+            //{
+            //    std::cout << odata[i] << ", ";
+            //}
+            //std::cout << std::endl;
+        }
+
+        void sort(int n, int* odata, const int* idata)
+        {
+            int bitSizeOfInt = sizeof(int) * 8;
 
             unsigned int blockSize = MAX_BLOCK_SIZE / 2;
             unsigned int maxElemsPerBlock = 2 * blockSize;
+            unsigned int gridSize = (n + maxElemsPerBlock - 1) / maxElemsPerBlock;
+            // Conflict free padding requires that shared memory be more than 2 * block_sz
+            unsigned int shmemSize = maxElemsPerBlock + ((maxElemsPerBlock - 1) >> LOG_NUM_BANKS);
+            int gridSizeSums = (gridSize + maxElemsPerBlock - 1) / maxElemsPerBlock;
+
+            int* bitBuffer;
+            int* reverseBitBuffer;
+            int* scanBuffer;
+            int* dev_odata, * dev_odataTemp;
+            int* dev_int;
 
             cudaMalloc((void**)&dev_odata, n * sizeof(int));
             checkCUDAError("cudaMalloc dev_odata failed!");
-            cudaMemset(dev_odata, 0, n * sizeof(unsigned int));
-            checkCUDAError("cudaMemset dev_odata failed!");
+            cudaMemcpy(dev_odata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy dev_odata failed!");
 
-            cudaMalloc((void**)&dev_idata, n * sizeof(int));
-            checkCUDAError("cudaMalloc dev_idata failed!");
-            cudaMemset(dev_idata, 0, n * sizeof(unsigned int));
-            checkCUDAError("cudaMemset dev_idata failed!");
-            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-            checkCUDAError("cudaMemcpy dev_idata failed!");
+            cudaMalloc((void**)&dev_odataTemp, n * sizeof(int));
+            checkCUDAError("cudaMalloc dev_odataTemp failed!");
 
-            cudaMalloc((void**)&dev_mapdata, n * sizeof(int));
-            checkCUDAError("cudaMalloc dev_mapdata failed!");
+            cudaMalloc((void**)&bitBuffer, n * sizeof(int));
+            checkCUDAError("cudaMalloc bitBuffer failed!");
 
-            cudaMalloc((void**)&dev_scan, n * sizeof(int));
-            checkCUDAError("cudaMalloc dev_scan failed!");
-            cudaMemset(dev_scan, 0, n * sizeof(int));
-            checkCUDAError("cudaMemset idata to dev_odata failed!");
+            cudaMalloc((void**)&reverseBitBuffer, n * sizeof(int));
+            checkCUDAError("cudaMalloc reverseBitBuffer failed!");
 
-            unsigned int gridSize = (n + maxElemsPerBlock - 1) / maxElemsPerBlock;
+            cudaMalloc((void**)&scanBuffer, n * sizeof(int));
+            checkCUDAError("cudaMalloc scanBuffer failed!");
 
-            // Conflict free padding requires that shared memory be more than 2 * block_sz
-            unsigned int shmemSize = maxElemsPerBlock + ((maxElemsPerBlock - 1) >> LOG_NUM_BANKS);
+            cudaMalloc((void**)&dev_int, sizeof(int));
+            checkCUDAError("cudaMalloc dev_int failed!");
 
-            // Allocate memory for array of total sums produced by each block
-            // Array length must be the same as number of blocks
             int* d_block_sums;
             cudaMalloc(&d_block_sums, sizeof(unsigned int) * gridSize);
             checkCUDAError("cudaMalloc d_block_sums failed!");
             cudaMemset(d_block_sums, 0, sizeof(unsigned int) * gridSize);
             checkCUDAError("cudaMemset d_block_sums failed!");
 
-            int gridSizeSums = (gridSize + maxElemsPerBlock - 1) / maxElemsPerBlock;
-
             int* d_dummy_blocks_sums;
             cudaMalloc(&d_dummy_blocks_sums, sizeof(unsigned int) * gridSizeSums);
             checkCUDAError("cudaMalloc d_dummy_blocks_sums failed!");
             cudaMemset(d_dummy_blocks_sums, 0, sizeof(unsigned int) * gridSizeSums);
             checkCUDAError("cudaMemset d_dummy_blocks_sums failed!");
-
-            dim3 blocksPerGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
             timer().startGpuTimer();
+            for (int i = 0; i < 32; ++i)
+            {
+                cudaMemset(dev_int, 0, sizeof(int));
+                kernalCheckStop << < (n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE >> > (n, dev_odata, dev_int);
+                int stop;
+                cudaMemcpy(&stop, dev_int, sizeof(int), cudaMemcpyDeviceToHost);
+                if (stop == 0) break;
 
-            StreamCompaction::Common::kernMapToBoolean << < blocksPerGrid, BLOCK_SIZE >> > (n, dev_mapdata, dev_idata);
-            cudaMemcpy(dev_scan, dev_mapdata, n * sizeof(int), cudaMemcpyDeviceToDevice);
+                radixSort(i, n,
+                    bitBuffer,
+                    dev_odata,
+                    dev_odataTemp,
+                    d_block_sums,
+                    d_dummy_blocks_sums,
+                    dev_int);
+                std::swap(dev_odata, dev_odataTemp);
 
-            gpuScanOptimized(dev_scan, dev_scan, d_block_sums, d_dummy_blocks_sums, n);
-
-            StreamCompaction::Common::kernScatter << < blocksPerGrid, BLOCK_SIZE >> > (n, dev_odata, dev_idata, dev_mapdata, dev_scan);
-
-            timer().endGpuTimer();
-
+                // for debug
+                //cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+                //for (int i = 0; i < n; ++i)
+                //{
+                //    std::cout << odata[i] << ", ";
+                //}
+                //std::cout << std::endl;
+            }
             cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
-            unsigned int countNon0;
-            cudaMemcpy(&countNon0, dev_scan + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
-            countNon0 += idata[n - 1] ? 1 : 0;
-
-            cudaFree(dev_odata);
-            checkCUDAError("cudaFree dev_odata failed!");
-            cudaFree(dev_idata);
-            checkCUDAError("cudaFree dev_idata failed!");
-            cudaFree(d_block_sums);
-            checkCUDAError("cudaFree d_block_sums failed!");
-            cudaFree(d_dummy_blocks_sums);
-            checkCUDAError("cudaFree d_dummy_blocks_sums failed!");
-            cudaFree(dev_mapdata);
-            checkCUDAError("cudaFree dev_mapdata failed!");
-            cudaFree(dev_scan);
-            checkCUDAError("cudaFree dev_scan failed!");
-
-            return countNon0;
+            timer().endGpuTimer();
         }
-    }
+	}
 }

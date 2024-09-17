@@ -12,6 +12,7 @@
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
 #include <stream_compaction/efficient_optimized.h>
+#include <stream_compaction/radix_sort.h>
 #include "testing_helpers.hpp"
 
 const int SIZE = 1 << 26; // feel free to change the size of array
@@ -29,7 +30,7 @@ int main(int argc, char* argv[]) {
     printf("** SCAN TESTS **\n");
     printf("****************\n");
 
-    genArray(SIZE - 1, a, 10);  // Leave a 0 at the end to test that edge case
+    genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
     a[SIZE - 1] = 0;
     printArray(SIZE, a, true);
 
@@ -177,21 +178,28 @@ int main(int argc, char* argv[]) {
     printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
 
-    //printf("\n");
-    //printf("*****************************\n");
-    //printf("** RAIX SORT TESTS **\n");
-    //printf("*****************************\n");
+    printf("\n");
+    printf("*****************************\n");
+    printf("** RAIX SORT TESTS **\n");
+    printf("*****************************\n");
 
-    //genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
-    //a[SIZE - 1] = 0;
-    //printArray(SIZE, a, true);
+    genArray(SIZE - 1, a, 100);  // Leave a 0 at the end to test that edge case
+    a[SIZE - 1] = 0;
+    printArray(SIZE, a, true);
 
-    //zeroArray(SIZE, b);
-    //printDesc("cpu quick sort without scan, power-of-two");
-    //StreamCompaction::CPU::sort(SIZE, b, a);
-    //printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
-    //printArray(SIZE, b, true);
-    //printCmpLenResult(SIZE, SIZE, b, b);
+    zeroArray(SIZE, b);
+    printDesc("cpu quick sort without scan, power-of-two");
+    StreamCompaction::CPU::sort(SIZE, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(SIZE, b, true);
+    printCmpLenResult(SIZE, SIZE, b, b);
+
+    zeroArray(SIZE, c);
+    printDesc("gpu radix sort without scan shared mem optimized, power-of-two");
+    StreamCompaction::RadixSort::sort(SIZE, c, a);
+    printElapsedTime(StreamCompaction::RadixSort::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(SIZE, c, true);
+    printCmpLenResult(SIZE, SIZE, b, c);
 
 
     system("pause"); // stop Win32 console from closing on exit
