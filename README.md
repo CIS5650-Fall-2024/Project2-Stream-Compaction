@@ -9,12 +9,6 @@ CUDA Stream Compaction
 
 ## Welcome to my Stream Compaction Project!
 
-- description of project including list of features
-- performance analysis
-- extra credits documented, with performance comparison, show how it works (show how radix sort is called and output)
-
-## Welcome to my Stream Compaction Project!
-
 ![flocking simulation](images/simulation/flocking.gif)
 
 This project investigates many different implementations of the scan and compact algorithms, along with optimizations. Additionally, it also implements [Radix sort](https://en.wikipedia.org/wiki/Radix_sort).
@@ -115,3 +109,7 @@ Answer Q1
 Here is the out from running the tests found in `main.cpp`. Note that I did add my own test cases for many of the extra methods I implemented. These include: ... mention exact tests.
 
 INCLUDE IN PR extra tests implemented, ec features, changes to cmakelists
+
+- description of project including list of features
+- performance analysis
+- extra credits documented, with performance comparison, show how it works (show how radix sort is called and output)
