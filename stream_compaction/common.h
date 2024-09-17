@@ -37,6 +37,8 @@ namespace StreamCompaction {
         __global__ void kernScatter(int n, int *odata,
                 const int *idata, const int *bools, const int *indices);
 
+        __global__ void resolve_scan_blocks(int n, int *prescan_remainder, int *block_scan);
+
         /**
         * This class is used for timing the performance
         * Uncopyable and unmovable
@@ -85,6 +87,19 @@ namespace StreamCompaction {
                 gpu_timer_started = true;
 
                 cudaEventRecord(event_start);
+            }
+
+            void endGpuTimerCummulative() {
+
+                cudaEventRecord(event_end);
+                cudaEventSynchronize(event_end);
+
+                if (!gpu_timer_started) { throw std::runtime_error("GPU timer not started"); }
+
+                float ms = 0;
+                cudaEventElapsedTime(&ms, event_start, event_end);
+                prev_elapsed_time_gpu_milliseconds += ms;
+                gpu_timer_started = false;
             }
 
             void endGpuTimer()
