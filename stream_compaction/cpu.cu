@@ -66,10 +66,11 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int* odata, const int* idata) {
-            timer().startCpuTimer();
 
             int* to_insert = new int[n];
             int* scan_result = new int[n];
+
+            timer().startCpuTimer();
             
             //scan
             int current_sum = 0;
@@ -91,10 +92,11 @@ namespace StreamCompaction {
             //scatter and get number of elements to return
             int num_elts = scatter(idata, odata, scan_result, to_insert, n);
 
+            timer().endCpuTimer();
+
             delete[] to_insert;
             delete[] scan_result;
 
-            timer().endCpuTimer();
             return num_elts;
         }
     }
