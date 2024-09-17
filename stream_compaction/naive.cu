@@ -16,8 +16,6 @@ namespace StreamCompaction {
             int index = (blockIdx.x * blockDim.x) + threadIdx.x;
             int offset = pow(2, d - 1);
             if (index < n) {
-                //int bruh = 69;
-                //oBuffer[index] = bruh + iBuffer[index];
                 if (index >= offset) {
                     oBuffer[index] = iBuffer[index] + iBuffer[index - offset];
                 }
@@ -39,7 +37,6 @@ namespace StreamCompaction {
             timer().startGpuTimer();
             // TODO
             for (int d = 1; d <= ilog2ceil(n); d++) {
-                int blockSize = 256;
                 dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
                 int* iBuffer;
                 int* oBuffer;
