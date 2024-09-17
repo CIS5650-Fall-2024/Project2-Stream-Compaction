@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
     printCmpLenResult(SIZE, SIZE, b, b);
 
     zeroArray(SIZE, c);
-    printDesc("gpu radix sort without scan shared mem optimized, power-of-two");
+    printDesc("gpu radix sort with shared mem optimized scan, power-of-two");
     StreamCompaction::RadixSort::sort(SIZE, c, a);
     printElapsedTime(StreamCompaction::RadixSort::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     printArray(SIZE, c, true);
