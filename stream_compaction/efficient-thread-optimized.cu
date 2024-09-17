@@ -3,7 +3,7 @@
 #include "common.h"
 #include "efficient-thread-optimized.h"
 
-#define blockSize 128
+#define blockSize 64
 
 namespace StreamCompaction {
     namespace EfficientThreadOptimized {
