@@ -182,10 +182,69 @@ namespace StreamCompaction {
          */
         int compact(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
-            
-            // todo
+
+            int arrSize = n;
+            if (n & (n - 1)) {  // if n is not a power of 2, pad the array to next power of 2
+              arrSize = 1 << ilog2ceil(n);
+            }
+
+            int numBlocks = blocksPerGrid(arrSize);
+            int numThreads = BLOCKSIZE;
+
+            int* dev_idata = nullptr; 
+            int* dev_odata = nullptr; 
+
+            cudaMalloc((void**)&dev_idata, arrSize * sizeof(int));
+            checkCUDAError("cudaMalloc dev_data failed");
+
+            cudaMalloc((void**)&dev_odata, arrSize * sizeof(int));
+            checkCUDAError("cudaMalloc dev_data failed");
+
+            cudaMemcpy(dev_idata, idata, arrSize * sizeof(int), cudaMemcpyHostToDevice); 
+            checkCUDAError("cudaMemcpy dev_data failed");
+
+            // create boolean array
+            int* dev_bool = nullptr; 
+            cudaMalloc((void**)&dev_bool, arrSize * sizeof(int));
+            checkCUDAError("cudaMalloc dev_bool failed");
+
+            cudaMemset(dev_bool, 0, arrSize * sizeof(int)); 
+            checkCUDAError("cudaMemset dev_bool failed");
+
+            StreamCompaction::Common::kernMapToBoolean<<<numBlocks, numThreads>>>(n, dev_bool, dev_idata);
+            checkCUDAError("kernMapToBoolean failed");
+
+            // create indices array and copy bools data
+            int* dev_indices = nullptr;
+            cudaMalloc((void**)&dev_indices, arrSize * sizeof(int));
+            checkCUDAError("cudaMalloc dev_indices failed");
+
+            cudaMemcpy(dev_indices, dev_bool, arrSize * sizeof(int), cudaMemcpyDeviceToDevice);
+            checkCUDAError("cudaMemcpy dev_indices failed");
+
+            // perform scan on boolean array
+            _scan(arrSize, dev_indices); 
+
+            // scatter
+            StreamCompaction::Common::kernScatter<<<numBlocks, numThreads>>>(n, dev_odata, dev_idata, dev_bool, dev_indices); 
+            checkCUDAError("StreamCompaction failed");
+
+            // get the output size
+            int odata_size = 0; 
+            cudaMemcpy(&odata_size, dev_indices + arrSize - 1, 1 * sizeof(int), cudaMemcpyDeviceToHost); 
+            checkCUDAError("cudaMemcpy odata_size failed"); 
+
+            // copy output into host memory
+            cudaMemcpy(odata, dev_odata, odata_size * sizeof(int), cudaMemcpyDeviceToHost); 
+            checkCUDAError("cudaMemcpy odata failed");
+
             timer().endGpuTimer();
-            return -1;
+
+            cudaFree(dev_bool); 
+            cudaFree(dev_idata); 
+            cudaFree(dev_odata); 
+            cudaFree(dev_indices); 
+            return odata_size;
         }
     }
 }
