@@ -42,7 +42,6 @@ namespace StreamCompaction {
 		 * Performs prefix-sum (aka scan) on idata, storing the result into odata.
 		 */
 		void scan(int n, int* odata, const int* idata) {
-			timer().startGpuTimer();
 
 			int* dev_indices;
 			//cudaMalloc((void**)&dev_indices, n * sizeof(int));
@@ -50,6 +49,8 @@ namespace StreamCompaction {
 			else cudaMalloc((void**)&dev_indices, 2 * n * sizeof(int));
 			cudaMemcpy(dev_indices, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 			thrust::device_ptr<int> thrust_indices(dev_indices);
+
+			timer().startGpuTimer();
 
 			//upsweep
 			dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
@@ -65,16 +66,17 @@ namespace StreamCompaction {
 
 			for (int d = ilog2ceil(n) - 1; d >= 0; d--)
 			{
-				int kSteps = n >> (d + 1);
-				// non-power-of-2
-				if (kSteps << (d + 1) != n)  kSteps = n >> d;
+				int kSteps = 0;
+				if (n == 1 << ilog2ceil(n)) kSteps = n >> (d + 1);
+				else kSteps = n >> d;
+
 				dim3 blocksPerGrid((kSteps + blockSize - 1) / blockSize);
 				kernDownSweep << < blocksPerGrid, blockSize >> > (kSteps, d, dev_indices);
 			}
 
+			timer().endGpuTimer();
 			cudaMemcpy(odata, dev_indices, n * sizeof(int), cudaMemcpyDeviceToHost);
 			cudaFree(dev_indices);
-			timer().endGpuTimer();
 		}
 
 		/**
@@ -87,7 +89,6 @@ namespace StreamCompaction {
 		 * @returns      The number of elements remaining after compaction.
 		 */
 		int compact(int n, int* odata, const int* idata) {
-			timer().startGpuTimer();
 
 			int* dev_idata;
 			int* dev_label;
@@ -95,17 +96,21 @@ namespace StreamCompaction {
 			cudaMalloc((void**)&dev_label, n * sizeof(int));
 			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 			cudaMemcpy(dev_label, dev_idata, n * sizeof(int), cudaMemcpyDeviceToDevice);
+			thrust::device_ptr<int> thrust_label(dev_label);
+
+			int* dev_indices;
+			if (n == 1 << ilog2ceil(n)) cudaMalloc((void**)&dev_indices, n * sizeof(int));
+			else cudaMalloc((void**)&dev_indices, 2 * n * sizeof(int));
+			thrust::device_ptr<int> thrust_indices(dev_indices);
+
+			timer().startGpuTimer();
 
 			//get labels
 			dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
 			Common::kernMapToBoolean << <blocksPerGrid, blockSize >> > (n, dev_label, dev_idata);
 
 			//scan begin
-			int* dev_indices;
-			if (n == 1 << ilog2ceil(n)) cudaMalloc((void**)&dev_indices, n * sizeof(int));
-			else cudaMalloc((void**)&dev_indices, 2 * n * sizeof(int));
 			cudaMemcpy(dev_indices, dev_label, n * sizeof(int), cudaMemcpyDeviceToDevice);
-			thrust::device_ptr<int> thrust_indices(dev_indices);
 
 			//upsweep
 			for (int d = 0; d < ilog2ceil(n); d++)
@@ -120,15 +125,15 @@ namespace StreamCompaction {
 
 			for (int d = ilog2ceil(n) - 1; d >= 0; d--)
 			{
-				int kSteps = n >> (d + 1);
-				// non-power-of-2
-				if (kSteps << (d + 1) != n)  kSteps = n >> d;
+				int kSteps = 0;
+				if (n == 1 << ilog2ceil(n)) kSteps = n >> (d + 1);
+				else kSteps = n >> d;
+
 				dim3 blocksPerGrid((kSteps + blockSize - 1) / blockSize);
 				kernDownSweep << < blocksPerGrid, blockSize >> > (kSteps, d, dev_indices);
 			}
 
 			//calculate total numbers
-			thrust::device_ptr<int> thrust_label(dev_label);
 			int count = thrust_indices[n - 1] + thrust_label[n - 1];
 
 			//scatter to labeled data
@@ -137,14 +142,14 @@ namespace StreamCompaction {
 			Common::kernScatter << <blocksPerGrid, blockSize >> > (n, dev_odata,
 				dev_idata, dev_label, dev_indices);
 
+			timer().endGpuTimer();
+
 			//copy to cpu output
 			cudaMemcpy(odata, dev_odata, count * sizeof(int), cudaMemcpyDeviceToHost);
-
 			cudaFree(dev_idata);
 			cudaFree(dev_odata);
 			cudaFree(dev_label);
 			cudaFree(dev_indices);
-			timer().endGpuTimer();
 			return count;
 		}
 	}
