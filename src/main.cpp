@@ -224,7 +224,7 @@ int main(int argc, char* argv[]) {
     printArray(SIZE, b, true);
 
     printDesc("radix sort memory optimized, power-of-two");
-    StreamCompaction::RadixSort::sort(SIZE, maxVal, c, a);
+    StreamCompaction::RadixSort::sort(SIZE, SORTMAXVAL, c, a);
     printElapsedTime(StreamCompaction::RadixSort::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     printArray(SIZE, c, true);
     printCmpResult(SIZE, b, c);
@@ -236,7 +236,7 @@ int main(int argc, char* argv[]) {
     printArray(NPOT, b, true);
 
     printDesc("radix sort memory optimized, non-power-of-two");
-    StreamCompaction::RadixSort::sort(NPOT, maxVal, c, a);
+    StreamCompaction::RadixSort::sort(NPOT, SORTMAXVAL, c, a);
     printElapsedTime(StreamCompaction::RadixSort::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);

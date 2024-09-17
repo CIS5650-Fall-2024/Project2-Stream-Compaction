@@ -9,7 +9,7 @@ CUDA Stream Compaction
 
 ## Welcome to my Stream Compaction Project!
 
-![flocking simulation](images/simulation/flocking.gif)
+![nsight systems report timeline](img/entire-report.jpg)
 
 This project investigates many different implementations of the scan and compact algorithms, along with optimizations. Additionally, it also implements [Radix sort](https://en.wikipedia.org/wiki/Radix_sort).
 
