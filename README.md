@@ -43,10 +43,33 @@ the input size is small, the CPU algorithm is the fastest algorithm, but it quic
 increases. The thrust implementation is the slowest among all GPU programs.
 
 #### Performance Bottlenecks
-Since our timer only records the section of the implementation that is doing computation, the performance bottleneck 
-will not count the memory transfer time. For the naive scan algorithm, the number of adds that need to be performed 
-slows down the process. The work-efficient algorithm then reduces the number of adds by using a balanced binary tree. 
-The improved efficient algorithm further reduces the number of threads that need to be used, which speeds up the process.
+Our timer for all the algorithms does not contain the memory allocation process and the process of copying the final 
+result array back to the host. Therefore, the execution time should mainly reflect the computation time as well as the 
+memory access time while doing the computation.
+
+The CPU implementation is fairly efficient and can hardly be further improved, since it is already a linear time 
+algorithm. From the runtime result we can also observe the fact that it runs very fast when the input size is small, 
+since comparing to its GPU counterparts it doesn't cause a lot of overheads. 
+
+The naive algorithm generally performs worse than the work-efficient algorithm, since it requires more adds operations 
+even comparing to the CPU implementation and have many idle threads that are not actively working. Since our 
+implementation uses global memory, the memory access could also potentially slow down the algorithm. It is expected 
+that a shared-memory model may further improve the algorithm's performance.
+
+The work-efficient algorithm improves based on the naive algorithm by doing computations like a balanced binary tree. 
+The number of adds for both the up-sweep and the down-sweep in this case becomes $O(n)$, thus making this algorithm 
+more efficient. The work-efficient algorithm does require more memory access, since there are more steps involved and 
+all the data are stored as global memory, so changing it to a shared-memory model should greatly improve its 
+performance. In part 5, we implemented an optimization that reduces the number of threads generated and replaced the 
+modular operation with a value comparison, which should make the algorithm more efficient.
+
+For both the naive and the efficient algorithm, we can see that having input size as a power-of-two number yields a 
+better result compared to a non-power-of-two input size. This is because the non-power-of-two size requires the 
+algorithm to append $0's$ to the back of the array to manually make it a power-of-two size, thus creating computations 
+that are not relevant. 
+
+The thrust algorithm takes much longer time that expected and becomes the slowest among all the algorithms. It is 
+possible that this is caused by a large size memory copy within the algorithm that causes this unexpected situation.
 
 ### Output
 This output is generated with $2^{20}$ input size and $256$ block size.
