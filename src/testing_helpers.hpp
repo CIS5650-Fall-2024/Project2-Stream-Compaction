@@ -29,9 +29,7 @@ void printCmpResult(int n, T *a, T *b) {
 
 template<typename T>
 void printCmpLenResult(int n, int expN, T *a, T *b) {
-    if (n != expN) {
-        printf("    expected %d elements, got %d\n", expN, n);
-    }
+    printf("    expected %d elements, got %d\n", expN, n);
     printf("    %s \n",
             (n == -1 || n != expN) ? "FAIL COUNT" :
             cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");
