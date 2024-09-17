@@ -17,15 +17,15 @@ namespace StreamCompaction {
          * For performance analysis, this is supposed to be a simple for loop.
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
          */
-        void scan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
+        void scan(int n, int *odata, const int *idata, bool timed) {
+            if (timed) timer().startCpuTimer();
             // TODO
             int partialSum = 0;
             for (int i = 0; i < n; ++i) {
                 odata[i] = partialSum;
                 partialSum += idata[i];
             }
-            timer().endCpuTimer();
+            if (timed) timer().endCpuTimer();
         }
 
         /**
@@ -64,12 +64,7 @@ namespace StreamCompaction {
                 buffer[i] = (idata[i] != 0);
             }
 
-            // Scan (calling timed function leads to error)
-            int partialSum = 0;
-            for (int i = 0; i < n; ++i) {
-                odata[i] = partialSum;
-                partialSum += buffer[i];
-            }
+            scan(n, odata, idata, 0);
 
             int numElements = scatter(n, odata, buffer, idata);
 
