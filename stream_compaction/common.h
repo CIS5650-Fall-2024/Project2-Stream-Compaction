@@ -12,7 +12,7 @@
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
-#define BLOCKSIZE 128
+#define BLOCKSIZE 1024
 #define blocksPerGrid(N) (N + BLOCKSIZE - 1) / BLOCKSIZE
 #define index1D (blockIdx.x * blockDim.x) + threadIdx.x
 

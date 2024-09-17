@@ -75,7 +75,6 @@ namespace StreamCompaction {
             // copy from device to host. shifting one to the right to do an exclusive scan
             cudaMemcpy(odata, dev_A, n * sizeof(int), cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy dev_A to odata failed!");
-            cudaDeviceSynchronize(); 
 
             // free device memory
             cudaFree(dev_A);
