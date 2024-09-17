@@ -17,6 +17,7 @@
 
 const int SIZE = 8 * 1024 * 1024; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
+const int SORTMAXVAL = SIZE / 2;
 int *a = new int[SIZE];
 int *b = new int[SIZE];
 int *c = new int[SIZE];
@@ -212,8 +213,7 @@ int main(int argc, char* argv[]) {
 
     // Radix sort tests
 
-    int maxVal = SIZE / 2;
-    genArray(SIZE - 1, a, maxVal);  // Leave a 0 at the end to test that edge case
+    genArray(SIZE - 1, a, SORTMAXVAL);  // Leave a 0 at the end to test that edge case
     a[SIZE - 1] = 0;
     printArray(SIZE, a, true);
 
