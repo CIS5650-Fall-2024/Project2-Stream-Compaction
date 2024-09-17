@@ -41,7 +41,7 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            int *dev_odata, *dev_tmpdata, *dev_idata;
+            int *dev_odata, *dev_idata;
 
             cudaMalloc((void**)&dev_odata, n * sizeof(int));
             checkCUDAError("cudaMalloc Naive::scan::dev_odata failed!");
@@ -51,7 +51,6 @@ namespace StreamCompaction {
 
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
-            const int blockSize = 512;
             dim3 gridDim((n + blockSize - 1) / blockSize);
 
             int depth_max = ilog2ceil(n);
@@ -74,7 +73,7 @@ namespace StreamCompaction {
 
             cudaFree(dev_odata);
             cudaFree(dev_idata);
-            checkCUDAError("cudaFree Naive::scan failed");
+            checkCUDAError("cudaFree Naive::scan failed!");
         }
     }
 }
