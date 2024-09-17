@@ -79,7 +79,7 @@ namespace StreamCompaction {
         }
 
 
-        /**
+        /**f
         *
         *
         * Optimized version of scan

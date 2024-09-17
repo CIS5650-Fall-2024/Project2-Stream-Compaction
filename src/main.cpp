@@ -20,7 +20,9 @@
 #define FourbitCase 1;
 #define EightbitCase 0;
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+#define blockSize 256
+
+const int SIZE = 1 << 25; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int* a = new int[SIZE];
 int* b = new int[SIZE];
@@ -170,7 +172,7 @@ int main(int argc, char* argv[]) {
     count = StreamCompaction::CPU::compactWithoutScan(SIZE, b, a);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     expectedCount = count;
-    //printArray(count, b, true);
+    printArray(count, b, true);
     printCmpLenResult(count, expectedCount, b, b);
 
     zeroArray(SIZE, c);
@@ -178,7 +180,7 @@ int main(int argc, char* argv[]) {
     count = StreamCompaction::CPU::compactWithoutScan(NPOT, c, a);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     expectedNPOT = count;
-    //printArray(count, c, true);
+    printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
 
     zeroArray(SIZE, c);
