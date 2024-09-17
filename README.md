@@ -89,3 +89,80 @@ The block size for each implementation was optimized to array size `1 << 20` (or
   README.
   * If you add your own tests (e.g. for radix sort or to test additional corner
     cases), be sure to mention it explicitly.
+
+The following snippet showcases a sample output generated with array size 2^20.
+Additional test case for radix sort has been added at the end of the output stream, where we compare our radix sort output and performance with those of the STL's `sort` function.
+
+```
+****************
+** SCAN TESTS **
+****************
+    [  14   3  34  11  30  10  26  38  33  19  35  16  23 ...   0  49  36   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 0.6696ms    (std::chrono Measured)
+    [   0  14  17  51  62  92 102 128 166 199 218 253 269 ... 25655020 25655020 25655069 25655105 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 0.6335ms    (std::chrono Measured)
+    [   0  14  17  51  62  92 102 128 166 199 218 253 269 ... 25654950 25654991 25655013 25655020 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 0.832512ms    (CUDA Measured)
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 0.384ms    (CUDA Measured)
+    passed
+==== work-efficient scan, power-of-two ====
+   elapsed time: 0.26624ms    (CUDA Measured)
+    passed
+==== work-efficient scan, non-power-of-two ====
+   elapsed time: 0.195584ms    (CUDA Measured)
+    passed
+==== thrust scan, power-of-two ====
+   elapsed time: 0.53008ms    (CUDA Measured)
+    passed
+==== thrust scan, non-power-of-two ====
+   elapsed time: 0.133952ms    (CUDA Measured)
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   0   3   2   1   0   0   2   2   3   3   1   2   1 ...   0   1   0   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 1.5552ms    (std::chrono Measured)
+    [   3   2   1   2   2   3   3   1   2   1   2   2   1 ...   1   3   1   1 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 1.8418ms    (std::chrono Measured)
+    [   3   2   1   2   2   3   3   1   2   1   2   2   1 ...   1   1   3   1 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 3.7806ms    (std::chrono Measured)
+    [   3   2   1   2   2   3   3   1   2   1   2   2   1 ...   1   3   1   1 ]
+    passed
+==== work-efficient compact, power-of-two ====
+   elapsed time: 2.21901ms    (CUDA Measured)
+    passed
+==== work-efficient compact, non-power-of-two ====
+   elapsed time: 0.543744ms    (CUDA Measured)
+    passed
+
+*****************************
+** RADIX SORT TESTS **
+*****************************
+    [ 24764 29203 21834 27361 7580 22360 28426 26938 18183 22519 14285 27466 30473 ... 18100 10349 16436 11257 ]
+==== cpu sort, power-of-two ====
+   elapsed time: 44.8732ms    (std::chrono Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 32767 32767 32767 32767 ]
+==== cpu sort, non-power-of-two ====
+   elapsed time: 45.1742ms    (std::chrono Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 32767 32767 32767 32767 ]
+==== radix sort, power-of-two ====
+   elapsed time: 10.3455ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 32767 32767 32767 32767 ]
+    passed
+==== radix sort, non-power-of-two ====
+   elapsed time: 10.6291ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 32767   0   0   0 ]
+    passed
+```
