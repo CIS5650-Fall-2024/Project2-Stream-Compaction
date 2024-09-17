@@ -23,8 +23,6 @@ thrust_scan_time_npot=0
 for i in $(seq 1 $NUM_TESTS)
 do
     echo -e "Test $i\n"
-    echo -e "CPU Test:\n"
-
     result=$(./bin/cis5650_stream_compaction_test cpu)
 
     elapsed_time=$(echo "$result" | grep -A 1 "cpu scan, power-of-two" | grep -oP 'elapsed time: \K[0-9]+\.[0-9]+')
@@ -42,7 +40,6 @@ do
     elapsed_time=$(echo "$result" | grep -A 1 "cpu compact with scan" | grep -oP 'elapsed time: \K[0-9]+\.[0-9]+')
     cpu_compact_with_scan_time=$(echo "$cpu_compact_with_scan_time + $elapsed_time" | bc)
 
-    echo -e "Naive Test:\n"
 
     result=$(./bin/cis5650_stream_compaction_test naive)
 
@@ -52,7 +49,6 @@ do
     elapsed_time=$(echo "$result" | grep -A 1 "naive scan, non-power-of-two" | grep -oP 'elapsed time: \K[0-9]+\.[0-9]+')
     naive_scan_time_npot=$(echo "$naive_scan_time_npot + $elapsed_time" | bc)
 
-    echo -e "Efficient Test:\n"
 
     result=$(./bin/cis5650_stream_compaction_test efficient)
 
@@ -68,7 +64,6 @@ do
     elapsed_time=$(echo "$result" | grep -A 1 "efficient compact, non-power-of-two" | grep -oP 'elapsed time: \K[0-9]+\.[0-9]+')
     efficient_compact_time_npot=$(echo "$efficient_compact_time_npot + $elapsed_time" | bc)
 
-    echo -e "Thrust Test:\n"
 
     result=$(./bin/cis5650_stream_compaction_test thrust)
 

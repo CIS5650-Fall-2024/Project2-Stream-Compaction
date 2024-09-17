@@ -15,15 +15,15 @@ namespace StreamCompaction {
 
         const int MAX_BLOCK_SIZE = 1024; // keep this as a power of 2
 
-        void scan(int n_padded, int* dev_data) {
+        #define LOG_NUM_BANKS 5
+        #define CONFLICT_FREE_OFFSET(threadIdx) ((threadIdx) >> LOG_NUM_BANKS)
+
+        void scan(int n_padded, int* dev_data, int* stored_sums, int offset) {
             int blockSize = std::min((n_padded / 2), MAX_BLOCK_SIZE);
             dim3 blocksPerGrid = ((n_padded / 2) + blockSize - 1) / blockSize;
 
-            int* stored_sums; // temp array used to store last entry per block during upsweep. See kernZeroEntries and kernIncrement for use info.
-            // Allocate with pinned memory
-            cudaHostAlloc((void**)&stored_sums, blocksPerGrid.x * sizeof(int), cudaHostAllocDefault);
-
-            kernScan<<<blocksPerGrid, blockSize, 2 * sizeof(int) * blockSize>>>(n_padded, ilog2ceil(2 * blockSize), dev_data, stored_sums);
+            int sharedMemorySize = (2 * blockSize + CONFLICT_FREE_OFFSET(2 * blockSize - 1)) * sizeof(int);
+            kernScan<<<blocksPerGrid, blockSize, sharedMemorySize>>>(n_padded, ilog2ceil(2 * blockSize), dev_data, stored_sums + offset);
             cudaDeviceSynchronize();
 
             // If the array didn't fit within a single block, we need to collect the individual block scan results, 
@@ -33,16 +33,15 @@ namespace StreamCompaction {
             if (n_padded > 2 * blockSize) {
                 // (Recursively) scan the summed blocks array
                 // Can use sum_data as both the input and output pointers for the scan. No issue writing over it.
-                scan(blocksPerGrid.x, stored_sums);
+                scan(blocksPerGrid.x, stored_sums + offset, stored_sums + offset, blocksPerGrid.x);
 
                 // Finally, add scanned sum values back to the original dev_data
                 // In original scan, each thread handled 2 elements. In this step, each handles one, so we need 2x the blocks.
                 dim3 kernBlocksPerGrid = 2 * blocksPerGrid.x;
-                kernIncrement<<<kernBlocksPerGrid, blockSize>>>(n_padded, dev_data, stored_sums);
+                kernIncrement<<<kernBlocksPerGrid, blockSize>>>(n_padded, dev_data, stored_sums + offset);
                 cudaDeviceSynchronize();
             }
 
-            cudaFreeHost(stored_sums);
         }
 
         /**
@@ -60,12 +59,27 @@ namespace StreamCompaction {
                 cudaMemset(dev_data + n, 0, (n_padded - n) * sizeof(int));
             }
 
+            int blockSize = std::min((n_padded / 2), MAX_BLOCK_SIZE);
+            dim3 blocksPerGrid = ((n_padded / 2) + blockSize - 1) / blockSize;
+
+            // Calculate the total amount of memory needed for stored_sums
+            int stored_sums_size = 0;
+            for (int i = ilog2ceil(n_padded) - ilog2ceil(MAX_BLOCK_SIZE); i >= 1; i -= ilog2ceil(MAX_BLOCK_SIZE)) {
+                stored_sums_size += pow(2, i);
+            }
+
+            // temp array used to store last entry per block during upsweep. See kernScan and kernIncrement for use info.
+            int* stored_sums; 
+            cudaMalloc((void**)&stored_sums, stored_sums_size * sizeof(int));
+
+
             timer().startGpuTimer();
-            scan(n_padded, dev_data);
+            scan(n_padded, dev_data, stored_sums, 0);
             timer().endGpuTimer();
 
             cudaMemcpy(odata, dev_data, n_padded * sizeof(int), cudaMemcpyDeviceToHost);
             cudaFree(dev_data);
+            cudaFree(stored_sums);
         }
 
         /**
@@ -78,10 +92,10 @@ namespace StreamCompaction {
 
             // Put the right and left children into shared memory.
             // Index from dev_data based on *global* position, but put into shared memory as local position (w.r.t. this block)
-            s_dev_data[2 * threadIdx.x + 1] = 
+            s_dev_data[2 * threadIdx.x + 1 + CONFLICT_FREE_OFFSET(2 * threadIdx.x + 1)] = 
                 dev_data[2 * threadIdx.x + 1 + (2 * blockDim.x * blockIdx.x)];
 
-            s_dev_data[2 * threadIdx.x] =
+            s_dev_data[2 * threadIdx.x + CONFLICT_FREE_OFFSET(2 * threadIdx.x)] =
                 dev_data[2 * threadIdx.x + (2 * blockDim.x * blockIdx.x)];
 
             for (int depth = 0; depth < numLevels; ++depth) {
@@ -89,8 +103,8 @@ namespace StreamCompaction {
                 // Make sure the local right-child index this thread will access is in bounds of this block.
                 if ((threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1 >= 2 * blockDim.x) continue;
                 
-                s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1] +=
-                    s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1];
+                s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1 + CONFLICT_FREE_OFFSET((threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1)] +=
+                    s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1 + CONFLICT_FREE_OFFSET((threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1)];
             }
             __syncthreads();
 
@@ -98,8 +112,8 @@ namespace StreamCompaction {
             // input data is too large to be scanned in a single block.
             // Then zero out the last entry for the downsweep.
             if (threadIdx.x == 0) {
-                stored_sums[blockIdx.x] = s_dev_data[2 * blockDim.x - 1];
-                s_dev_data[2 * blockDim.x - 1] = 0;
+                stored_sums[blockIdx.x] = s_dev_data[2 * blockDim.x + CONFLICT_FREE_OFFSET(2 * blockDim.x - 1) - 1];
+                s_dev_data[2 * blockDim.x + CONFLICT_FREE_OFFSET(2 * blockDim.x - 1) - 1] = 0;
             }
             
             for (int depth = numLevels - 1; depth >= 1; --depth) {
@@ -107,20 +121,20 @@ namespace StreamCompaction {
                 // Make sure the local right-child index this thread will access is in bounds of this block.
                 if ((threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1 >= 2 * blockDim.x) continue;
 
-                int leftVal = s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1];
-                s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1] = 
-                    s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1];
+                int leftVal = s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1 + CONFLICT_FREE_OFFSET((threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1)];
+                s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1 + CONFLICT_FREE_OFFSET((threadIdx.x * (1 << (depth + 1))) + (1 << depth) - 1)] = 
+                    s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1 + CONFLICT_FREE_OFFSET((threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1)];
                 
-                s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1] += leftVal;
+                s_dev_data[(threadIdx.x * (1 << (depth + 1))) + (1 << (depth + 1)) - 1 + CONFLICT_FREE_OFFSET(threadIdx.x * (1 << (depth + 1)) + (1 << (depth + 1)) - 1)] += leftVal;
             }
 
             __syncthreads();
             // On the last iteration, depth = 0, we write to global memory.
             dev_data[2 * threadIdx.x + (2 * blockDim.x * blockIdx.x)] = 
-                s_dev_data[2 * threadIdx.x + 1];
+                s_dev_data[2 * threadIdx.x + 1 + CONFLICT_FREE_OFFSET(2 * threadIdx.x + 1)];
             
             dev_data[2 * threadIdx.x + 1 + (2 * blockDim.x * blockIdx.x)] = 
-                (s_dev_data[2 * threadIdx.x] + s_dev_data[2 * threadIdx.x + 1]);
+                (s_dev_data[2 * threadIdx.x + CONFLICT_FREE_OFFSET(2 * threadIdx.x)] + s_dev_data[2 * threadIdx.x + 1 + CONFLICT_FREE_OFFSET(2 * threadIdx.x + 1)]);
         }
 
         /**
@@ -160,6 +174,16 @@ namespace StreamCompaction {
                 // trueFalseArray with a different value here.
                 cudaMemset(trueFalseArray + n, 0, (n_padded - n) * sizeof(int));
             }
+            
+            // Calculate the total amount of memory needed for stored_sums
+            int stored_sums_size = 0;
+            for (int i = ilog2ceil(n_padded) - ilog2ceil(MAX_BLOCK_SIZE); i >= 1; i -= ilog2ceil(MAX_BLOCK_SIZE)) {
+                stored_sums_size += pow(2, i);
+            }
+
+            // temp array used to store last entry per block during upsweep. See kernScan and kernIncrement for use info.
+            int* stored_sums; 
+            cudaMalloc((void**)&stored_sums, stored_sums_size * sizeof(int));
 
             timer().startGpuTimer();
             
@@ -168,7 +192,7 @@ namespace StreamCompaction {
             StreamCompaction::Common::kernMapToBoolean<<<blocksPerGrid, threadsPerBlock>>>(n, trueFalseArray, dev_idata);
             cudaDeviceSynchronize();
 
-            scan(n_padded, trueFalseArray); // scan happens in-place, so trueFalseArray is now scanned
+            scan(n_padded, trueFalseArray, stored_sums, 0); // scan happens in-place, so trueFalseArray is now scanned
 
             StreamCompaction::Common::kernScatter<<<blocksPerGrid, threadsPerBlock>>>(n, dev_odata, dev_idata, trueFalseArray);
             cudaDeviceSynchronize();
