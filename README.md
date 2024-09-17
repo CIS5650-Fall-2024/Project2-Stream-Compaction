@@ -33,3 +33,19 @@ The graph is attached below. It shows that, on my underperforming MX450 GPU, the
 ![](img/Image0.png)
 
 ##### **Task:** Detailed Analysis Using Nsight System
+
+In the native GPU-based implementation, as shown in the Nsight Systems timeline below, there is high SM Warp Occupancy and DRAM Bandwidth usage around 33% for both read and write. This suggests that the implementation is compute-bound, likely due to conditional branching in the kernel or the MX450's limited computational performance.
+
+![](img/Image1.png)
+
+For the efficient scan implementation, Nsight Systems shows a relatively high number of Unallocated Warps in Active SMs. This is likely because, when the layer level \(d\) is high, the total number of threads used is less than the fixed block size, leading to idle threads. Additionally, frequent and scattered global memory reads could be an issue, as Nsight Systems indicates slightly higher DRAM Bandwidth for reading compared to writing.
+
+![](img/Image2.png)
+
+Finally, for Thrust's scan implementation, it appears that Thrust first uses a kernel to initialize the data, as there is no DRAM Read Bandwidth observed. The scan phase shows very low Unallocated Warps in Active SMs, suggesting that the algorithm is highly optimized. However, the SM Warp Occupancy is only around 50%, indicating room for improvement. The DRAM Read and Write Bandwidths switch between the phases, starting at 25% and 15%, and then shifting to 15% and 25%. This may be due to the different use of up-sweep and down-sweep operations or could be attributed to the MX450's interesting performance characteristics.
+
+![](img/Image3.png)
+
+Using Nsight Compute, we can distinguish between the different stages of the process by noting the distinct kernel names that appear.
+
+![](img/Image4.png)
