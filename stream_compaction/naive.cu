@@ -3,6 +3,8 @@
 #include "common.h"
 #include "naive.h"
 
+#define blockSize 256
+
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;
@@ -40,7 +42,6 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             int* dev_idata;
             int* dev_odata;
-            int blockSize = 128;
             int fullBlocksPerGrid = (n + blockSize - 1) / blockSize;
 
             cudaMalloc((void**)&dev_idata, n * sizeof(int));

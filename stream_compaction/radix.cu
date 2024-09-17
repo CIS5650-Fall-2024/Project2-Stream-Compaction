@@ -6,6 +6,8 @@
 #include "common.h"
 #include "efficient.h"
 
+#define blockSize 128
+
 namespace StreamCompaction {
     namespace Radix {
         using StreamCompaction::Common::PerformanceTimer;
@@ -71,7 +73,7 @@ namespace StreamCompaction {
         /**
          * Performs radix sort on idata, storing the result into odata.
          * @param n the number of elements in idata
-         * @param odata output data
+         * @param odata output.txt data
          * @param idata input data
          * @param maxBits the maximum number of bits of a given number in the array
          */
@@ -82,7 +84,6 @@ namespace StreamCompaction {
             int* dev_f;
             int* dev_t;
             int* dev_d;
-            int blockSize = 64;
             int fullBlocksPerGrid = (n + blockSize - 1) / blockSize;
 
             cudaMalloc((void**)&dev_idata, n * sizeof(int));
@@ -103,7 +104,7 @@ namespace StreamCompaction {
 
             timer().startGpuTimer();
             for (int i = 0; i < maxBits; i++) {
-                // be array (b can be acquired by flipping back)
+                // b & e array (b can be acquired by flipping back)
                 kernMapToCurrBits<<<fullBlocksPerGrid, blockSize>>>(n, dev_be, dev_idata, i);
                 // exclusive scan f array
                 StreamCompaction::Efficient::scan(n, dev_f, dev_be);

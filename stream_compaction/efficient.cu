@@ -3,6 +3,8 @@
 #include "common.h"
 #include "efficient.h"
 
+#define blockSize 256
+
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
@@ -44,7 +46,6 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             int enlargedSize = 1 << ilog2ceil(n); // enlarge the size to the nearest power of 2
             int* dev_idata;
-            int blockSize = 64;
 
             cudaMalloc((void**)&dev_idata, enlargedSize * sizeof(int));
             checkCUDAError("cudaMalloc dev_idata failed!");
@@ -88,7 +89,6 @@ namespace StreamCompaction {
             int* dev_odata;
             int* dev_temp;
             int* dev_scan;
-            int blockSize = 128;
             int fullBlocksPerGrid = (n + blockSize - 1) / blockSize;
 
             int enlargedSize = 1 << ilog2ceil(n); // enlarge the size to the nearest power of 2
