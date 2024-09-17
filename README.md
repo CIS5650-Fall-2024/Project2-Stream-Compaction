@@ -25,3 +25,9 @@ This project implements scan and stream compaction algorithms for both CPU and G
 ##### Roughly optimize the block sizes of each of your implementations for minimal run time on your GPU.
 
 A block size of 256 in all GPU-based implementations appears to slightly improve performance, though it remains slower than the CPU-based implementation for the reasons mentioned above.
+
+##### Compare all of these GPU Scan implementations (Naive, Work-Efficient, and Thrust) to the serial CPU version of Scan.
+
+The graph is attached below. It shows that, on my underperforming MX450 GPU, the CPU-based implementation is consistently faster than the GPU-based implementation, despite excluding memory operations from the GPU timers and optimizing thread usage for efficient scanning.
+
+![](img/Image0.png)
