@@ -55,4 +55,56 @@ Using Nsight Compute, we can distinguish between the different stages of the pro
 ##### **Task:**  Paste the output of the test program
 
 ```
+****************
+** SCAN TESTS **
+****************
+    [  25  28  32  23  32  46  20  29  16  42  45  28  18 ...  14   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 0.5771ms    (std::chrono Measured)
+    [   0  25  53  85 108 140 186 206 235 251 293 338 366 ... 25678579 25678593 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 0.7419ms    (std::chrono Measured)
+    [   0  25  53  85 108 140 186 206 235 251 293 338 366 ... 25678504 25678524 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 3.07014ms    (CUDA Measured)
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 2.77504ms    (CUDA Measured)
+    passed
+==== work-efficient scan, power-of-two ====
+   elapsed time: 2.29498ms    (CUDA Measured)
+    passed
+==== work-efficient scan, non-power-of-two ====
+   elapsed time: 2.22688ms    (CUDA Measured)
+    passed
+==== thrust scan, power-of-two ====
+   elapsed time: 0.59936ms    (CUDA Measured)
+    passed
+==== thrust scan, non-power-of-two ====
+   elapsed time: 0.875584ms    (CUDA Measured)
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   3   0   2   1   0   2   0   3   2   0   1   2   2 ...   0   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 1.9409ms    (std::chrono Measured)
+    [   3   2   1   2   3   2   1   2   2   3   2   2   3 ...   1   2 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 2.22ms    (std::chrono Measured)
+    [   3   2   1   2   3   2   1   2   2   3   2   2   3 ...   2   1 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 3.6667ms    (std::chrono Measured)
+    [   3   2   1   2   3   2   1   2   2   3   2   2   3 ...   1   2 ]
+    passed
+==== work-efficient compact, power-of-two ====
+   elapsed time: 2.7296ms    (CUDA Measured)
+    passed
+==== work-efficient compact, non-power-of-two ====
+   elapsed time: 2.64397ms    (CUDA Measured)
+    passed
 ```
