@@ -108,8 +108,8 @@ namespace StreamCompaction {
             odata[0] = 0;
 
             // free the buffers
-            cudaFree(buffers[0]);
-            cudaFree(buffers[1]);
+            cudaFree(reinterpret_cast<void*>(buffers[0]));
+            cudaFree(reinterpret_cast<void*>(buffers[1]));
 
             // avoid calling the original end timer function afterwards by returning
             return;
