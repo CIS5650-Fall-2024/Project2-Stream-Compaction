@@ -145,16 +145,21 @@ namespace StreamCompaction {
 
             cudaMemcpy(idataDevice, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
+            // No need to synchronize here: the CPU blocks until the transfer is complete.
+
             // Per-block exclusive scan of the original input. iblockSumDevice will store the
             // final prefix sums computed by each block.
             exclusiveScanKernel<<<blockCount, blockSize, blockSharedMemSize>>>(n, odataDevice, idataDevice, iblockSumDevice);
+            cudaDeviceSynchronize();
 
             // Exclusive scan of the final prefix sums computed by each block. oblockSumDevice
             // will store the increments to be added to each block's scan results.
             exclusiveScanKernel<<<blockSumBlockCount, blockSumBlockSize, blockSumSharedMemSize>>>(blockCount.x, oblockSumDevice, iblockSumDevice);
+            cudaDeviceSynchronize();
 
             // Add the block increments to the original scan results to obtain final results.
             addBlockIncrementsKernel<<<blockCount, blockSize>>>(n, odataDevice, oblockSumDevice);
+            cudaDeviceSynchronize();
 
             cudaMemcpy(odata, odataDevice, n * sizeof(int), cudaMemcpyDeviceToHost);
 
