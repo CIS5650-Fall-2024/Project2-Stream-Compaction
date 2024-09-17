@@ -194,7 +194,7 @@ In my original implementation, the kernel invocations always used a fixed number
 __global__ void upSweep(int n, int D, int* x) {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
     if (idx >= n) return;
-    if (idx % D != 0) return;
+    if (idx & (D - 1) != 0) return;
     x[idx + D - 1] += x[idx + D >> 1 - 1];
 }
 ```
