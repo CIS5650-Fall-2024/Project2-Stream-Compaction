@@ -74,65 +74,74 @@ This output is generated with $2^{20}$ input size and $256$ block size.
 ****************
 ** SCAN TESTS **
 ****************
-    [  21  48  31   3  42   0  12  14  10  46  47  33  22 ...  18   0 ]
+    [  28  28  11  44  31  11   4  25  23  43  12  12  28 ...  48   0 ]
 ==== cpu scan, power-of-two ====
-   elapsed time: 1.5173ms    (std::chrono Measured)
-    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25687063 25687081 ]
+   elapsed time: 1.5931ms    (std::chrono Measured)
+    [   0  28  56  67 111 142 153 157 182 205 248 260 272 ... 25666831 25666879 ]
     passed
 ==== cpu scan, non-power-of-two ====
-   elapsed time: 1.5309ms    (std::chrono Measured)
-    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25686948 25686975 ]
+   elapsed time: 1.4801ms    (std::chrono Measured)
+    [   0  28  56  67 111 142 153 157 182 205 248 260 272 ... 25666796 25666799 ]
     passed
 ==== naive scan, power-of-two ====
-   elapsed time: 71.0168ms    (CUDA Measured)
-    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25687063 25687081 ]
+   elapsed time: 1.85376ms    (CUDA Measured)
+    [   0  28  56  67 111 142 153 157 182 205 248 260 272 ... 25666831 25666879 ]
     passed
 ==== naive scan, non-power-of-two ====
-   elapsed time: 1.07379ms    (CUDA Measured)
-    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ...   0   0 ]
+   elapsed time: 0.916128ms    (CUDA Measured)
+    [   0  28  56  67 111 142 153 157 182 205 248 260 272 ... 25666796 25666799 ]
     passed
 ==== work-efficient scan, power-of-two ====
-   elapsed time: 12.4552ms    (CUDA Measured)
-    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25687063 25687081 ]
+   elapsed time: 1.6073ms    (CUDA Measured)
+    [   0  28  56  67 111 142 153 157 182 205 248 260 272 ... 25666831 25666879 ]
     passed
 ==== work-efficient scan, non-power-of-two ====
-   elapsed time: 0.667136ms    (CUDA Measured)
-    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25686948 25686975 ]
+   elapsed time: 1.02006ms    (CUDA Measured)
+    [   0  28  56  67 111 142 153 157 182 205 248 260 272 ... 25666796 25666799 ]
     passed
 ==== thrust scan, power-of-two ====
-   elapsed time: 0.945536ms    (CUDA Measured)
-    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25687063 25687081 ]
+   elapsed time: 0.83968ms    (CUDA Measured)
+    [   0  28  56  67 111 142 153 157 182 205 248 260 272 ... 25666831 25666879 ]
     passed
 ==== thrust scan, non-power-of-two ====
-   elapsed time: 0.505536ms    (CUDA Measured)
-    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25686948 25686975 ]
+   elapsed time: 0.6672ms    (CUDA Measured)
+    [   0  28  56  67 111 142 153 157 182 205 248 260 272 ... 25666796 25666799 ]
     passed
 
 *****************************
 ** STREAM COMPACTION TESTS **
 *****************************
+    [   0   2   1   2   3   2   3   2   0   3   2   2   1 ...   2   0 ]
 ==== cpu compact without scan, power-of-two ====
-   elapsed time: 2.2486ms    (std::chrono Measured)
+   elapsed time: 2.2588ms    (std::chrono Measured)
+    [   2   1   2   3   2   3   2   3   2   2   1   1   2 ...   1   2 ]
     passed
 ==== cpu compact without scan, non-power-of-two ====
-   elapsed time: 2.3153ms    (std::chrono Measured)
+   elapsed time: 2.1694ms    (std::chrono Measured)
+    [   2   1   2   3   2   3   2   3   2   2   1   1   2 ...   3   3 ]
     passed
 ==== cpu compact with scan ====
-   elapsed time: 5.0041ms    (std::chrono Measured)
+   elapsed time: 5.4433ms    (std::chrono Measured)
+    [   2   1   2   3   2   3   2   3   2   2   1   1   2 ...   1   2 ]
     passed
 ==== work-efficient compact, power-of-two ====
-   elapsed time: 13.1282ms    (CUDA Measured)
+   elapsed time: 1.83184ms    (CUDA Measured)
+    [   2   1   2   3   2   3   2   3   2   2   1   1   2 ...   1   2 ]
     passed
 ==== work-efficient compact, non-power-of-two ====
-   elapsed time: 1.02128ms    (CUDA Measured)
+   elapsed time: 1.1128ms    (CUDA Measured)
+    [   2   1   2   3   2   3   2   3   2   2   1   1   2 ...   3   3 ]
     passed
 
 **********************
 ** RADIX SORT TESTS **
 **********************
+    [  32  26 157 158 195 138 167 198 116  95 114 106 149 ...  30   0 ]
 ==== radix sort ====
-   elapsed time: 30.6645ms    (CUDA Measured)
+   elapsed time: 17.5402ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 199 199 ]
 ==== thrust sort ====
-   elapsed time: 1.46294ms    (CUDA Measured)
+   elapsed time: 1.57117ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 199 199 ]
     passed
 ```
