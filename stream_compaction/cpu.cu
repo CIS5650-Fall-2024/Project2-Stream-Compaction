@@ -55,11 +55,12 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
             // TODO
             // Temporary arrays
             int* mask = new int[n];
             int* indices = new int[n];
+
+            timer().startCpuTimer();
 
             for (int i = 0; i < n; ++i)
             {
@@ -82,15 +83,27 @@ namespace StreamCompaction {
                 }
             }
 
+            timer().endCpuTimer();
+
             // Retrieve the number of elements remaining
             int elementCount = indices[n - 1] + mask[n - 1];
 
             // Clean up
             delete[] mask;
             delete[] indices;
-            timer().endCpuTimer();
 
             return elementCount;
+        }
+
+        void sort(int n, int *odata, const int *idata)
+        {
+            memcpy(odata, idata, n * sizeof(int));
+
+            timer().startCpuTimer();
+
+            std::stable_sort(odata, odata + n);
+
+            timer().endCpuTimer();
         }
     }
 }

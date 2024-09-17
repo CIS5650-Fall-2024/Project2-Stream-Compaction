@@ -4,7 +4,7 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
-constexpr int blockSize = 128;
+constexpr int blockSize = 1024;  // Optimized for SIZE = 1 << 26
 
 namespace StreamCompaction {
     namespace Naive {

@@ -9,7 +9,7 @@
 
 #define getBit(num, k) ((num) & (1 << (k))) >> (k)
 
-constexpr int blockSize = 128;
+constexpr int blockSize = 256;
 
 namespace StreamCompaction
 {

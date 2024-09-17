@@ -7,14 +7,218 @@
  */
 
 #include <cstdio>
+#include <iomanip>
 #include <stream_compaction/cpu.h>
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
+#include <stream_compaction/radix.h>
 #include "testing_helpers.hpp"
-#include "stream_compaction/radix.h"
-#include "fstream"
 
+#define BENCHMARK 0
+#if BENCHMARK
+
+void benchmark_powerOfTwo(int repeat)
+{
+    std::cout << "**********************************\n";
+    std::cout << "***** power-of-2 (repeat=" << std::setw(2) << repeat << ") *****\n";
+    std::cout << "**********************************\n";
+    std::cout << std::setw(2) << " p\t";
+    std::cout << std::setw(12) << "CPU\t";
+    std::cout << std::setw(12) << "GPU Naive\t";
+    std::cout << std::setw(12) << "GPU Work-Eff\t";
+    std::cout << std::setw(12) << "GPU Thrust\n";
+    // Test on different sizes
+    for (int p = 8; p < 29; ++p)
+    {
+        const int SIZE = 1 << p;
+        int* a = new int[SIZE];
+        int* b = new int[SIZE];
+
+        float elapsedTimes[4] = {0.f, 0.f, 0.f, 0.f};
+
+        genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
+        a[SIZE - 1] = 0;
+
+        for (int i = 0; i < repeat; ++i)
+        {
+            zeroArray(SIZE, b);
+            StreamCompaction::CPU::scan(SIZE, b, a);
+            elapsedTimes[0] += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+            zeroArray(SIZE, b);
+            StreamCompaction::Naive::scan(SIZE, b, a);
+            elapsedTimes[1] += StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation();
+
+            zeroArray(SIZE, b);
+            StreamCompaction::Efficient::scan(SIZE, b, a);
+            elapsedTimes[2] += StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+
+            zeroArray(SIZE, b);
+            StreamCompaction::Thrust::scan(SIZE, b, a);
+            elapsedTimes[3] += StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation();
+        }
+
+        std::cout << std::setw(2) << p << "\t";
+        std::cout << std::setw(11) << elapsedTimes[0] / repeat << "\t";
+        std::cout << std::setw(11) << elapsedTimes[1] / repeat << "\t";
+        std::cout << std::setw(11) << elapsedTimes[2] / repeat << "\t";
+        std::cout << std::setw(11) << elapsedTimes[3] / repeat << "\n";
+
+        delete[] a;
+        delete[] b;
+    }
+}
+
+void benchmark_nonPowerOfTwo(int repeat)
+{
+    std::cout << "**************************\n";
+    std::cout << "***** non-power-of-2 *****\n";
+    std::cout << "**************************\n";
+    std::cout << std::setw(2) << " p\t";
+    std::cout << std::setw(12) << "CPU\t";
+    std::cout << std::setw(12) << "GPU Naive\t";
+    std::cout << std::setw(12) << "GPU Work-Eff\t";
+    std::cout << std::setw(12) << "GPU Thrust\n";
+    // Test on different sizes
+    for (int p = 8; p < 29; ++p)
+    {
+        const int SIZE = 1 << p;
+        const int NPOT = SIZE - 3;
+        int* a = new int[NPOT];
+        int* b = new int[NPOT];
+
+        float elapsedTimes[4] = { 0.f, 0.f, 0.f, 0.f };
+
+        genArray(NPOT - 1, a, 50);  // Leave a 0 at the end to test that edge case
+        a[NPOT - 1] = 0;
+
+        for (int i = 0; i < repeat; ++i)
+        {
+            zeroArray(NPOT, b);
+            StreamCompaction::CPU::scan(NPOT, b, a);
+            elapsedTimes[0] += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+            zeroArray(NPOT, b);
+            StreamCompaction::Naive::scan(NPOT, b, a);
+            elapsedTimes[1] += StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation();
+
+            zeroArray(NPOT, b);
+            StreamCompaction::Efficient::scan(NPOT, b, a);
+            elapsedTimes[2] += StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+
+            zeroArray(NPOT, b);
+            StreamCompaction::Thrust::scan(NPOT, b, a);
+            elapsedTimes[3] += StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation();
+        }
+
+        std::cout << std::setw(2) << p << "\t";
+        std::cout << std::setw(11) << elapsedTimes[0] / repeat << "\t";
+        std::cout << std::setw(11) << elapsedTimes[1] / repeat << "\t";
+        std::cout << std::setw(11) << elapsedTimes[2] / repeat << "\t";
+        std::cout << std::setw(11) << elapsedTimes[3] / repeat << "\n";
+
+        delete[] a;
+        delete[] b;
+    }
+}
+
+void benchmark_stream_compaction(int repeat)
+{
+    std::cout << "**********************************\n";
+    std::cout << "***** power-of-2 (repeat=" << std::setw(2) << repeat << ") *****\n";
+    std::cout << "**********************************\n";
+    std::cout << std::setw(2) << " p\t";
+    std::cout << std::setw(12) << "CPU Compaction w/o. Scan\t";
+    std::cout << std::setw(12) << "CPU Compaction w/. Scan\t";
+    std::cout << std::setw(12) << "GPU Compaction with Work-Eff Scan\t";
+    // Test on different sizes
+    for (int p = 8; p < 26; ++p)
+    {
+        const int SIZE = 1 << p;
+        int* a = new int[SIZE];
+        int* b = new int[SIZE];
+
+        float elapsedTimes[3] = { 0.f, 0.f, 0.f};
+
+        genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
+        a[SIZE - 1] = 0;
+
+        for (int i = 0; i < repeat; ++i)
+        {
+            zeroArray(SIZE, b);
+            StreamCompaction::CPU::compactWithoutScan(SIZE, b, a);
+            elapsedTimes[0] += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+            zeroArray(SIZE, b);
+            StreamCompaction::CPU::compactWithScan(SIZE, b, a);
+            elapsedTimes[1] += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+            zeroArray(SIZE, b);
+            StreamCompaction::Efficient::compact(SIZE, b, a);
+            elapsedTimes[2] += StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+        }
+
+        std::cout << std::setw(2) << p << "\t";
+        std::cout << std::setw(11) << elapsedTimes[0] / repeat << "\t";
+        std::cout << std::setw(11) << elapsedTimes[1] / repeat << "\t";
+        std::cout << std::setw(11) << elapsedTimes[2] / repeat << "\n";
+
+        delete[] a;
+        delete[] b;
+    }
+}
+
+void benchmark_radix_sort(int repeat)
+{
+    std::cout << "***************************\n";
+    std::cout << "******* stable sort *******\n";
+    std::cout << "***************************\n";
+    std::cout << std::setw(2) << " p\t";
+    std::cout << std::setw(16) << "std::stable_sort\t";
+    std::cout << std::setw(12) << "Radix::sort\n";
+    // Test on different sizes
+    for (int p = 8; p < 29; ++p)
+    {
+        const int SIZE = 1 << p;
+        int* a = new int[SIZE];
+        int* b = new int[SIZE];
+
+        float elapsedTimes[2] = { 0.f, 0.f };
+
+        genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
+        a[SIZE - 1] = 0;
+
+        for (int i = 0; i < repeat; ++i)
+        {
+            zeroArray(SIZE, b);
+            StreamCompaction::CPU::sort(SIZE, b, a);
+            elapsedTimes[0] += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+            zeroArray(SIZE, b);
+            StreamCompaction::Radix::sort(SIZE, b, a);
+            elapsedTimes[1] += StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation();
+        }
+
+        std::cout << std::setw(2) << p << "\t";
+        std::cout << std::setw(15) << elapsedTimes[0] / repeat << "\t";
+        std::cout << std::setw(15) << elapsedTimes[1] / repeat << "\n";
+
+        delete[] a;
+        delete[] b;
+    }
+}
+
+int main(int argc, char * argv[])
+{
+    benchmark_powerOfTwo(10);
+    benchmark_nonPowerOfTwo(10);
+    benchmark_stream_compaction(10);
+    benchmark_radix_sort(10);
+
+    return 0;
+}
+#else
 const int SIZE = 1 << 24; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
@@ -154,23 +358,31 @@ int main(int argc, char* argv[]) {
     printf("****** RADIX SORT TESTS *****\n");
     printf("*****************************\n");
 
+    zeroArray(SIZE, b);
+    printDesc("std::stable_sort, power-of-two");
+    StreamCompaction::CPU::sort(SIZE, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(SIZE, b, true);
+
     zeroArray(SIZE, c);
     printDesc("radix sort, power-of-two");
     StreamCompaction::Radix::sort(SIZE, c, a);
     printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    printArray(SIZE, c, true);
-    std::cout << "   The array is";
-    std::cout << (std::is_sorted(c, c + SIZE) ? " " : " not ");
-    std::cout << "sorted.\t(std::is_sorted verified)\n";
+    //printArray(SIZE, c, true);
+    printCmpResult(SIZE, b, c);
+
+    zeroArray(SIZE, b);
+    printDesc("std::stable_sort, non-power-of-two");
+    StreamCompaction::CPU::sort(NPOT, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(NPOT, b, true);
 
     zeroArray(SIZE, c);
     printDesc("radix sort, non-power-of-two");
     StreamCompaction::Radix::sort(NPOT, c, a);
     printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    printArray(NPOT, c, true);
-    std::cout << "   The array is";
-    std::cout << (std::is_sorted(c, c + NPOT) ? " " : " not ");
-    std::cout << "sorted.\t(std::is_sorted verified)\n";
+    //printArray(NPOT, c, true);
+    printCmpResult(SIZE, b, c);
 
 #ifdef _WIN32
     system("pause"); // stop Win32 console from closing on exit
@@ -180,3 +392,4 @@ int main(int argc, char* argv[]) {
     delete[] b;
     delete[] c;
 }
+#endif

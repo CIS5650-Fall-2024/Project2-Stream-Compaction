@@ -7,7 +7,7 @@
 #include <thread>
 #include <thrust/device_ptr.h>
 
-constexpr int blockSize = 128;
+constexpr int blockSize = 512;  // Optimized for SIZE = 1 << 26
 
 namespace StreamCompaction {
     namespace Efficient {
