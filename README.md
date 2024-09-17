@@ -8,6 +8,8 @@ CUDA Stream Compaction
 
 ### Deze Lyu
 
+**Note: My GPU model, the MX450, is not very powerful, resulting in slow performance for all GPU-based implementations, including the one using the Thrust library. I have verified that all memory operations are excluded from the GPU timers. Despite this, the CPU-based implementation remains faster than the Thrust library's implementation for an array size of 2^20. Therefore, although I made every effort to complete the performance analysis, the results may not be very meaningful.**
+
 #### Description
 
 This project implements scan and stream compaction algorithms for both CPU and GPU. The features include:
@@ -19,8 +21,6 @@ This project implements scan and stream compaction algorithms for both CPU and G
  - Threads Compaction (Why is My GPU Approach So Slow?)
 
 #### Performance Analysis
-
-**Note: My GPU model, the MX450, is not very powerful, resulting in slow performance for all GPU-based implementations, including the one using the Thrust library. I have verified that all memory operations are excluded from the GPU timers. Despite this, the CPU-based implementation remains faster than the Thrust library's implementation for an array size of 2^20. Therefore, although I made every effort to complete the performance analysis, the results may not be very meaningful.**
 
 ##### **Task:** Roughly optimize the block sizes of each of your implementations for minimal run time on your GPU.
 
