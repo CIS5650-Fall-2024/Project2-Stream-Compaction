@@ -121,13 +121,13 @@ namespace StreamCompaction {
 
                 runScanSharedChunk<<<numBlocks, blockSize, blockSize * sizeof(int)>>>(n, dev_odata, dev_blockSums, dev_idata);
                 scanSharedHelper(numBlocks, dev_blockSumsScan, dev_blockSums);
-
                 scanSharedAddBlockSums<<<numBlocks, blockSize>>>(n, dev_odata, dev_blockSumsScan);
 
                 cudaFree(dev_blockSums);
                 cudaFree(dev_blockSumsScan);
             } else {
-                runScanSharedChunk<<<numBlocks, blockSize, blockSize * sizeof(int)>>>(n, dev_odata, nullptr, dev_idata);
+                int numThreads = std::min(n, blockSize);
+                runScanSharedChunk<<<1, numThreads, numThreads * sizeof(int)>>>(n, dev_odata, nullptr, dev_idata);
             }
             copyArray<<<numBlocks, blockSize>>>(n, dev_idata, dev_odata);
             convertInclusiveToExclusive<<<numBlocks, blockSize>>>(n, dev_odata, dev_idata);

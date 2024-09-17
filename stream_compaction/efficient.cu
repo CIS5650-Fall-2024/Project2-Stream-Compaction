@@ -125,5 +125,101 @@ namespace StreamCompaction {
             checkCUDAError("cudaFree failed");
             return numElements;
         }
+
+        __global__ void runScanSharedChunk(int n, int *odata, int *blockSums, const int *idata) {
+            extern __shared__ int shared_data[];
+
+            int index = threadIdx.x;
+            int chunkSize = blockDim.x;
+            int globalIndex = threadIdx.x + (blockIdx.x * blockDim.x);
+            if (globalIndex >= n) {
+                return;
+            }
+
+            shared_data[index] = idata[globalIndex];
+            __syncthreads();
+
+            // up sweep
+            int val = (index + 1) << 1;
+            for (int d = 1; d < chunkSize; d <<= 1) {
+                int elemIndex = val * d - 1;
+                if (elemIndex < chunkSize) {
+                    shared_data[elemIndex] += shared_data[elemIndex - d];
+                }
+                __syncthreads();
+            }
+
+            if (index == chunkSize - 1) {
+                if (blockSums != nullptr) {
+                    blockSums[blockIdx.x] = shared_data[chunkSize - 1];
+                }
+                shared_data[chunkSize - 1] = 0;
+            }
+            __syncthreads();
+
+            // down sweep
+            for (int d = chunkSize >> 1; d > 0; d >>= 1) {
+                int elemIndex = val * d - 1;
+                if (elemIndex < chunkSize) {
+                    int t = shared_data[elemIndex - d];
+                    shared_data[elemIndex - d] = shared_data[elemIndex];
+                    shared_data[elemIndex] += t;
+                }
+                __syncthreads();
+            }
+
+            odata[globalIndex] = shared_data[index];
+        }
+
+        __global__ void scanSharedAddBlockSums(int n, int *data, const int *blockSums) {
+            int index = threadIdx.x + (blockIdx.x * blockDim.x);
+            if (index >= n) {
+                return;
+            }
+            data[index] += blockSums[blockIdx.x];
+        }
+
+        void scanSharedHelper(int n, int *dev_odata, int *dev_idata) {
+            int numBlocks = (n + blockSize - 1) / blockSize;
+
+            if (numBlocks > 1) {
+                int numBlocksPowOf2 = 1 << ilog2ceil(numBlocks);
+                int *dev_blockSums;
+                int *dev_blockSumsScan;
+                cudaMalloc((void**)&dev_blockSums, numBlocksPowOf2 * sizeof(int));
+                cudaMalloc((void**)&dev_blockSumsScan, numBlocksPowOf2 * sizeof(int));
+
+                runScanSharedChunk<<<numBlocksPowOf2, blockSize, blockSize * sizeof(int)>>>(n, dev_odata, dev_blockSums, dev_idata);
+                scanSharedHelper(numBlocksPowOf2, dev_blockSumsScan, dev_blockSums);
+                scanSharedAddBlockSums<<<numBlocks, blockSize>>>(n, dev_odata, dev_blockSumsScan);
+
+                cudaFree(dev_blockSums);
+                cudaFree(dev_blockSumsScan);
+            } else {
+                int numThreads = std::min(n, blockSize);
+                runScanSharedChunk<<<1, numThreads, numThreads * sizeof(int)>>>(n, dev_odata, nullptr, dev_idata);
+            }
+        }
+
+        void scanShared(int n, int *odata, const int *idata) {
+            int nPowOf2 = 1 << ilog2ceil(n);
+
+            int *dev_idata;
+            int *dev_odata;
+            cudaMalloc((void**)&dev_idata, nPowOf2 * sizeof(int));
+            cudaMalloc((void**)&dev_odata, nPowOf2 * sizeof(int));
+            checkCUDAError("cudaMalloc failed");
+            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy failed");
+
+            timer().startGpuTimer();
+            scanSharedHelper(nPowOf2, dev_odata, dev_idata);
+            timer().endGpuTimer();
+
+            cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaFree(dev_idata);
+            cudaFree(dev_odata);
+            checkCUDAError("cudaFree failed");
+        }
     }
 }
