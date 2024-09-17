@@ -71,7 +71,7 @@ namespace StreamCompaction {
             timer().startGpuTimer();
 
             // declare the block size
-            const int block_size {32};
+            const int block_size {256};
 
             // calculate the number of iterations needed to perform shifting and adding
             const int limit {ilog2ceil(n)};

@@ -87,7 +87,7 @@ namespace StreamCompaction {
             timer().startGpuTimer();
             
             // declare the block size
-            const int block_size {32};
+            const int block_size {256};
 
             // calculate the number of iterations needed to perform up-sweeping
             const int limit {ilog2ceil(n)};
@@ -208,7 +208,7 @@ namespace StreamCompaction {
             timer().startGpuTimer();
 
             // declare the block size
-            const int block_size {32};
+            const int block_size {256};
 
             // populate the condition buffer
             Common::kernMapToBoolean<<<n / block_size + 1, block_size>>>(
