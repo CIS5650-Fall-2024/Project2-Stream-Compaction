@@ -3,6 +3,9 @@
 #include "common.h"
 #include "efficient.h"
 
+#define blockSize 1
+#define RECURSIVE_SCAN 0
+
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
@@ -12,12 +15,14 @@ namespace StreamCompaction {
             return timer;
         }
 
+
 		// up-sweep kernel
         __global__ void kernUpSweep(int n, int* odata, const int* idata, int t) {
             int index = threadIdx.x + (blockIdx.x * blockDim.x);
             if (index >= n) {
                 return;
             }
+#if RECURSIVE_SCAN
 			// exclusive scan
 			odata[index] = (index > 0) ? idata[index - 1] : 0;
 			__syncthreads();
@@ -32,11 +37,23 @@ namespace StreamCompaction {
 
                 __syncthreads();
             }
-        }
+#else
+			odata[index] = idata[index];
+			__syncthreads();
+			int offset = 1 << (t + 1); // 2^(d + 1)
+			int ai = index + offset - 1;
+			int bi = index + (offset / 2) - 1;
+			if (index < n && (index % offset) == 0) {
+				odata[ai] += idata[bi];
+			}
+			__syncthreads();
+#endif
+		}
 
         // down-sweep kernel
 		__global__ void kernDownSweep(int n, int* odata, const int* idata, int t) {
 			int index = threadIdx.x + (blockIdx.x * blockDim.x);
+#if RECURSIVE_SCAN
 			if (index >= 1 << (t + 1)) {
 				return;
 			}
@@ -59,6 +76,27 @@ namespace StreamCompaction {
 
 				__syncthreads();
 			}
+#else	
+			if (index >= n) {
+				return;
+			}
+
+			__syncthreads();			
+
+			int offset = 1 << (t + 1);
+			int ai = index + offset - 1;
+			int bi = index + (offset / 2) - 1;
+			if (index % offset == 0) {
+				int temp = odata[bi];
+				odata[bi] = odata[ai];
+				odata[ai] += temp;
+			}
+
+			__syncthreads();
+
+
+#endif 
+
 		}
 
 		// up sweep + down aweep
@@ -110,20 +148,58 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             
             // TODO
-			const int blockSize = 128;
-			dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+			int t = ilog2ceil(n) - 1;
+			int peddedSize = 1 << (t + 1);
+			//const int blockSize = 128;
+			int numBlocks = (peddedSize + blockSize - 1) / blockSize;
+			dim3 fullBlocksPerGrid(numBlocks);
+			
+			printf("log2_n - 1: %d\n", t);
+			printf("array size: %d; pedded size: %d\n", n, peddedSize);
+			printf("block numbers: %d\n", numBlocks);
 			// call kernel
 			int* dev_idata;
 			int* dev_odata;
-			cudaMalloc((void**)&dev_idata, n * sizeof(int));
-			cudaMalloc((void**)&dev_odata, n * sizeof(int));
+			cudaMalloc((void**)&dev_idata, peddedSize * sizeof(int));
+			cudaMalloc((void**)&dev_odata, peddedSize * sizeof(int));
+			cudaMemset(dev_odata, 0, peddedSize * sizeof(int));
+			cudaMemset(dev_idata, 0, peddedSize * sizeof(int));
 			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-            int t = ilog2ceil(n) - 1;
-            printf("log2_n - 1: %d\n", t);
+
+
+            
 			timer().startGpuTimer();
+
+#if RECURSIVE_SCAN
             //kernUpSweep << <1, n >> > (n, dev_odata, dev_idata, t);
 			//kernDownSweep << <1, n >> > (n, dev_odata, dev_idata, t);
-			kernScan << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, t);
+			//kernScan << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, t); // arbitrary block size
+			kernScan << <1, n >> > (n, dev_odata, dev_idata, t);
+#else
+			
+			// up-sweep
+			for (int d = 0; d <= t; ++d) {
+				int offset = 1 << (d + 1);
+				//int numBlocks = (n + offset - 1) / offset;
+				//dim3 fullBlocksPerGrid(numBlocks);
+				kernUpSweep << <numBlocks, blockSize >> > (peddedSize, dev_odata, dev_idata, d);
+				int* temp = dev_idata;
+				dev_idata = dev_odata;
+				dev_odata = temp;
+			}
+			// down sweep
+			// set last element to 0
+			dev_odata = dev_idata;
+			cudaMemset(dev_odata + peddedSize - 1, 0, sizeof(int));
+			for (int d = t; d >= 0; d--) {
+				int offset = 1 << (d + 1);
+				//int numBlocks = (n + offset - 1) / offset;
+				//dim3 fullBlocksPerGrid(numBlocks);
+				
+				kernDownSweep << <numBlocks, blockSize >> > (peddedSize, dev_odata, dev_idata, d);
+			}
+
+#endif
 			timer().endGpuTimer();
 			cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 			cudaFree(dev_idata);

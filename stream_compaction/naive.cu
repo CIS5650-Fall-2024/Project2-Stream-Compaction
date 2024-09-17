@@ -3,6 +3,8 @@
 #include "common.h"
 #include "naive.h"
 
+# define RECURSIVE_SCAN 0		
+
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;
@@ -18,6 +20,21 @@ namespace StreamCompaction {
 				log2++;
 			}
 			return log2+1;
+		}
+
+		__global__ void kernInclusiveScan(int n, int* odata, const int* idata, int t) {
+			int index = threadIdx.x + (blockIdx.x * blockDim.x);
+			
+			if (index >= n) {
+				return;
+			}
+
+			odata[index] = idata[index];
+			__syncthreads();
+
+			if(index >= t) {
+				odata[index] = idata[index - t] + odata[index];
+			}
 		}
 
 		__global__ void kernScan(int n, int* odata, const int* idata, int log2_n) {
@@ -125,7 +142,10 @@ namespace StreamCompaction {
 			dim3 fullBlocksPerGrid(numBlocks);
 			printf("block size: %d\n", blockSize);
 			printf("numBlocks: %d\n", numBlocks);
-			// call kernel
+			// get block size and block number for scan block sum
+			int numBlocks_scan = (numBlocks + blockSize - 1) / blockSize;
+			dim3 fullBlocksPerGrid_scan(numBlocks_scan);
+			
 			int* dev_idata;
 			int* dev_odata;
 			int* dev_blockSum;
@@ -137,20 +157,43 @@ namespace StreamCompaction {
 			cudaMalloc((void**)&dev_blockIncrements, n * sizeof(int));
 			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 			cudaMemcpy(dev_blockSum, blockSum, blockSize * sizeof(int), cudaMemcpyHostToDevice);
+
 			timer().startGpuTimer();
+			// call kernel
+# if RECURSIVE_SCAN
 			// scan on each block
-			//kernScan << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, t);
-			kernBlockWiseExclusiveScan << <fullBlocksPerGrid, blockSize, blockSize * sizeof(int) >> > (n, dev_odata, dev_idata, blockSize);
+			//kernScan << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, t); // non-shared memory one
+			kernBlockWiseExclusiveScan << <fullBlocksPerGrid, blockSize, blockSize * sizeof(int) >> > (n, dev_odata, dev_idata, blockSize); // shared memory one
 			// write total sum of each block to blockSum
 			kernWriteBlockSum << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_blockSum);
 			// scan on blockSum
 			int blockSumSize = ilog2ceil(numBlocks);
 			kernScan << <1, numBlocks >> > (numBlocks, dev_blockIncrements, dev_blockSum, blockSumSize);
+			//kernScan << <fullBlocksPerGrid_scan, blockSize >> > (numBlocks, dev_blockIncrements, dev_blockSum, blockSumSize);
+			// recursive scan on blockSum
 			// add block increments to each element in the corresponding block
 			kernAddBlockSum << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_blockIncrements);
-			//dev_odata = dev_blockIncrements;
+			//dev_odata = dev_blockIncrements; // for testing
 			timer().endGpuTimer();
 			cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+# else
+			for (int d = 1; d <= log2_n; d++) {
+				int pedding = 1 << (d - 1);
+				kernInclusiveScan << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, pedding);
+				int* temp = dev_idata;
+				dev_idata = dev_odata;
+				dev_odata = temp;			
+			}
+
+
+			timer().endGpuTimer();
+
+			// right shift odata
+			odata[0] = 0;
+			cudaMemcpy(odata + 1, dev_idata, (n - 1) * sizeof(int), cudaMemcpyDeviceToHost);
+
+#endif
+			
 			cudaFree(dev_idata);
 			cudaFree(dev_odata);
 			cudaFree(dev_blockSum);
