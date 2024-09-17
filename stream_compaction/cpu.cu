@@ -21,8 +21,10 @@ namespace StreamCompaction {
             timer().startCpuTimer();
             odata[0] = 0; // Exclusive scan
             for (int i = 1; i < n; i++) {
+                //printf("\nIndex - %d, idata[i - 1] - %d, odata[i - 1] - %d", i, idata[i - 1], odata[i - 1]);
                 odata[i] = odata[i - 1] + idata[i - 1];
             }
+            
             timer().endCpuTimer();
         }
 
@@ -48,7 +50,7 @@ namespace StreamCompaction {
          *
          * @returns the number of elements remaining after compaction.
          */
-        int compactWithScan(int n, int *odata, const int *idata) {
+        int compactWithScan(int n, int* odata, const int* idata) {
             timer().startCpuTimer();
             int* flags = new int[n];
             int* scanned = new int[n];
@@ -56,17 +58,22 @@ namespace StreamCompaction {
             // Map input to flags (0 or 1)
             for (int i = 0; i < n; i++) {
                 flags[i] = (idata[i] != 0) ? 1 : 0;
+                //printf("\nIndex - %d, idata[i] - %d, flags[i] - %d", i, idata[i], flags[i]);
             }
 
             // Perform scan on flags
-            scan(n, scanned, flags);
-
+            //printf("\nn - %d, scanned - %d, flags - %d", n, scanned, flags);
+            //CPU::scan(n, scanned, flags);
+            scanned[0] = 0; // Exclusive scan
+            for (int i = 1; i < n; i++) {
+                //printf("\nIndex - %d, idata[i - 1] - %d, odata[i - 1] - %d", i, idata[i - 1], scanned[i - 1]);
+                scanned[i] = scanned[i - 1] + flags[i - 1];
+            }
             // Scatter non-zero elements
-            int count = 0;
-            for (int i = 0; i < n; i++) {
+            int count = scanned[n - 1] + flags[n - 1]; // Total count of non-zero elements
+            for (int i = n - 1; i >= 0; i--) {
                 if (flags[i]) {
                     odata[scanned[i]] = idata[i];
-                    count++;
                 }
             }
 
@@ -74,6 +81,7 @@ namespace StreamCompaction {
             delete[] scanned;
             timer().endCpuTimer();
             return count;
+            //return 0;
         }
     }
 }
