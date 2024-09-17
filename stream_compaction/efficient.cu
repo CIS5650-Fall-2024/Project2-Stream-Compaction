@@ -228,8 +228,11 @@ namespace StreamCompaction {
             StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (nonPowSize, dev_odata, dev_idata, dev_bools, dev_indices);
             checkCUDAError("kernScatter failed!");
             timer().endGpuTimer();
+
+            //Copy the result to odata
             int count;
             cudaMemcpy(&count, &dev_indices[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
+            if (idata[n - 1] != 0) count++;
             cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
             return count;
         }

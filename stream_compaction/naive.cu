@@ -22,7 +22,6 @@ namespace StreamCompaction {
             else {
                 odata[k] = idata[k];
             }
-
         }
 
         /**
@@ -65,56 +64,5 @@ namespace StreamCompaction {
             cudaFree(dev_idata);
         }
 
-        void radixSort(int n, int* odata, const int* idata, const int bitSize) {
-            int* dev_odata;
-            int* dev_idata;
-            int* dev_bools;
-            int* dev_scan;
-            int* dev_indices;
-            // Allocate memory to GPU
-			cudaMalloc((void**)&dev_odata, n * sizeof(int));
-			checkCUDAError("cudaMalloc dev_odata failed!");
-			cudaMalloc((void**)&dev_idata, n * sizeof(int));
-			checkCUDAError("cudaMalloc dev_idata failed!");
-            cudaMalloc((void**)&dev_bools, n * sizeof(int));
-			checkCUDAError("cudaMalloc dev_bools failed!");
-            cudaMalloc((void**)&dev_scan, n * sizeof(int));
-			checkCUDAError("cudaMalloc dev_scan failed!");
-            cudaMalloc((void**)&dev_indices, n * sizeof(int));
-			checkCUDAError("cudaMalloc dev_indices failed!");
-
-			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-			checkCUDAError("cudaMemcpy idata failed!");
-
-            int blockSize = 256;
-            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
-            //Step1: Compute temporary array containing and map to boolean
-            for (int i = 0; i < bitSize; ++i) {
-                StreamCompaction::Common::kernMapToBooleanRadix << <fullBlocksPerGrid, blockSize >> > (n, dev_bools, dev_idata, i);         
-                cudaDeviceSynchronize();
-                checkCUDAError("kernMapToBooleanRadix failed!");
-                //Step2: Scan the boolean array
-                StreamCompaction::Efficient::scan(n, dev_scan, dev_bools);
-                cudaDeviceSynchronize();
-                checkCUDAError("scan failed!");
-                //Step3: Scatter
-                StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_indices);
-				cudaDeviceSynchronize();
-				checkCUDAError("kernScatterRadix failed!");
-				//Swap dev_odata and dev_idata
-				int* temp = dev_idata;
-				dev_idata = dev_odata;
-				dev_odata = temp;
-            }
-            // Step 6: Copy the sorted data back to the host
-            cudaMemcpy(odata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
-            checkCUDAError("cudaMemcpy odata failed!");
-            // Free memory
-            cudaFree(dev_odata);
-            cudaFree(dev_idata);
-            cudaFree(dev_bools);
-            cudaFree(dev_scan);
-            cudaFree(dev_indices);
-        }
     }
 }
