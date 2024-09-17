@@ -24,42 +24,28 @@ void scanTests(const int SIZE, const int NPOT, int *a, int *b, int *c, int *d) {
     // We use b for further comparison. Make sure your StreamCompaction::CPU::scan is correct.
     // At first all cases passed because b && c are all zeroes.
     zeroArray(SIZE, b);
-    printDesc("cpu scan, power-of-two, exclusive, serial");
-    StreamCompaction::CPU::scan(SIZE, b, a);
+    printDesc("cpu scan, power-of-two, serial");
+    StreamCompaction::CPU::scan(SIZE, b, a, /*simulateGPUScan=*/false);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     printArray(SIZE, b, true);
 
     zeroArray(SIZE, c);
-    printDesc("cpu scan, non-power-of-two, exclusive, serial");
-    StreamCompaction::CPU::scan(NPOT, c, a);
+    printDesc("cpu scan, non-power-of-two, serial");
+    StreamCompaction::CPU::scan(NPOT, c, a, /*simulateGPUScan=*/false);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     if (!printCmpResult(NPOT, b, c)) printArray(NPOT, c, true);
 
     zeroArray(SIZE, d);
-    printDesc("cpu scan, power-of-two, exclusive");
-    StreamCompaction::CPU::scanExclusive(SIZE, d, a);
+    printDesc("cpu scan, power-of-two, simulated GPU scan");
+    StreamCompaction::CPU::scan(SIZE, d, a, /*simulateGPUScan=*/true);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     if (!printCmpResult(SIZE, b, d)) printArray(SIZE, d, true);
 
-    // zeroArray(SIZE, d);
-    // printDesc("cpu scan, power-of-two, inclusive");
-    // StreamCompaction::CPU::scanInclusive(SIZE, d, a);
-    // printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
-    // printArray(SIZE, d, true);
-    // printCmpResult(SIZE, b, d);
-
     zeroArray(SIZE, d);
-    printDesc("cpu scan, non-power-of-two, exclusive");
-    StreamCompaction::CPU::scanExclusive(NPOT, d, a);
+    printDesc("cpu scan, non-power-of-two, simulated GPU scan");
+    StreamCompaction::CPU::scan(NPOT, d, a, /*simulateGPUScan=*/true);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
     if (!printCmpResult(NPOT, c, d)) printArray(NPOT, d, true);
-
-    // zeroArray(SIZE, d);
-    // printDesc("cpu scan, non-power-of-two, inclusive");
-    // StreamCompaction::CPU::scanInclusive(NPOT, d, a);
-    // printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
-    // printArray(NPOT, d, true);
-    // printCmpResult(NPOT, c, d);
 
     zeroArray(SIZE, c);
     printDesc("naive scan, power-of-two");

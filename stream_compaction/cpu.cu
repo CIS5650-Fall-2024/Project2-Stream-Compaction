@@ -2,6 +2,7 @@
 #include "cpu.h"
 
 #include "common.h"
+#include <vector>
 
 namespace StreamCompaction {
     namespace CPU {
@@ -13,20 +14,28 @@ namespace StreamCompaction {
         }
 
         /**
-         * CPU scan (prefix sum).
+         * CPU exlusive scan (prefix sum).
          * For performance analysis, this is supposed to be a simple for loop.
-         * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
-         * Exclusive prefix sum.
+         * (Optional) For better understanding before starting moving to GPU, you can 
+         * simulate your GPU scan in this function first.
+         * 
+         * If simulateGPUScan is true, the algorithm mimics the GPU parallel algorithm
+         * of StreamCompaction::Naive::scan to some extent; differences lie around how
+         * the GPU version deals with arbitrary length inputs across more than 1 block.
          */
-        void scan(int n, int *odata, const int *idata) {
+        void scan(int n, int *odata, const int *idata, bool simulateGPUScan) {
             timer().startCpuTimer();
 
-            scanNoTimer(n, odata, idata);
+            if (simulateGPUScan) {
+                scanExclusiveSimulateGPU(n, odata, idata);
+            } else {
+                scanExclusiveSerial(n, odata, idata);
+            }
 
             timer().endCpuTimer();
         }
 
-        void scanNoTimer(int n, int *odata, const int *idata) {
+        inline void scanExclusiveSerial(int n, int *odata, const int *idata) {
             // Put addition identity in first element.
             odata[0] = 0;
             // Serial version.
@@ -35,28 +44,35 @@ namespace StreamCompaction {
             }
         }
 
-        // CPU version of parallel algorithm. Incorrect.
-        void scanExclusive(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
-
-            // Each new iteration should update k in [2^d, ...] only.
-
-            int *auxBuffer = (int *)malloc(n * sizeof(int));
-            int *iterInput = auxBuffer;
+        // CPU version of parallel algorithm. Mimics the GPU parallel algorithm in 
+        // StreamCompaction::Naive::scan to some extent. The intention is not to be
+        // efficient, but to help understand the parallel algorithm.
+        inline void scanExclusiveSimulateGPU(int n, int *odata, const int *idata) {
+            // For each depth d, iterInput is read from and iterOutput is written to
+            // and then swapped.
+            std::vector<int> auxBuffer(n);
+            int *iterInput = auxBuffer.data();
             int *iterOutput = odata;
 
+            // Put addition identity in first element.
             iterInput[0] = 0;
+
+            // Copy input data to iterInput, shifting by 1. This effectively turns
+            // an inclusive scan into an exclusive scan.
             for (int k = 1; k < n; ++k) {
                 iterInput[k] = idata[k-1]; 
             }
 
             for (int d = 1; d <= ilog2ceil(n); ++d) {
+                int delta = 1 << (d-1);
+
                 // At the beginning of each new iteration:
                 //  - partial sums [0, 2^(d-1) - 1] are complete;
                 //  - the rest are of the form x[k - 2^d - 1] + ... + x[k].
                 for (int k = 0; k < n; ++k) {
-                    if (k >= pow(2, d-1)) {
-                        iterOutput[k] = iterInput[k - (int)pow(2, d-1)] + iterInput[k];
+                    // Each new iteration should update k in [2^d, ...] only.
+                    if (k >= delta) {
+                        iterOutput[k] = iterInput[k - delta] + iterInput[k];
                     } else {
                         iterOutput[k] = iterInput[k];
                     }
@@ -66,62 +82,18 @@ namespace StreamCompaction {
                     // = x[max(0, k - 2^(d) + 1), k - 2^(d-1)] + x[k - 2^(d-1) + 1, k] 
                     // for d >= 1. 
                 }
-                 // Processing [2^d, n) completely before moving on to next d is equivalent
+
+                // Processing [2^d, n) completely before moving on to next d is equivalent
                 // to waiting on a barrier for all threads to reach it, in the parallel case.
 
                 std::swap(iterInput, iterOutput);
             }
 
+            // Depending on the number of iterations, the final result (iterInput) may already
+            // be in odata.
             if (iterInput != odata) {
                 memcpy(odata, iterInput, n * sizeof(int));
             }
-
-            free(auxBuffer);
-
-            timer().endCpuTimer();
-        }
-
-        void scanInclusive(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
-
-            // Each new iteration should update k in [2^d, ...] only.
-
-            int *auxBuffer = (int *)malloc(n * sizeof(int));
-            memcpy(auxBuffer, idata, n * sizeof(int));
-            int *iterInput = auxBuffer;
-            int *iterOutput = odata;
-
-            odata[0] = idata[0];
-
-            for (int d = 1; d <= ilog2ceil(n); ++d) {
-                // At the beginning of each new iteration:
-                //  - partial sums [0, 2^(d-1) - 1] are complete;
-                //  - the rest are of the form x[k - 2^d - 1] + ... + x[k].
-                for (int k = 0; k < n; ++k) {
-                    if (k >= pow(2, d-1)) {
-                        iterOutput[k] = iterInput[k - (int)pow(2, d-1)] + iterInput[k];
-                    } else {
-                        iterOutput[k] = iterInput[k];
-                    }
-
-                    // y[k] is now:
-                    // = x[k] + x[k - 1] + x[k - 2] + ... + x[k - 4] + .... + x[k - 2^(d-1)]
-                    // = x[max(0, k - 2^(d) + 1), k - 2^(d-1)] + x[k - 2^(d-1) + 1, k] 
-                    // for d >= 1. 
-                }
-                 // Processing [2^d, n) completely before moving on to next d is equivalent
-                // to waiting on a barrier for all threads to reach it, in the parallel case.
-
-                std::swap(iterInput, iterOutput);
-            }
-
-            if (iterInput != odata) {
-                memcpy(odata, iterInput, n * sizeof(int));
-            }
-
-            free(auxBuffer);
-
-            timer().endCpuTimer();
         }
 
         /**
@@ -159,7 +131,7 @@ namespace StreamCompaction {
             }
 
             int *nonzeroMaskPrefixSum = new int[n];
-            scanNoTimer(n, nonzeroMaskPrefixSum, nonzeroMask);
+            scanExclusiveSerial(n, nonzeroMaskPrefixSum, nonzeroMask);
 
             int nonzeroCount = 0;
             for (int i = 0; i < n; ++i) {
