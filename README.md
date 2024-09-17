@@ -13,7 +13,9 @@ This project implements GPU stream compaction using CUDA to remove zeros from an
 
 ### Features
 1. CPU Scan & Stream Compaction
-  * CPU Scan: Implements a simple exclusive prefix sum using a for loop.
-  * Compact Without Scan: A basic CPU method that removes zeros without relying on a scan operation.
-  * Compact With Scan: A more advanced method using scan to optimize the stream compaction process.
+* CPU Scan: Implements a simple exclusive prefix sum using a for loop.
+* Compact Without Scan: A basic CPU method that removes zeros without relying on a scan operation.
+* Compact With Scan: A more advanced method using scan to optimize the stream compaction process.
 
+2. Naive GPU Scan
+* Implements a naive GPU scan algorithm based on the description in GPU Gems 3, Section 39.2.1. This implementation uses global memory and repeatedly swaps input/output arrays across several kernel launches.
