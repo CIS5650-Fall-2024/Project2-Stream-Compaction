@@ -14,30 +14,30 @@ namespace StreamCompaction {
 
         __global__ void kernUpsweep(int n, int d, int* data) {
             int k = (blockDim.x * blockIdx.x) + threadIdx.x;
-            int pow_d_plus_one = pow(2, d + 1);
+            int pow_d_plus_one = (1 << d + 1);
 
-            if (k > n / pow_d_plus_one) {
+            if (k >= n / pow_d_plus_one) {
                 return;
             }
             
             k *= pow_d_plus_one;
 
-            int pow_d = pow(2, d);
+            int pow_d = (1 << d);
 
             data[k + pow_d_plus_one - 1] += data[k + pow_d - 1];
         }
 
         __global__ void kernDownsweep(int n, int d, int* data) {
             int k = (blockDim.x * blockIdx.x) + threadIdx.x;
-            int pow_d_plus_one = pow(2, d + 1);
+            int pow_d_plus_one = (1 << d + 1);
 
-            if (k > n / pow_d_plus_one) {
+            if (k >= n / pow_d_plus_one) {
                 return;
             }
 
             k *= pow_d_plus_one;
 
-            int curr_left_idx = k + pow(2, d) - 1;
+            int curr_left_idx = k + (1 << d) - 1;
             int left_child_val = data[curr_left_idx];       // Save left child
             int curr_node_idx = k + pow_d_plus_one - 1;
             data[curr_left_idx] = data[curr_node_idx];      // Set left child to this node’s value
@@ -56,7 +56,7 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             int log = ilog2ceil(n);
-            int power_two_len = pow(2, log);
+            int power_two_len = (1 << log);
 
             int* data;
             cudaMalloc((void**)&data, sizeof(int) * power_two_len);
@@ -72,7 +72,7 @@ namespace StreamCompaction {
 
             //upsweep
             for (int d = 0; d < log; d++) {
-                threads_to_launch = power_two_len / pow(2, d + 1);
+                threads_to_launch = power_two_len / (1 << d + 1);
 
                 blockDim = dim3((threads_to_launch + blockSize - 1) / blockSize);
 
@@ -84,7 +84,7 @@ namespace StreamCompaction {
 
             //downsweep
             for (int d = log - 1; d >= 0; d--) {
-                threads_to_launch = power_two_len / pow(2, d + 1);
+                threads_to_launch = power_two_len / (1 << d + 1);
 
                 blockDim = dim3((threads_to_launch + blockSize - 1) / blockSize);
 
@@ -111,7 +111,7 @@ namespace StreamCompaction {
             int num_elts = -1;
 
             int log = ilog2ceil(n);
-            int power_two_len = pow(2, log);
+            int power_two_len = (1 << log);
 
             int blockSize = 128;
             dim3 blockDim((n + blockSize - 1) / blockSize);
@@ -145,7 +145,7 @@ namespace StreamCompaction {
 
             //upsweep
             for (int d = 0; d < log; d++) {
-                threads_to_launch = power_two_len / pow(2, d + 1);
+                threads_to_launch = power_two_len / (1 << d + 1);
 
                 scan_blockDim = dim3((threads_to_launch + scan_blockSize - 1) / scan_blockSize);
 
@@ -157,7 +157,7 @@ namespace StreamCompaction {
 
             //downsweep
             for (int d = log - 1; d >= 0; d--) {
-                threads_to_launch = power_two_len / pow(2, d + 1);
+                threads_to_launch = power_two_len / (1 << d + 1);
 
                 scan_blockDim = dim3((threads_to_launch + scan_blockSize - 1) / scan_blockSize);
 
@@ -172,6 +172,10 @@ namespace StreamCompaction {
 
             cudaMemcpy(odata, out_data, sizeof(int) * n, cudaMemcpyDeviceToHost);
             cudaMemcpy(&num_elts, scan_data + power_two_len - 1, sizeof(int), cudaMemcpyDeviceToHost);
+
+            int last_bool;
+            cudaMemcpy(&last_bool, bools + power_two_len - 1, sizeof(int), cudaMemcpyDeviceToHost);
+            if (last_bool == 1) num_elts++;
 
             cudaFree(bools);
             cudaFree(in_data);

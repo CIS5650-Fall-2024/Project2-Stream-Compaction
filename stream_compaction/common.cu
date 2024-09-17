@@ -24,7 +24,7 @@ namespace StreamCompaction {
          */
         __global__ void kernMapToBoolean(int n, int *bools, const int *idata) {
             int k = (blockDim.x * blockIdx.x) + threadIdx.x;
-            if (k > n) {
+            if (k >= n) {
                 return;
             }
             bools[k] = (idata[k] == 0) ? 0 : 1;
