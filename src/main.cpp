@@ -15,7 +15,7 @@
 #include <stream_compaction/radix-sort.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 16 * 1024 * 1024; // feel free to change the size of array
+const int SIZE = 8 * 1024 * 1024; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -212,7 +212,7 @@ int main(int argc, char* argv[]) {
 
     // Radix sort tests
 
-    int maxVal = 50;
+    int maxVal = SIZE / 2;
     genArray(SIZE - 1, a, maxVal);  // Leave a 0 at the end to test that edge case
     a[SIZE - 1] = 0;
     printArray(SIZE, a, true);
