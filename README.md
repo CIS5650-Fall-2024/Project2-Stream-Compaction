@@ -19,3 +19,11 @@ This project implements GPU stream compaction using CUDA to remove zeros from an
 
 2. Naive GPU Scan
 * Implements a naive GPU scan algorithm based on the description in GPU Gems 3, Section 39.2.1. This implementation uses global memory and repeatedly swaps input/output arrays across several kernel launches.
+
+3. Work-Efficient GPU Scan & Stream Compaction
+* Work-Efficient Scan: Implements a more optimized version using the tree-based approach from GPU Gems 3, Section 39.2.2.
+* Stream Compaction Using Scan: Uses the work-efficient scan to perform stream compaction by mapping the input array to boolean values, scanning the array, and then scattering the valid elements.
+* Handles non-power-of-two sized arrays efficiently.
+
+4. Thrust Library Integration
+* Uses the Thrust library's exclusive_scan function to perform stream compaction with GPU-accelerated thrust primitives.
