@@ -42,17 +42,18 @@ namespace StreamCompaction {
             timer().startGpuTimer();
             // TODO
             int *g_odata,*g_idata,*temp;
-            cudaError_t result = cudaMalloc((void**)&g_idata, n * sizeof(int));
-            result = cudaMalloc((void**)&g_odata,n*sizeof(int));
-            result = cudaMalloc((void**)&temp,2 * n * sizeof(int));
+            int zeropadded_n = pow(2, ilog2ceil(n));
+            cudaError_t result = cudaMalloc((void**)&g_idata, zeropadded_n * sizeof(int));
+            result = cudaMalloc((void**)&g_odata,zeropadded_n*sizeof(int));
+            result = cudaMalloc((void**)&temp,2 * zeropadded_n * sizeof(int));
             cudaMemcpy(g_idata,idata,sizeof(int)*n,cudaMemcpyHostToDevice);
             int threadsPerBlock = 256;
-            int blocksPerGrid = (n + threadsPerBlock - 1) / threadsPerBlock;
-            scan_global<<<blocksPerGrid,threadsPerBlock>>>(n,g_odata,g_idata,temp);
+            int blocksPerGrid = (zeropadded_n + threadsPerBlock - 1) / threadsPerBlock;
+            scan_global<<<blocksPerGrid,threadsPerBlock>>>(zeropadded_n,g_odata,g_idata,temp);
             cudaMemcpy(odata,g_odata,sizeof(int)*n,cudaMemcpyDeviceToHost);
             for (int i = 0; i < n; i++)
             {
-                printf("%d %d\n", idata[i], odata[i]);
+                //printf("%d %d\n", idata[i], odata[i]);
             }
             timer().endGpuTimer();
         }
