@@ -35,20 +35,21 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
+            int size = 0;
+
             timer().startCpuTimer();
             
-            int olength = 0;
             for (int k = 0; k < n; ++k)
             {
                 if (idata[k] != 0)
                 {
-                    odata[olength] = idata[k];
-                    ++olength;
+                    odata[size] = idata[k];
+                    ++size;
                 }
             }
 
             timer().endCpuTimer();
-            return olength;
+            return size;
         }
 
         /**
@@ -57,9 +58,10 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
+            int* indices = new int[n];
+            int size = 0;
 
-            int* tmpdata = new int[n];
+            timer().startCpuTimer();
 
             // Compute the temporary array of pass/fail checks
             for (int k = 0; k < n; ++k)
@@ -68,27 +70,27 @@ namespace StreamCompaction {
             }
             
             // Scan the temporary array
-            tmpdata[0] = 0;
+            indices[0] = 0;
             for (int k = 1; k < n; ++k)
             {
-                tmpdata[k] = tmpdata[k - 1] + odata[k - 1];
+                indices[k] = indices[k - 1] + odata[k - 1];
             }
 
             // Scatter based on the found indices
-            int olength = 0;
             for (int k = 0; k < n; ++k)
             {
-                if (odata[k] == 1)
+                if (odata[k] != 0)
                 {
-                    odata[tmpdata[k]] = idata[k];
-                    ++olength;
+                    odata[indices[k]] = idata[k];
+                    ++size;
                 }
             }
 
-            delete[](tmpdata);
-
             timer().endCpuTimer();
-            return olength;
+
+            delete[](indices);
+
+            return size;
         }
     }
 }
