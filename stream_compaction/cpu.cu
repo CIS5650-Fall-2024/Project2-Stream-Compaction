@@ -64,14 +64,17 @@ namespace StreamCompaction {
             }
 
             for (int d = 1; d <= ilog2ceil(n); ++d) {
+                // Elements to be added are this much apart.
                 int delta = 1 << (d-1);
 
                 // At the beginning of each new iteration:
                 //  - partial sums [0, 2^(d-1) - 1] are complete;
                 //  - the rest are of the form x[k - 2^d - 1] + ... + x[k].
                 for (int k = 0; k < n; ++k) {
-                    // Each new iteration should update k in [2^d, ...] only.
-                    if (k >= delta) {
+                    // Each new iteration should update k in [2^d-1, ...] only.
+                    if (k > delta) {
+                        // Note that if k = delta, then iterInput[k - delta] = 0, so 
+                        // that's handled by the other case.
                         iterOutput[k] = iterInput[k - delta] + iterInput[k];
                     } else {
                         iterOutput[k] = iterInput[k];
