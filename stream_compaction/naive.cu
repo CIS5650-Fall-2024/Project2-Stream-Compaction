@@ -83,7 +83,7 @@ namespace StreamCompaction {
                 const int offset {1 << index};
 
                 // perform shifting and adding
-                shift_and_add<<<count / block_size + 1, block_size>>>(
+                StreamCompaction::Naive::shift_and_add<<<count / block_size + 1, block_size>>>(
                     n, offset, buffers[0], buffers[1]
                 );
 
