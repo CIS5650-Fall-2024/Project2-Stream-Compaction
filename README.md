@@ -22,18 +22,22 @@ Stream compaction is the process of taking an array and removing unwanted elemen
 This is a much less intuitive approach. The algorithm involves 2 phases, the upsweep and the downsweep. The upsweep is the same as the parallel reduction from method 3, except the algorithm occurs "in place" on the input data. Then, by treating the array as a tree and doing some clever summation, the amount of work can be reduced by filtering the sums down the "tree". This is done by setting the "root" -- the last element -- to zero, and then at each pass, giving each left child the parent's value, and setting the right child to the sum of the previous left child’s value and the parent's value. The upsweep has O(n) adds and the downsweep has O(n) adds and O(n) swaps, which reduces the complexity from method 3.
 5. A wrapper for thrust's implementation of stream compaction for the sake of performance comparison.
 
+# Sample Output
+
 ## Performance Analysis
 
 # Charts
 
 The following is a chart displaying how running time of the numerous methods changes with input size in the scan algorithm.
 
-![](img/scan_graph.jpg)
+![](img/scan_graph.png)
 
 The following is a chart displaying how running time of the numerous methods changes with input size in the compaction algorithm.
 
-![](img/compaction_graph.jpg)
+![](img/compaction_graph.png)
 
 # Observations
 
 Observations on power-of-two length. In scan the non-power of two work efficient algorithm had a larger difference in performance over the power of two input. This is likely because the overhead of padding zeroes increases as size increases. The same is not true of the compaction algorithms, likely because the main bottleneck of that algorithm is the global memory reads, which are present even if the input is a power of 2. 
+
+# Investigation of Thrust using NSight Compute
