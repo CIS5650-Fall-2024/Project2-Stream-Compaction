@@ -5,7 +5,7 @@
 
 #include <device_launch_parameters.h>
 
-#define blockSize 256
+#define blockSize 128
 
 namespace StreamCompaction {
     namespace Naive {
@@ -15,7 +15,6 @@ namespace StreamCompaction {
             static PerformanceTimer timer;
             return timer;
         }
-        // TODO: __global__
 
         /**
         * Kernel function for scan
@@ -34,6 +33,7 @@ namespace StreamCompaction {
             else {
                 odata[k] = idata[k];
             }
+
         }
 
         /**
