@@ -51,3 +51,8 @@ Finally, for Thrust's scan implementation, it appears that Thrust first uses a k
 Using Nsight Compute, we can distinguish between the different stages of the process by noting the distinct kernel names that appear.
 
 ![](img/Image4.png)
+
+##### **Task:**  Paste the output of the test program
+
+```
+```
