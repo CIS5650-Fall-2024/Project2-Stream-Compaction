@@ -1,12 +1,12 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "common.h"
-#include "efficient-optimized.h"
+#include "efficient-thread-optimized.h"
 
 #define blockSize 128
 
 namespace StreamCompaction {
-    namespace EfficientOptimized {
+    namespace EfficientThreadOptimized {
         using StreamCompaction::Common::PerformanceTimer;
         PerformanceTimer& timer()
         {

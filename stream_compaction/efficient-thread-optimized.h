@@ -3,7 +3,7 @@
 #include "common.h"
 
 namespace StreamCompaction {
-    namespace EfficientOptimized {
+    namespace EfficientThreadOptimized {
         StreamCompaction::Common::PerformanceTimer& timer();
 
         void scan(int n, int *odata, const int *idata);
