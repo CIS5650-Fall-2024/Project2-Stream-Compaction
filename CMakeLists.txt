@@ -9,6 +9,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -G")
 
+# Force CUDA architecture to sm_86 for RTX 3070 Ti (Ampere)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_86")
+
+
 # Enable C++11 for host code
 set(CMAKE_CXX_STANDARD 11)
 if(NOT DEFINED CMAKE_CUDA_STANDARD)
@@ -47,13 +51,10 @@ source_group(Sources FILES ${sources})
 
 add_executable(${CMAKE_PROJECT_NAME} ${sources} ${headers})
 target_link_libraries(${CMAKE_PROJECT_NAME} stream_compaction)
-if(CMAKE_VERSION VERSION_LESS "3.23.0")
-    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES OFF)
-elseif(CMAKE_VERSION VERSION_LESS "3.24.0")
-    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES all-major)
-else()
-    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES native)
-endif()
+
+# Force CUDA architecture to sm_86 for RTX 3070 Ti (Ampere)
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES 86)
+
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE "$<$<AND:$<CONFIG:Debug,RelWithDebInfo>,$<COMPILE_LANGUAGE:CUDA>>:-G>")
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
 

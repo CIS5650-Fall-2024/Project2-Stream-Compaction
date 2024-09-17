@@ -34,6 +34,8 @@ namespace StreamCompaction {
     namespace Common {
         __global__ void kernMapToBoolean(int n, int *bools, const int *idata);
 
+        __global__ void kernMapToBooleanRadix(int n, int *odata, const int *idata, int i);
+
         __global__ void kernScatter(int n, int *odata,
                 const int *idata, const int *bools, const int *indices);
 
