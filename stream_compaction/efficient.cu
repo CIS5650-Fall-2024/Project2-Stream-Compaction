@@ -64,17 +64,16 @@ namespace StreamCompaction {
             // TODO
             int *g_odata;
             int *g_idata;
-            cudaMalloc((void**)&g_odata,n*sizeof(int));
+            int zeropadded_n = pow(2, ilog2ceil(n));
+            cudaMalloc((void**)&g_odata, zeropadded_n * sizeof(int));
 
-            cudaMalloc((void**)&g_idata,n*sizeof(int));
+            cudaMalloc((void**)&g_idata,zeropadded_n * sizeof(int));
 
-            
-            
             cudaMemcpy(g_idata,idata,n*sizeof(int),cudaMemcpyHostToDevice);
 
             int threadsPerBlock = 256;
-            int blocksPerGrid = ((n/2) + threadsPerBlock - 1) / threadsPerBlock;
-            scan_global << <blocksPerGrid, threadsPerBlock >> > (n, g_odata, g_idata);
+            int blocksPerGrid = ((zeropadded_n /2) + threadsPerBlock - 1) / threadsPerBlock;
+            scan_global << <blocksPerGrid, threadsPerBlock >> > (zeropadded_n, g_odata, g_idata);
 
             cudaMemcpy(odata,g_odata,sizeof(int)*n,cudaMemcpyDeviceToHost);
 
@@ -97,49 +96,52 @@ namespace StreamCompaction {
             // TODO
             int *g_bools = 0;
             int *bools = 0;
-            int *temp_array = (int*)malloc(sizeof(int)*n);
             int* indices;
             int* g_idata;
             int *g_odata;
-
+            int zeropadded_n = pow(2,ilog2ceil(n));
+            printf("zeropadded = %d\n", zeropadded_n);
             int threadsPerBlock = 256;
-            int blocksPerGrid = (n + threadsPerBlock - 1) / threadsPerBlock;
-            cudaError_t result = cudaMalloc((void**)(&g_bools), n * sizeof(int));
+            int blocksPerGrid = (zeropadded_n + threadsPerBlock - 1) / threadsPerBlock;
+            int *temp_array = (int*)malloc(sizeof(int)*zeropadded_n);
+            cudaError_t result = cudaMalloc((void**)(&g_bools), zeropadded_n * sizeof(int));
             if (result != cudaSuccess) {
-                fprintf(stderr, "Kernel launch 1 failed: %s\n", cudaGetErrorString(result));
+                fprintf(stderr, "Mem alloc failed: %s\n", cudaGetErrorString(result));
                 cudaFree(g_bools);
                 timer().endGpuTimer();
                 return -1;
             }
-            result = cudaMalloc((void**)(&g_idata), n * sizeof(int));
+            result = cudaMalloc((void**)(&g_idata), zeropadded_n * sizeof(int));
+            cudaMemset(g_idata, 0, zeropadded_n*sizeof(int));
             if (result != cudaSuccess) {
-                fprintf(stderr, "Kernel launch 2 failed: %s\n", cudaGetErrorString(result));
+                fprintf(stderr, "Mem alloc failed: %s\n", cudaGetErrorString(result));
                 cudaFree(g_bools);
                 cudaFree(g_idata);
                 timer().endGpuTimer();
                 return -1;
             }
             cudaMemcpy(g_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-            cudaMalloc((void**)&g_odata,sizeof(int)*n);
-            StreamCompaction::Common::kernMapToBoolean<<<blocksPerGrid,threadsPerBlock>>>(n, g_bools, g_idata);
-            bools = (int*)malloc(n*sizeof(int));
+            cudaMalloc((void**)&g_odata,sizeof(int)* zeropadded_n);
+            StreamCompaction::Common::kernMapToBoolean<<<blocksPerGrid,threadsPerBlock>>>(zeropadded_n, g_bools, g_idata);
+            bools = (int*)malloc(zeropadded_n*sizeof(int));
             cudaDeviceSynchronize();
-            cudaMemcpy(bools,g_bools,n*sizeof(int),cudaMemcpyDeviceToHost);
-
-            result = cudaMalloc(&indices, n * sizeof(int));
+            cudaMemcpy(bools,g_bools,zeropadded_n*sizeof(int),cudaMemcpyDeviceToHost);
+            
+            result = cudaMalloc(&indices, zeropadded_n * sizeof(int));
             timer().endGpuTimer();
-            scan(n, temp_array, bools);
+            scan(zeropadded_n, temp_array, bools);
+            
             timer().startGpuTimer();
-            cudaMemcpy(indices, temp_array, n * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(indices, temp_array, zeropadded_n * sizeof(int), cudaMemcpyHostToDevice);
 
-            StreamCompaction::Common::kernScatter<<<blocksPerGrid,threadsPerBlock>>>(n, g_odata,g_idata, g_bools, indices);
-            cudaMemcpy(odata,g_odata,n*sizeof(int),cudaMemcpyDeviceToHost);
+            StreamCompaction::Common::kernScatter<<<blocksPerGrid,threadsPerBlock>>>(zeropadded_n, g_odata,g_idata, g_bools, indices);
+            cudaMemcpy(odata,g_odata,zeropadded_n*sizeof(int),cudaMemcpyDeviceToHost);
             cudaFree(bools);
             cudaFree(indices);
             cudaFree(g_odata);
             timer().endGpuTimer();
 
-            return temp_array[n-1];
+            return temp_array[zeropadded_n-1];
         }
     }
 }
