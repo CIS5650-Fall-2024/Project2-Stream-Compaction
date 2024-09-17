@@ -17,7 +17,7 @@
 // Radix sort tests cases
 // Make sure only set one of the following to 1
 #define ThreebitCase 0;
-#define FourbitCase 1;
+#define FourbitCase 0;
 #define EightbitCase 0;
 
 #define blockSize 256
@@ -32,36 +32,49 @@ int main(int argc, char* argv[]) {
 
     // Radix sort tests
     printf("\n");
-    printf("****************\n");
+    printf("**********************\n");
     printf("** RADIX SORT TESTS **\n");
-    printf("****************\n");
+    printf("**********************\n");
     
 #if ThreebitCase
     // Test 3 bit case
     int unsortedArray[8] = { 4, 7, 2, 6, 3, 5, 1, 0 };  // Binary equivalents: 100, 111, 010, 110, 011, 101, 001, 000
     int sortedArray[8];
     int bitSize = 3; 
+    // Input array and bitSize
+    StreamCompaction::RadixSort::radixSort(8, sortedArray, unsortedArray, bitSize);
+    // Print the array
+    printDesc("Radix sort, unsorted");
+    printArray(8, unsortedArray, true);
+    printDesc("Radix sort, sorted");
+    printArray(8, sortedArray, true);
 #endif
 #if FourbitCase
      // Test 4 bit case
      int unsortedArray[8] = { 4, 7, 10, 9, 15, 1, 0, 3 };  // Binary equivalents: 0100, 0111, 1010, 1001, 1111, 0001, 0000, 0011
      int sortedArray[8];
      int bitSize = 4;
+     // Input array and bitSize
+     StreamCompaction::RadixSort::radixSort(8, sortedArray, unsortedArray, bitSize);
+     // Print the array
+     printDesc("Radix sort, unsorted");
+     printArray(8, unsortedArray, true);
+     printDesc("Radix sort, sorted");
+     printArray(8, sortedArray, true);
 #endif
 #if EightbitCase
     // Test 8 bit case
     int unsortedArray[8] = { 68, 119, 170, 153, 255, 1, 0, 51 };  // Binary equivalents: 01000100, 01110111, 10101010, 10011001, 11111111, 00000001, 00000000, 00110011
     int sortedArray[8];
     int bitSize = 8;
-#endif
     // Input array and bitSize
     StreamCompaction::RadixSort::radixSort(8, sortedArray, unsortedArray, bitSize);
-
     // Print the array
     printDesc("Radix sort, unsorted");
     printArray(8, unsortedArray, true);
     printDesc("Radix sort, sorted");
     printArray(8, sortedArray, true);
+#endif
 
     // Scan tests
     printf("\n");
