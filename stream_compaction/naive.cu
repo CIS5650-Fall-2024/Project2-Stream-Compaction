@@ -17,13 +17,15 @@ namespace StreamCompaction {
             int index = (blockIdx.x * blockDim.x) + threadIdx.x;
             if (index >= n) return;
 
-            int ipow2 = powf(2, d - 1);
-            if (index >= ipow2)
+            int pow2 = (1 << (d - 1));
+            if (index >= pow2)
             {
-                odata[index] = idata[index - ipow2] + idata[index];
+                // Combine
+                odata[index] = idata[index - pow2] + idata[index];
             }
             else
             {
+                // Unused this iteration - Copy over to the other array
                 odata[index] = idata[index];
             }
         }
@@ -33,14 +35,16 @@ namespace StreamCompaction {
             int index = (blockIdx.x * blockDim.x) + threadIdx.x;
             if (index >= n) return;
 
-            int output = index >= s ? idata[index - s] : 0;
-            odata[index] = output;
+            // Shift to the right
+            // Fill newly empty slots with 0s
+            odata[index] = index >= s ? idata[index - s] : 0;
         }
 
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
+            // Allocate device arrays
             int *dev_odata, *dev_idata;
 
             cudaMalloc((void**)&dev_odata, n * sizeof(int));
@@ -53,10 +57,12 @@ namespace StreamCompaction {
 
             dim3 gridDim((n + blockSize - 1) / blockSize);
 
+            // Number of levels needed for the naive parallel scan
             int depth_max = ilog2ceil(n);
 
             timer().startGpuTimer();
 
+            // Perform an Inclusive Scan
             for (int d = 1; d <= depth_max; ++d)
             {
                 kernNaiveScan<<<gridDim, blockSize>>>(n, d, dev_odata, dev_idata);
@@ -65,12 +71,16 @@ namespace StreamCompaction {
                 dev_idata = dev_odata;
                 dev_odata = tmp;
             }
+
+            // Inclusive Scan -> Exclusive Scan conversion
             kernShiftRight<<<gridDim, blockSize>>>(n, 1, dev_odata, dev_idata);
 
             timer().endGpuTimer();
 
+            // Copy the output data
             cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 
+            // Free device arrays
             cudaFree(dev_odata);
             cudaFree(dev_idata);
             checkCUDAError("cudaFree Naive::scan failed!");
