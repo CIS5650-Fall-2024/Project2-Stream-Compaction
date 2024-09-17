@@ -57,13 +57,13 @@ namespace StreamCompaction {
 
             dim3 gridDim((n + blockSize - 1) / blockSize);
 
-            // Number of levels needed for the naive parallel scan
-            int depth_max = ilog2ceil(n);
+            // Number of levels needed for the scan
+            int maxDepth = ilog2ceil(n);
 
             timer().startGpuTimer();
 
             // Perform an Inclusive Scan
-            for (int d = 1; d <= depth_max; ++d)
+            for (int d = 1; d <= maxDepth; ++d)
             {
                 kernNaiveScan<<<gridDim, blockSize>>>(n, d, dev_odata, dev_idata);
 
