@@ -12,8 +12,10 @@
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
+#include "stream_compaction/radix.h"
+#include "fstream"
 
-const int SIZE = 1 << 28; // feel free to change the size of array
+const int SIZE = 1 << 18; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -146,6 +148,29 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
+
+    printf("\n");
+    printf("*****************************\n");
+    printf("****** RADIX SORT TESTS *****\n");
+    printf("*****************************\n");
+
+    zeroArray(SIZE, c);
+    printDesc("radix sort, power-of-two");
+    StreamCompaction::Radix::sort(SIZE, c, a);
+    printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(SIZE, c, true);
+    std::cout << "   The array is";
+    std::cout << (std::is_sorted(c, c + SIZE) ? " " : " not ");
+    std::cout << "sorted.\t(std::is_sorted verified)\n";
+
+    zeroArray(SIZE, c);
+    printDesc("radix sort, non-power-of-two");
+    StreamCompaction::Radix::sort(NPOT, c, a);
+    printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(SIZE, c, true);
+    std::cout << "   The array is";
+    std::cout << (std::is_sorted(c, c + NPOT) ? " " : " not ");
+    std::cout << "sorted.\t(std::is_sorted verified)\n";
 
 #ifdef _WIN32
     system("pause"); // stop Win32 console from closing on exit

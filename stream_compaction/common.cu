@@ -47,9 +47,17 @@ namespace StreamCompaction {
 
             if (bools[index])
             {
-                assert(indices[index] < n && indices[index] >= 0);
                 odata[indices[index]] = idata[index];
             }
+        }
+
+        __global__ void kernScatter(int n, int* odata,
+            const int* idata, const int* indices) {
+            // TODO
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+            if (index >= n) { return; }
+
+            odata[indices[index]] = idata[index];
         }
 
     }
