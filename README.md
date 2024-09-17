@@ -12,7 +12,7 @@ CUDA Stream Compaction
 This project implements GPU stream compaction using CUDA to remove zeros from an array of integers. Stream compaction is a crucial optimization technique, particularly useful for high-performance computing tasks like path tracing. By implementing various scan (prefix sum) algorithms, this project explores different strategies to leverage GPU parallelism efficiently.
 
 ### Features
-1. CPU Scan & Stream Compaction
+# 1. CPU Scan & Stream Compaction
 * CPU Scan: Implements a simple exclusive prefix sum using a for loop.
 * Compact Without Scan: A basic CPU method that removes zeros without relying on a scan operation.
 * Compact With Scan: A more advanced method using scan to optimize the stream compaction process.
