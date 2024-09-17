@@ -37,10 +37,11 @@ bit array and scatter operation are $O(1)$ due to the parallelism.
 ### Performance Analysis
 We will compare the performance of the different scan algorithms on different input sizes. The graph is shown below in 
 log scale.
-![Performance Graph](img/Figure_1.png)
-From the graph, we can see that the work-efficient scan algorithm performs the best among all the scan algorithms. When 
-the input size is small, the CPU algorithm is the fastest algorithm, but it quickly becomes slower as the input size 
-increases. The thrust implementation is the slowest among all GPU programs.
+![Performance Graph](img/Figure_2.png)
+From the graph, we can see that the thrust scan algorithm performs the best among all the scan algorithms, followed 
+by the work-efficient algorithm. When the input size is small, the CPU algorithm is the fastest algorithm, 
+but it quickly becomes slower as the input size increases. The naive scan algorithm also becomes slow when the size 
+becomes very large.
 
 #### Performance Bottlenecks
 Our timer for all the algorithms does not contain the memory allocation process and the process of copying the final 
@@ -63,13 +64,9 @@ all the data are stored as global memory, so changing it to a shared-memory mode
 performance. In part 5, we implemented an optimization that reduces the number of threads generated and replaced the 
 modular operation with a value comparison, which should make the algorithm more efficient.
 
-For both the naive and the efficient algorithm, we can see that having input size as a power-of-two number yields a 
-better result compared to a non-power-of-two input size. This is because the non-power-of-two size requires the 
-algorithm to append $0's$ to the back of the array to manually make it a power-of-two size, thus creating computations 
-that are not relevant. 
-
-The thrust algorithm takes much longer time that expected and becomes the slowest among all the algorithms. It is 
-possible that this is caused by a large size memory copy within the algorithm that causes this unexpected situation.
+The thrust algorithm is the most efficient algorithm when the input size is very large. It is not hard to imagine that 
+the thrust implementation uses shared-memory model and properly optimizes the use of warps and registers to make the 
+algorithm very efficient on large scale data.
 
 ### Output
 This output is generated with $2^{20}$ input size and $256$ block size.
@@ -77,56 +74,65 @@ This output is generated with $2^{20}$ input size and $256$ block size.
 ****************
 ** SCAN TESTS **
 ****************
+    [  21  48  31   3  42   0  12  14  10  46  47  33  22 ...  18   0 ]
 ==== cpu scan, power-of-two ====
-   elapsed time: 2.2409ms    (std::chrono Measured)
+   elapsed time: 1.5173ms    (std::chrono Measured)
+    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25687063 25687081 ]
     passed
 ==== cpu scan, non-power-of-two ====
-   elapsed time: 2.2036ms    (std::chrono Measured)
+   elapsed time: 1.5309ms    (std::chrono Measured)
+    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25686948 25686975 ]
     passed
 ==== naive scan, power-of-two ====
-   elapsed time: 3.0672ms    (CUDA Measured)
+   elapsed time: 71.0168ms    (CUDA Measured)
+    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25687063 25687081 ]
     passed
 ==== naive scan, non-power-of-two ====
-   elapsed time: 2.01571ms    (CUDA Measured)
+   elapsed time: 1.07379ms    (CUDA Measured)
+    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ...   0   0 ]
     passed
 ==== work-efficient scan, power-of-two ====
-   elapsed time: 1.51936ms    (CUDA Measured)
+   elapsed time: 12.4552ms    (CUDA Measured)
+    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25687063 25687081 ]
     passed
 ==== work-efficient scan, non-power-of-two ====
-   elapsed time: 1.31811ms    (CUDA Measured)
+   elapsed time: 0.667136ms    (CUDA Measured)
+    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25686948 25686975 ]
     passed
 ==== thrust scan, power-of-two ====
-   elapsed time: 31.2554ms    (CUDA Measured)
+   elapsed time: 0.945536ms    (CUDA Measured)
+    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25687063 25687081 ]
     passed
 ==== thrust scan, non-power-of-two ====
-   elapsed time: 19.5888ms    (CUDA Measured)
+   elapsed time: 0.505536ms    (CUDA Measured)
+    [   0  21  69 100 103 145 145 157 171 181 227 274 307 ... 25686948 25686975 ]
     passed
 
 *****************************
 ** STREAM COMPACTION TESTS **
 *****************************
 ==== cpu compact without scan, power-of-two ====
-   elapsed time: 4.2505ms    (std::chrono Measured)
+   elapsed time: 2.2486ms    (std::chrono Measured)
     passed
 ==== cpu compact without scan, non-power-of-two ====
-   elapsed time: 4.0982ms    (std::chrono Measured)
+   elapsed time: 2.3153ms    (std::chrono Measured)
     passed
 ==== cpu compact with scan ====
-   elapsed time: 13.0274ms    (std::chrono Measured)
+   elapsed time: 5.0041ms    (std::chrono Measured)
     passed
 ==== work-efficient compact, power-of-two ====
-   elapsed time: 3.36822ms    (CUDA Measured)
+   elapsed time: 13.1282ms    (CUDA Measured)
     passed
 ==== work-efficient compact, non-power-of-two ====
-   elapsed time: 1.09792ms    (CUDA Measured)
+   elapsed time: 1.02128ms    (CUDA Measured)
     passed
 
 **********************
 ** RADIX SORT TESTS **
 **********************
 ==== radix sort ====
-   elapsed time: 17.0703ms    (CUDA Measured)
+   elapsed time: 30.6645ms    (CUDA Measured)
 ==== thrust sort ====
-   elapsed time: 46.5818ms    (CUDA Measured)
+   elapsed time: 1.46294ms    (CUDA Measured)
     passed
 ```
