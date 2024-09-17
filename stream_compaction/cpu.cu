@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <vector>
 #include "cpu.h"
 
 #include "common.h"
@@ -20,6 +21,11 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int prev = 0;
+            for (int i = 0; i < n; i++) {
+                odata[i] = idata[i] + prev;
+                prev = odata[i];
+            }
             timer().endCpuTimer();
         }
 
@@ -31,8 +37,15 @@ namespace StreamCompaction {
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int idx = 0;
+            for (int i = 0; i < n; i++) {
+                if (idata[i] > 0) {
+                    odata[idx] = idata[i];
+                    idx++;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return idx;
         }
 
         /**
@@ -43,8 +56,29 @@ namespace StreamCompaction {
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            std::vector<int> step1;
+            for (int i = 0; i < n; i++) {
+                if (idata[i] > 0) {
+                    step1.push_back(1);
+                }
+                else {
+                    step1.push_back(0);
+                }
+            }
+            std::vector<int> step2;
+            int prev = 0;
+            for (int i = 0; i < n; i++) {
+                step2.push_back(prev);
+                prev += step1[i];
+            }
+            int count = step2[n - 1] + (step1[n - 1] > 0);
+            for (int i = 0; i < n; i++) {
+                if (idata[i] > 0) {
+                    odata[step2[i]] = idata[i];
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return count;
         }
     }
 }
