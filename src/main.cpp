@@ -65,26 +65,6 @@ void scanTests(const int SIZE, const int NPOT, int *a, int *b, int *c, int *d) {
     printElapsedTime(StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     if (!printCmpResult(NPOT, b, c)) printArray(SIZE, c, true);
 
-    // zeroArray(SIZE, c);
-    // zeroArray(SIZE, d);
-    // printDesc("parallel reduction, power-of-two");
-    // StreamCompaction::Efficient::reduce(SIZE, d, a);
-    // StreamCompaction::Efficient::scan(SIZE, c, a);
-    // printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    // printArray(SIZE, d, true);
-    // printArray(SIZE, c, true);
-    // printCmpResult(SIZE, c, d);
-
-    // zeroArray(SIZE, c);
-    // zeroArray(SIZE, d);
-    // printDesc("parallel reduction, non-power-of-two");
-    // StreamCompaction::Efficient::reduce(NPOT, d, a);
-    // StreamCompaction::Efficient::scan(NPOT, c, a);
-    // printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    // printArray(NPOT, d, true);
-    // printArray(NPOT, c, true);
-    // printCmpResult(NPOT, c, d);
-
     zeroArray(SIZE, c);
     printDesc("work-efficient scan, power-of-two");
     StreamCompaction::Efficient::scan(SIZE, c, a);

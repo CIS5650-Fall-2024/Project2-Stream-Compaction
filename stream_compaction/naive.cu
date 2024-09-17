@@ -160,13 +160,10 @@ namespace StreamCompaction {
 
             cudaFree(oblockSumDevice);
             checkCUDAError("failed to free oblockSumDevice");
-
             cudaFree(iblockSumDevice);
             checkCUDAError("failed to free iblockSumDevice");
-
             cudaFree(odataDevice);
             checkCUDAError("failed to free odataDevice");
-
             cudaFree(idataDevice);
             checkCUDAError("failed to free idataDevice");
 
