@@ -19,7 +19,14 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            // DONE
+            // Exclusive - Include the identity in the output
+            odata[0] = 0;
+            for(int k = 1; k < n; k++)
+            {
+                odata[k] = odata[k - 1] + idata[k];
+            }
+
             timer().endCpuTimer();
         }
 
@@ -30,9 +37,21 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            
+            // DONE
+            int j = 0;
+            for (int i = 0; i < n; ++i)
+            {
+                if (idata[i] != 0)
+                {
+                    odata[j] = idata[i];
+                    ++j;
+                }
+            }
+
+
             timer().endCpuTimer();
-            return -1;
+            return j;
         }
 
         /**
@@ -42,9 +61,49 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            // DONE
+
+            int numRemaining;
+
+            // Step 1: Compute temporary array containing
+            // either 1 or 0, depending on if element meets criteria
+            int* temp = new int[n];
+            for (int i = 0; i < n; ++i)
+            {
+                if (idata[i] == 0)
+                {
+                    temp[i] = 0;
+                }
+                else
+                {
+                    temp[i] = 1;
+                }
+            }
+
+
+            // Step 2: Run exclusive scan on the temp array
+            // Exclusive - Insert the identity
+            odata[0] = 0;
+            // Start at 1 since we inserted the identity and are shifting to the right
+            for (int k = 1; k < n; ++k)
+            {
+                odata[k] = odata[k - 1] + temp[k - 1];
+            }
+
+            // Step 3: Scatter!
+            // Result of scan is index into the final array
+            numRemaining = odata[n - 1];
+            for (int i = 0; i < n; ++i)
+            {
+                if (temp[i] == 1)
+                {
+                    odata[odata[i]] = idata[i];
+                }
+            }
+
             timer().endCpuTimer();
-            return -1;
+
+            return numRemaining;
         }
     }
 }
