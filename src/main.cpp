@@ -159,6 +159,38 @@ int main(int argc, char* argv[]) {
 
     // pow2 test
 
+    zeroArray(8, a);
+    std::cout << " " << std::endl;
+    std::cout << "Radix Sort, hard-coded lecture example test" << std::endl;
+    std::cout << " " << std::endl;
+
+    // example from slides for debugging
+    a[0] = 4;
+    a[1] = 7;
+    a[2] = 2;
+    a[3] = 6;
+    a[4] = 3;
+    a[5] = 5;
+    a[6] = 1;
+    a[7] = 0;
+
+    printArray(8, a, true);
+
+    zeroArray(8, b);
+    printDesc("cpu sort (std::sort)");
+    StreamCompaction::CPU::sort(8, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(8, b, true);
+
+    zeroArray(8, c);
+    printDesc("radix sort");
+    StreamCompaction::Radix::sort(8, c, a);
+    printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(8, c, true);
+    printCmpResult(8, b, c);
+
+    // pow2 test
+
     zeroArray(SIZE, a);
     std::cout << " " << std::endl;
     std::cout << "Radix Sort, pow2 consecutive ints" << std::endl;
@@ -211,35 +243,25 @@ int main(int argc, char* argv[]) {
 
     // npot shuffled
 
-    genArray(SIZE, a, SIZE);
+    genArray(NPOT, a, NPOT);
     std::cout << " " << std::endl;
     std::cout << "Radix Sort, non-pow2 shuffled ints" << std::endl;
     std::cout << " " << std::endl;
 
-    // example from slides for debugging
-    /*a[0] = 4;
-    a[1] = 7;
-    a[2] = 2;
-    a[3] = 6;
-    a[4] = 3;
-    a[5] = 5;
-    a[6] = 1;
-    a[7] = 0;*/
+    printArray(NPOT, a, true);
 
-    printArray(SIZE, a, true);
-
-    zeroArray(SIZE, b);
+    zeroArray(NPOT, b);
     printDesc("cpu sort (std::sort)");
-    StreamCompaction::CPU::sort(SIZE, b, a);
+    StreamCompaction::CPU::sort(NPOT, b, a);
     printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
-    printArray(SIZE, b, true);
+    printArray(NPOT, b, true);
 
-    zeroArray(SIZE, c);
+    zeroArray(NPOT, c);
     printDesc("radix sort");
-    StreamCompaction::Radix::sort(SIZE, c, a);
+    StreamCompaction::Radix::sort(NPOT, c, a);
     printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-    printArray(SIZE, c, true);
-    printCmpResult(SIZE, b, c);
+    printArray(NPOT, c, true);
+    printCmpResult(NPOT, b, c);
 
     // END TESTS ----------------------------------------
 
