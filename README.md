@@ -76,6 +76,7 @@ Here is the output for Radix Sort Benchmarks:
 
 ![](img/screenshot-radix-sort.png)
 
+To verify the correctness of my Radix Sort, I used `std::stable_sort` as the *ground truth*. I then utilized the provided `printCmpResult()` to compare the sorting results. The outputs are shown in the following section, "Test Program Output", and confirm the correctness of the implementation.
 
 ## Test Program Output
 
