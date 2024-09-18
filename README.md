@@ -17,13 +17,16 @@ CUDA Stream Compaction
 
 **Optimizing Block Size**
 
+<img src="https://github.com/yuhanliu-tech/GPU-Stream-Compaction/blob/main/img/block_opt.png" width="600"/>
+
 #### Comparison of GPU Scan Implementations
 
 | CPU |  Naive  |   Work-Efficient  | Thrust |
 | :------------------------------: |:------------------------------: |:-----------------------------------------------: |:-----------------------------------------------:|
 | xxxxx                            | xxxxxx                          |xxxxxx                                            |xxxxxx                                    |
 
-(Plot a graph of the comparison (with array size on the independent axis)
+
+<img src="https://github.com/yuhanliu-tech/GPU-Stream-Compaction/blob/main/img/scan_perf.png" width="600"/>
 
 **Explaining of Phenomena in the Graph**
 
@@ -41,3 +44,7 @@ CUDA Stream Compaction
 * For radix sort, show how it is called and an example of its output.
 
 * Additional tests for radix sort
+
+* Performance Evaluation
+
+<img src="https://github.com/yuhanliu-tech/GPU-Stream-Compaction/blob/main/img/radix_perf.png" width="600"/>
