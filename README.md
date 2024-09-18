@@ -46,7 +46,7 @@ Meanwhile, the thrust implementation is much faster than any other implementatio
 
 ### Performance Bottlenecks:
 
-![](img/nsight_systems.png)
+![](img/nsight_system.png)
 
 - **Computation:** The CPU implementation is mainly limited in its compute due to it being single-threaded and not being able to take advantage of parallelization. The naive implementation also suffers from a computation bottleneck due to not being able to properly utilize all of the threads in a warp during computation. The work-efficient implementation does not seem to suffer from as much computational bottlenecks.
 
