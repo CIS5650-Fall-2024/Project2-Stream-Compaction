@@ -27,8 +27,10 @@ namespace StreamCompaction {
             odata[0] = 0;
 
             
-            for (int i = 1; i < n; i++) {
+            for (int i = 1; i <=n; i++) {
                 odata[i] = odata[i - 1] + idata[i - 1];
+                
+           
             }
             
             timer().endCpuTimer();
