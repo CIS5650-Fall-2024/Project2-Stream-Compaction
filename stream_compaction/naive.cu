@@ -14,26 +14,26 @@ namespace StreamCompaction {
             return timer;
         }
         // TODO: __global__
-        __global__ void scan_global(int n, int *odata, int *idata, int *temp)
+        __global__ void scan_global(int n, int *odata, int *idata, int *temp,int offset,int pout)
         {
             int thid = threadIdx.x + (blockIdx.x * blockDim.x);
-            int pout = 0, pin = 1;
             // Load input into global memory.
             // This is exclusive scan, so shift right by one
             // and set first element to 0
-            
-            temp[pout * n + thid] = (thid > 0) ? idata[thid - 1] : 0;
+            int pin = 1 - pout;
+            if (thid >= offset)
+                temp[pout * n + thid] = temp[pin * n + thid - offset] + temp[pin* n + thid];
+            else
+                temp[pout * n + thid] = temp[pin * n + thid];
             __syncthreads();
-            for (int offset = 1; offset < n; offset*=2) {
-                pout = 1 - pout; // swap double buffer indices
-                pin = 1 - pout;
-                if (thid >= offset)
-                    temp[pout * n + thid] = temp[pin * n + thid - offset] + temp[pin* n + thid];
-                else
-                    temp[pout * n + thid] = temp[pin * n + thid];
-                __syncthreads();
-            }
             odata[thid] = temp[pout * n + thid]; // write output
+        }
+
+        __global__ void shiftInput(int* idata, int* shifted_input)
+        {
+            int thid = threadIdx.x + (blockIdx.x * blockDim.x);
+            shifted_input[thid] = (thid > 0) ? idata[thid - 1] : 0;
+            __syncthreads();
         }
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
@@ -47,11 +47,20 @@ namespace StreamCompaction {
             result = cudaMalloc((void**)&g_odata,zeropadded_n*sizeof(int));
             result = cudaMalloc((void**)&temp,2 * zeropadded_n * sizeof(int));
             cudaMemcpy(g_idata,idata,sizeof(int)*n,cudaMemcpyHostToDevice);
-            int threadsPerBlock = 256;
+            int threadsPerBlock = 1024;
             int blocksPerGrid = (zeropadded_n + threadsPerBlock - 1) / threadsPerBlock;
-            scan_global<<<blocksPerGrid,threadsPerBlock>>>(zeropadded_n,g_odata,g_idata,temp);
+
+            int offset = 1;
+            int pout = 0;
+            shiftInput<<<blocksPerGrid,threadsPerBlock>>>(g_idata, temp);
+            for (int i = 0; i < ilog2ceil(n); i++) {
+                pout = 1 - pout;
+                scan_global<<<blocksPerGrid,threadsPerBlock>>>(zeropadded_n,g_odata,g_idata,temp,offset,pout);
+                offset *= 2;
+            }
+
             cudaMemcpy(odata,g_odata,sizeof(int)*n,cudaMemcpyDeviceToHost);
-            for (int i = 0; i < n; i++)
+            for (int i = 0; i < 257; i++)
             {
                 //printf("%d %d\n", idata[i], odata[i]);
             }
