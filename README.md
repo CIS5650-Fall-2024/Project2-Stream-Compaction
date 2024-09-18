@@ -29,6 +29,17 @@ This project implements GPU stream compaction using CUDA to remove zeros from an
 * Uses the Thrust library's exclusive_scan function to perform stream compaction with GPU-accelerated thrust primitives.
 
 ## Performance Analysis
+
+### Optimize Block Size
+<img src="img/BlockSizeGraph.png" width=800>
+There is a significant decrease in time as block size increases until about 64 threads per block and then the time has little to no change or effect.
+
+### Scan Implementation Comparison
+<img src="img/ScanGraph.png" width=800>
+
+### Stream Compaction Implementation Comparison
+<img src="img/StreamCompactionGraph.png" width=800>
+
 #### Key Insights:
 * Naive GPU Scan: While the naive approach is simple, it suffers from inefficiencies due to its multiple kernel launches and use of global memory.
 * Work-Efficient GPU Scan: More performant than the naive version due to reduced memory bandwidth usage and in-place calculations.
@@ -37,3 +48,8 @@ This project implements GPU stream compaction using CUDA to remove zeros from an
 #### Bottlenecks Identified:
 * Global Memory Access: Naive implementations suffer from excessive global memory reads/writes, leading to slower performance.
 * Occupancy: The work-efficient algorithm shows reduced efficiency at deeper recursion levels due to reduced thread workload, limiting GPU occupancy.
+
+#### Optimizations Explored:
+* Adjusted block size to optimize shared memory usage and improve the occupancy of each streaming multiprocessor.
+* Adjusted kernels to only include shifting operators instead of multiplication and division.
+* 
