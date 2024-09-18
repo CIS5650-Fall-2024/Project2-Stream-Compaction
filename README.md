@@ -60,7 +60,7 @@ Let us consider above diagram for conceptual understanding.
 
 For `k = 0`, we are considering the least significant bit.\
 `i` array is our input array in binary representation.\
-`b` array contains the true/false result of applying an appropraite bit mask (for this example `0b1`).\
+`b` array contains the true/false result of applying an appropriate bit mask (for this example `0b1`).\
 `e` array is `b` array negated.\
 `f` array is the exclusive scan on `e` array.\
 `t` array is populated such that `t[idx] = idx - f[idx] + totalFalses`, where `totalFalses = e[n - 1] + f[n - 1]`.\
@@ -70,7 +70,7 @@ Lastly, the final `output` array is computed by scattering `i` array based on th
 Our implementation simplifies above procedure by combining multiple steps into single processes.\
 `kernBitMaskNot` takes input array `i` and applies a negated bit mask to output array `e`.\
 `kernScan` performs a naive parallel scan on `e` to output array `f`.\
-Based on `e` and `f` arrays' last elements, we comput `totalFalses`.\
+Based on `e` and `f` arrays' last elements, we compute `totalFalses`.\
 `kernScatter` takes these intermediate results and outputs final `output` array directly.
 
 Code for above algorithm can be found inside `radix.cu`.\
@@ -90,10 +90,13 @@ It should be noted that due to the randomness of array generation (the distribut
 
 Due to the nature of the array sizes being too big to fit in a regular independent axis scale, the array sizes are presented in the logarithmic scale with base 2.
 
-Note that for every plot presented below, *the lower the value, the better the performance is*.
+Note that for every plot presented below, *the lower the value, the better the performance is*.\
+Po2 stands for power-of-two, and NPo2 stands for non-power-of-two.
 
 * Roughly optimize the block sizes of each of your implementations for minimal
   run time on your GPU.
+
+The block size for naive approach was chosen to be 128, and the block size for work-efficient approach was chosen to be 256.
 
 The block size for each implementation was optimized to array size `1 << 20` (or 2^20). The relationships observed in the following analysis may be subject to change depending on the target of this optimization, though in general worse in performance unless the sizes are at either extremes.
 
@@ -101,14 +104,18 @@ The block size for each implementation was optimized to array size `1 << 20` (or
   Thrust) to the serial CPU version of Scan. Plot a graph of the comparison
   (with array size on the independent axis).
 
+### Scan
+
 ![](writeup/scan_all.png)
 
-For our scan implementations, we first present you a plot of runtime for all dataset collected. However, this is not very useful for distinguishing interesting points and extracting meaningful explanations. Therefore, we extracted a specific subrange of power-of-two array sizes and normalized them with respect performance of our CPU scan for a closer observation.
+For our scan implementations, we first present you a plot of runtime for all dataset collected. However, this is not very useful for distinguishing interesting points and extracting meaningful explanations. Therefore, we extracted a specific subrange of power-of-two array sizes and normalized them with respect to the performance of our CPU scan for a closer observation.
 
 ![](writeup/scan_po2_relative_1.png)
 ![](writeup/scan_po2_relative_2.png)
 
 This relative plot showcases that for lower array sizes (approximately up to 2^18), CPU scan implementation outperforms all other parallel schemes by a huge margin, especially at very small array sizes. However, once the array sizes become big enough that it actually takes the CPU a significant amount of time to process all entries serially, the benefit of parallelism kicks in. We can observe that from array size of 2^19 ~ 2^20 onwards, all parallel implementations out-scale the performance of CPU scan by multiple factors. Work-efficient parallelism outperforms CPU scan by more than a double (or less than halve the time taken).
+
+### Compaction
 
 ![](writeup/compact_all.png)
 
@@ -117,11 +124,13 @@ We see a similar trend with our compact implementations.
 ![](writeup/compact_extract.png)
 ![](writeup/compact_relative.png)
 
-By observing the trends and intersections on the relative performance plot, we can see that although work-efficient parallelism performs initially worse. However, again, once the array size passes a certain threshold (for our test runs around array sizes of 2^18 ~ 2^19), the work-efficient compaction outscales CPU's linear compaction by 2~3 times.
+By observing the trends and intersections on the relative performance plot, we can again see that work-efficient parallelism performs initially worse. However, once the array size passes a certain threshold (for our test runs around array sizes of 2^18 ~ 2^19), the work-efficient compaction out-scales CPU's linear compaction by 2~3 times.
+
+### Radix Sort
 
 ![](writeup/sort_all.png)
 
-The exact same pattern can be seen for radix sort, except the threshold for sorting is lower at around 2^15~2^16 elements.
+The exact same pattern can be seen for radix sort, except the threshold for sorting is lower at around 2^15~2^16 elements. For above graph for all sort implementations, it is hard to observe any difference because both power-of-two and non-power-of-two tests resulted in almost identical readings for each implementation.
 
 ![](writeup/sort_extract.png)
 ![](writeup/sort_relative.png)
@@ -139,7 +148,7 @@ We can observe from the Nsight compute profiling below that our work-efficient p
 
 ![](writeup/nsight_compute_profile.JPG)
 
-On the other hand, we can observe from the following Nsight profile traces that `DeviceScanKernel` (the actual kernel invocation for thrust library's `exclusive_scan`) reaches theoretical occupancy limit. This means that our program is always actively trying to process the warps, but is limited by the memory throughput as shown in the low memory and cache throughput percentages.
+On the other hand, we can observe from the following Nsight profile traces that `DeviceScanKernel` (the actual kernel invocation for thrust library's `exclusive_scan`) reaches theoretical occupancy limit. This means that our program is always actively trying to process the warps, but is limited by the memory bandwidth as shown in the low memory and cache throughput percentages.
 
 ![](writeup/thrust_profile.JPG)
 ![](writeup/thrust_profile_compute.JPG)
