@@ -14,7 +14,7 @@ namespace StreamCompaction {
             static PerformanceTimer timer;
             return timer;
         }
-        // TODO: __global__
+
 		__global__ void kernScan(int n, int d, int* odata, const int* idata) {
 			int index = threadIdx.x + (blockIdx.x * blockDim.x);
             if (index >= n) {
@@ -48,7 +48,6 @@ namespace StreamCompaction {
 			dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
 
             timer().startGpuTimer();
-            // TODO
 			for (int d = 1; d <= ilog2ceil(n); d++) {
 				kernScan <<<blocksPerGrid, blockSize>>> (n, d, dev_odata, dev_idata);
 				std::swap(dev_odata, dev_idata);
