@@ -66,9 +66,21 @@ namespace StreamCompaction {
                     bitArray[i] = 0;
                 }
             }
-            scan(n, scanBitArray, bitArray);
+
+
             //
             timer().startCpuTimer();
+            
+            {
+                //1.5 scan
+                scanBitArray[0] = 0;
+                for (int i = 1; i < n; i++) {
+                    scanBitArray[i] = scanBitArray[i - 1] + bitArray[i - 1];
+                }
+                //scan(n, scanBitArray, bitArray);
+            }
+            
+
             // 2. Scatter
             int numElem = scanBitArray[n - 1];
             for (int i = 0; i < n; i++) {
