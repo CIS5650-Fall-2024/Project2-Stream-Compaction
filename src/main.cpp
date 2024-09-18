@@ -11,6 +11,7 @@
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
+#include <stream_compaction/radix.h>
 #include "testing_helpers.hpp"
 
  const int SIZE = 1 << 20; // feel free to change the size of array
@@ -102,7 +103,6 @@ int main(int argc, char* argv[]) {
 	printf("*****************************\n");
 
 	// Compaction tests
-
 	genArray(SIZE - 1, a, 4);  // Leave a 0 at the end to test that edge case
 	a[SIZE - 1] = 0;
 	printArray(SIZE, a, true);
@@ -148,11 +148,35 @@ int main(int argc, char* argv[]) {
 	//printArray(count, c, true);
 	printCmpLenResult(count, expectedNPOT, b, c);
 
+	//Sort tests
+	printf("\n");
+	printf("*****************************\n");
+	printf("********* SORT TESTS ********\n");
+	printf("*****************************\n");
+
+	zeroArray(SIZE, c);
+	printDesc("radix sort, power-of-two");
+	StreamCompaction::Radix::sort(SIZE, c, a);
+	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	printArray(SIZE, c, true);
+	if (std::is_sorted(c, c + SIZE)) printf("passed\n");
+	else printf("failed\n");
+
+	zeroArray(SIZE, c);
+	printDesc("radix sort, non-power-of-two");
+	StreamCompaction::Radix::sort(NPOT, c, a);
+	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	printArray(NPOT, c, true);
+	if (std::is_sorted(c, c + NPOT)) printf("passed\n");
+	else printf("failed\n");
+
 	system("pause"); // stop Win32 console from closing on exit
 	delete[] a;
 	delete[] b;
 	delete[] c;
 
+
+	////test of scan and compact time
 	//printf("Power of 2,CPU Scan Time (ms),Naive Scan Time (ms),Efficient Scan Time (ms),Thrust Scan Time (ms),CPU Compact without Scan Time (ms),CPU Compact with Scan Time (ms),Efficient GPU Compact Time (ms)\n");
 	//for (int POW = 0; POW <= MAX_POW; POW++) {
 	//	int SIZE = 1 << POW;

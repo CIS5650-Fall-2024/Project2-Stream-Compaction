@@ -10,14 +10,12 @@
 namespace StreamCompaction {
 	namespace Efficient {
 		using StreamCompaction::Common::PerformanceTimer;
-		PerformanceTimer& timer()
-		{
+		PerformanceTimer& timer() {
 			static PerformanceTimer timer;
 			return timer;
 		}
 
-		__global__ void kernUpSweep(int n, int d, int* odata)
-		{
+		__global__ void kernUpSweep(int n, int d, int* odata) {
 			int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 			if (index >= n) return;
 
@@ -26,8 +24,7 @@ namespace StreamCompaction {
 			odata[k + (1 << (d + 1)) - 1] += odata[k + (1 << d) - 1];
 		}
 
-		__global__ void kernDownSweep(int n, int d, int* odata)
-		{
+		__global__ void kernDownSweep(int n, int d, int* odata) {
 			int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 			if (index >= n) return;
 
@@ -43,33 +40,27 @@ namespace StreamCompaction {
 		 */
 		void scan(int n, int* odata, const int* idata) {
 
+			int N = 1 << ilog2ceil(n);
 			int* dev_indices;
 			//cudaMalloc((void**)&dev_indices, n * sizeof(int));
-			if (n == 1 << ilog2ceil(n)) cudaMalloc((void**)&dev_indices, n * sizeof(int));
-			else cudaMalloc((void**)&dev_indices, 2 * n * sizeof(int));
+			cudaMalloc((void**)&dev_indices, N * sizeof(int));
 			cudaMemcpy(dev_indices, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 			thrust::device_ptr<int> thrust_indices(dev_indices);
 
 			timer().startGpuTimer();
 
 			//upsweep
-			dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
-			for (int d = 0; d < ilog2ceil(n); d++)
-			{
-				int kSteps = n >> (d + 1);
+			for (int d = 0; d < ilog2ceil(N); d++){
+				int kSteps = N >> (d + 1);
 				dim3 blocksPerGrid((kSteps + blockSize - 1) / blockSize);
 				kernUpSweep << < blocksPerGrid, blockSize >> > (kSteps, d, dev_indices);
 			}
 
 			//downsweep
-			thrust_indices[n - 1] = 0;
+			thrust_indices[N - 1] = 0;
 
-			for (int d = ilog2ceil(n) - 1; d >= 0; d--)
-			{
-				int kSteps = 0;
-				if (n == 1 << ilog2ceil(n)) kSteps = n >> (d + 1);
-				else kSteps = n >> d;
-
+			for (int d = ilog2ceil(N) - 1; d >= 0; d--){
+				int kSteps = N >> (d + 1);
 				dim3 blocksPerGrid((kSteps + blockSize - 1) / blockSize);
 				kernDownSweep << < blocksPerGrid, blockSize >> > (kSteps, d, dev_indices);
 			}
@@ -90,6 +81,7 @@ namespace StreamCompaction {
 		 */
 		int compact(int n, int* odata, const int* idata) {
 
+			int N = 1 << ilog2ceil(n);
 			int* dev_idata;
 			int* dev_label;
 			cudaMalloc((void**)&dev_idata, n * sizeof(int));
@@ -99,8 +91,7 @@ namespace StreamCompaction {
 			thrust::device_ptr<int> thrust_label(dev_label);
 
 			int* dev_indices;
-			if (n == 1 << ilog2ceil(n)) cudaMalloc((void**)&dev_indices, n * sizeof(int));
-			else cudaMalloc((void**)&dev_indices, 2 * n * sizeof(int));
+			cudaMalloc((void**)&dev_indices, N * sizeof(int));
 			thrust::device_ptr<int> thrust_indices(dev_indices);
 
 			timer().startGpuTimer();
@@ -113,22 +104,17 @@ namespace StreamCompaction {
 			cudaMemcpy(dev_indices, dev_label, n * sizeof(int), cudaMemcpyDeviceToDevice);
 
 			//upsweep
-			for (int d = 0; d < ilog2ceil(n); d++)
-			{
-				int kSteps = n >> (d + 1);
+			for (int d = 0; d < ilog2ceil(N); d++){
+				int kSteps = N >> (d + 1);
 				dim3 blocksPerGrid((kSteps + blockSize - 1) / blockSize);
 				kernUpSweep << < blocksPerGrid, blockSize >> > (kSteps, d, dev_indices);
 			}
 
 			//downsweep
-			thrust_indices[n - 1] = 0;
+			thrust_indices[N - 1] = 0;
 
-			for (int d = ilog2ceil(n) - 1; d >= 0; d--)
-			{
-				int kSteps = 0;
-				if (n == 1 << ilog2ceil(n)) kSteps = n >> (d + 1);
-				else kSteps = n >> d;
-
+			for (int d = ilog2ceil(N) - 1; d >= 0; d--){
+				int kSteps = N >> (d + 1);
 				dim3 blocksPerGrid((kSteps + blockSize - 1) / blockSize);
 				kernDownSweep << < blocksPerGrid, blockSize >> > (kSteps, d, dev_indices);
 			}

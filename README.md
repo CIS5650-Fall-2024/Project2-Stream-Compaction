@@ -14,9 +14,10 @@ CUDA Stream Compaction
 - Naive GPU Scan Algorithm
 - Work-Efficient GPU Scan & Stream Compaction
 - Thrust's Exclusive Scan Function
+- [Extra Credit +10] Radix Sort Based on Work-Efficient Scan
 
 **Optimizations made**
-- [Extra Credit +5] Optimized number of blocks used in efficient scan. 
+- [Extra Credit +5] Optimized number of threads used in work-efficient scan. 
 
 ### 2. Extra Credits
 [Extra Credit +5] **Why is My GPU Approach So Slow?**
@@ -30,11 +31,39 @@ n, to determine the number of blocks.
 However, for arrays with very short lengths, the CPU will still outperform the GPU. This is because the basic unit of 
 an up-sweep or down-sweep operation is inherently more complex than a simple short for-loop on the CPU. Nonetheless, this complexity becomes negligible as the array size increases significantly.
 
+[Extra Credit +10] **Radix Sort Based on Work-Efficient Scan**
 
+I have implemented radix sort algorithm by using the kernel of work-efficient scan. Here is its test results in release mode at length of 2^20, block size of 128:
+```
+*****************************
+********* SORT TESTS ********
+*****************************
+==== radix sort, power-of-two ====
+   elapsed time: 20.0816ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ...   3   3 ]
+passed
+==== radix sort, non-power-of-two ====
+   elapsed time: 23.0973ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ...   3   3 ]
+passed
+Press any key to continue . . .
+```
 
 
 ### 3. Performance Analysis
-#### Selection of Block Size
+#### (i) Non-Power-of-Two Arrays
+NPOT arrays has been a major issue that troubled me for days. However, I finally realized that the 
+solution is simply padding an NPOT array with zeros to transform it into a POT array. These zeros are 
+discarded after the up-sweep and down-sweep phases. This padding should only occur during the up-sweep and down-sweep 
+stages since these are the only steps that require a balanced binary tree structure.
+
+Padding with redundant zeros may impact performance, but this impact is minimal. Therefore, only POT arrays are used 
+for the performance analysis below.
+
+
+
+
+#### (ii) Selection of Block Size
 Figure below shows in debug mode, under the length of 2^28, time cost by Naive and Work Efficient scan. From the graph we know that should pick the block size 
 with the overall shortest scan time, which is 128, for further tests.
 ![scan_time_vs_block_size.png](img%2Fscan_time_vs_block_size.png)
@@ -45,8 +74,7 @@ Analysis:
 wasted resources. However, as noted earlier, the work-efficient method has been optimized and handles small block sizes much more effectively.
 
 
-
-#### Scan Result and Observation
+#### (iii) Scan Result and Observation
 Figure below shows in release mode, given fixed block size of 128, scan performance of all approaches. Both X and Y axis are log-scaled.
 ![scan_time_vs_array_size.png](img%2Fscan_time_vs_array_size.png)
 
@@ -59,7 +87,7 @@ nearly linearly, suggesting the current implementation hasn’t fully achieved i
 my implementation underscores the bottlenecks in my approach.
 
 
-#### Compaction Result and Observation
+#### (iv) Compaction Result and Observation
 Figure below shows in release mode, given fixed block size of 128, compaction performance of all approaches. Both X and Y axis are log-scaled.
 ![compaction_time_vs_array_size.png](img%2Fcompaction_time_vs_array_size.png)
 
@@ -68,7 +96,7 @@ Observation:
 This introduces some ```cudaMemcpy``` operations within the GPU timer, which slightly slows it down. Despite this, the work-efficient method still outperforms the CPU method when processing long arrays.
 
 
-#### Bottlenecks Analysis
+#### (v) Bottlenecks Analysis
 For the CPU and naive scan methods, the bottlenecks lie in their respective computation approaches or similar inefficiencies 
 found in the work-efficient scan. Therefore, I’ll focus on comparing my work-efficient scan with the highly optimized Thrust scan.
 
