@@ -59,11 +59,9 @@ This repository compares the implementation of scan or prefix scan algorithm on 
     [   3   1   1   2   3   2   1   1   3   3   2   3   3 ...   3   1 ]
     passed
 ==== work-efficient compact, power-of-two ====
-zeropadded = 256
    elapsed time: 0.077728ms    (CUDA Measured)
     passed
 ==== work-efficient compact, non-power-of-two ====
-zeropadded = 256
    elapsed time: 0.083264ms    (CUDA Measured)
     passed
 ```
