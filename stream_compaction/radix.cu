@@ -42,7 +42,11 @@ namespace StreamCompaction
 
         void sort(int n, int* odata, const int* idata)
         {
-            int digits = 31;
+            sort(n, 31, odata, idata);
+        }
+
+        void sort(int n, int bits, int* odata, const int* idata)
+        {
             int nCeil = 1 << ilog2ceil(n);
 
             int* dev_idata;
@@ -76,7 +80,7 @@ namespace StreamCompaction
             checkCUDAError("cudaMemcpy idata->dev_idata failed!");
 
             timer().startGpuTimer();
-            for (int k = 0; k < digits; ++k)
+            for (int k = 0; k < bits; ++k)
             {
                 // k-th pass
                 dim3 threadsPerBlock(blockSize);
