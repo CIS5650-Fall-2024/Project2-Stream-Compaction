@@ -20,3 +20,4 @@ CUDA Stream Compaction
      * Efficient: (256, 1, 1)
  * Comparison of all Scan Implementations (CPU, GPU (Naive, Efficient, Thrust)):
    *  ![](images/Chart1.png)
+   *  This chart plots the time taken/runtime of different Scan implementations across different input array sizes. We can draw a conclusion that the GPU methods have a significant performance boost over the serial CPU method for larger array sizes, larger than 2 to the power of 14.
