@@ -19,7 +19,12 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            if (n > 0) {
+                odata[0] = 0;
+                for (int i = 1; i < n; i++) {
+                    odata[i] = odata[i - 1] + idata[i - 1];
+                }
+            }
             timer().endCpuTimer();
         }
 
@@ -30,9 +35,15 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int pos = 0;
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    odata[pos] = idata[i];
+                    pos++;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return pos;
         }
 
         /**
@@ -41,10 +52,40 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            // construct the temporary array
+            int *temp = new int[n];
+            int *scanResult = new int[n];
+
             timer().startCpuTimer();
-            // TODO
+            // map
+            for (int i = 0; i < n; i++) {
+                temp[i] = idata[i] == 0 ? 0 : 1;
+            }
+
+            // scan
+            if (n > 0) {
+                scanResult[0] = 0;
+                for (int i = 1; i < n; i++) {
+                    scanResult[i] = scanResult[i - 1] + temp[i - 1];
+                }
+            }
+
+            // scatter
+            int count = 0;
+            for (int i = 0; i < n; i++) {
+                if (temp[i] == 1) {
+                    odata[scanResult[i]] = idata[i];
+                    count++;
+                }
+            }
+            count = scanResult[n - 1] + temp[n - 1];
             timer().endCpuTimer();
-            return -1;
+
+            // free memory
+            delete[] temp;
+            delete[] scanResult;
+
+            return count;
         }
     }
 }
