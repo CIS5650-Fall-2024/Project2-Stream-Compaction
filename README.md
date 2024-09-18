@@ -25,13 +25,9 @@ CUDA Stream Compaction
 
 | CPU |  Naive  |   Work-Efficient  | Thrust |
 | :------------------------------: |:------------------------------: |:-----------------------------------------------: |:-----------------------------------------------:|
-| xxxxx                            | xxxxxx                          |xxxxxx                                            |xxxxxx                                    |
+| For smaller datasets, the overhead of managing parallel execution on a GPU (e.g., kernel launches, thread synchronization) offsets the parallel advantage, making the CPU more efficient. However, as data scales, the complexity of scanning on the CPU increases linearly. In the graph below where array sizes increase exponentially, the complexity of CPU scanning does so as well. | The naive parallel approach rivals the work-efficient approach for most of the array sizes below. However, this method has a memory latency bottleneck: its excessive use of global memory in the summation causes the runtime to swell as the array size grows. | The work-efficient GPU scan starts with more overhead than the naive implementation for smaller arrays, but as they grow larger, it outperforms both the CPU and naive versions. The work-efficient binary tree structure reduces unnecessary memory operations and optimizes thread usage by performing operations in place. The bottleneck here is thread usage: the binary tree structure leaves threads underutilized as the number of operations at each step in the algorithm reduces. Because of this, more primitive methods like naive and CPU come close in runtime for smaller array sizes. | Referencing the NVIDIA developer [documentation](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda) for exclusive scan, we notice that the Thrust implementation employs techniques to improve performance, including optimizing shared memory and load balancing. Setting up these optimizations, like bankconflict avoidance and loop unrolling, introduces overhead, which make more primitive methods more efficient for small array sizes. However, even in the graph below, the thrust scan implementation clearly does not scale as significantly as any of the other scan implementations.        |
 
 <img src="https://github.com/yuhanliu-tech/GPU-Stream-Compaction/blob/main/img/scan_perf.png" width="600"/>
-
-**Explaining of Phenomena in the Graph**
-
-* Can you find the performance bottlenecks? Is it memory I/O? Computation? Is it different for each implementation?
 
 #### Output of Testing 
 test array SIZE: 2^18, blockSize: 256
@@ -139,9 +135,9 @@ Radix Sort, non-pow2 shuffled ints
     passed
 ```
 
-#### Additional Feature: Radix Sort
+### Additional Feature: Radix Sort
 
-* I implemented parallel radix sort as an additional module to the `stream_compaction` subproject (and additionally, a CPU std::sort function for comparison).
+* I implemented parallel radix sort as an additional module to the `stream_compaction` subproject (and additionally, a CPU std::sort function for comparison). The implementation can be found in `radix.cu` and `radix.h`. 
 
 * The radix sort function takes as input, the size of the array, along with pointers to the input and output arrays. Below is a code snippet from a radix test in the main method, showing how it is called:
 
