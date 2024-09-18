@@ -17,7 +17,7 @@ namespace StreamCompaction {
 
         #define LOG_NUM_BANKS 5
         #define CONFLICT_FREE_OFFSET(threadIdx) ((threadIdx) >> LOG_NUM_BANKS)
-
+    
         void scan(int n_padded, int* dev_data, int* stored_sums, int offset) {
             int blockSize = std::min((n_padded / 2), MAX_BLOCK_SIZE);
             dim3 blocksPerGrid = ((n_padded / 2) + blockSize - 1) / blockSize;
@@ -70,7 +70,7 @@ namespace StreamCompaction {
 
             // temp array used to store last entry per block during upsweep. See kernScan and kernIncrement for use info.
             int* stored_sums; 
-            cudaMalloc((void**)&stored_sums, stored_sums_size * sizeof(int));
+            cudaMalloc((void**)&stored_sums, std::max(1, stored_sums_size) * sizeof(int));
 
 
             timer().startGpuTimer();
@@ -112,7 +112,7 @@ namespace StreamCompaction {
             // input data is too large to be scanned in a single block.
             // Then zero out the last entry for the downsweep.
             if (threadIdx.x == 0) {
-                stored_sums[blockIdx.x] = s_dev_data[2 * blockDim.x + CONFLICT_FREE_OFFSET(2 * blockDim.x - 1) - 1];
+                stored_sums[blockIdx.x] = s_dev_data[2 * blockDim.x - 1 + CONFLICT_FREE_OFFSET(2 * blockDim.x - 1)];
                 s_dev_data[2 * blockDim.x + CONFLICT_FREE_OFFSET(2 * blockDim.x - 1) - 1] = 0;
             }
             

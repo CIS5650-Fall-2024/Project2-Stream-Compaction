@@ -4,6 +4,7 @@
 #include "radix.h"
 #include <climits>
 #include "efficient.h"
+#include <iostream>
 
 namespace StreamCompaction {
     namespace Radix {
@@ -44,7 +45,7 @@ namespace StreamCompaction {
 
             // temp array used to store last entry per block during upsweep. See kernScan and kernIncrement for use info.
             int* stored_sums; 
-            cudaMalloc((void**)&stored_sums, stored_sums_size * sizeof(int));
+            cudaMalloc((void**)&stored_sums, std::max(stored_sums_size, 1) * sizeof(int));
 
             int blockSize = 1024;
             dim3 blocksPerGrid((n + blockSize - 1) / blockSize);
@@ -57,6 +58,7 @@ namespace StreamCompaction {
 
                 // Scan operates in place, so we need to first copy the bit_mapped_data to scanned_bit_mapped_data so we don't lose it
                 cudaMemcpy(scanned_bit_mapped_data, bit_mapped_data, n * sizeof(int), cudaMemcpyDeviceToDevice);
+                cudaDeviceSynchronize();
 
                 StreamCompaction::Efficient::scan(n_padded, scanned_bit_mapped_data, stored_sums, 0); 
                 cudaDeviceSynchronize();
