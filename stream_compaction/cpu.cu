@@ -13,6 +13,18 @@ namespace StreamCompaction {
         }
 
         /**
+         * Standard sort
+         * (for parallel radix comparison)
+         */
+        void sort(int n, int* odata, const int* idata) {
+            memcpy(odata, idata, n * sizeof(int));
+
+            timer().startCpuTimer();
+            std::sort(odata, odata + n);
+            timer().endCpuTimer();
+        }
+
+        /**
          * CPU scan (prefix sum).
          * For performance analysis, this is supposed to be a simple for loop.
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.

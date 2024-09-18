@@ -11,16 +11,18 @@
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
+#include <stream_compaction/radix.h>
 #include "testing_helpers.hpp"
+#include <iostream>
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 3; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
 int *c = new int[SIZE];
 
 int main(int argc, char* argv[]) {
-    // Scan tests
+    // Scan tests --------------------------------------
 
     printf("\n");
     printf("****************\n");
@@ -100,7 +102,7 @@ int main(int argc, char* argv[]) {
     printf("** STREAM COMPACTION TESTS **\n");
     printf("*****************************\n");
 
-    // Compaction tests
+    // Compaction tests --------------------------------------
 
     genArray(SIZE - 1, a, 4);  
     a[SIZE - 1] = 1; // Leave a 1 at the end to test that edge case
@@ -147,8 +149,38 @@ int main(int argc, char* argv[]) {
     //printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
 
-    system("pause"); // stop Win32 console from closing on exit
+    //system("pause"); // stop Win32 console from closing on exit
     delete[] a;
     delete[] b;
     delete[] c;
+
+
+    // radix sort tests --------------------------------------
+
+    printf("\n");
+    printf("*****************************\n");
+    printf("***** RADIX SORT TESTS ******\n");
+    printf("*****************************\n");
+
+    genArray(SIZE, a, SIZE);
+
+    for (int i = 0; i < SIZE; i++) {
+        a[i] = i;
+    }
+
+    printArray(SIZE, a, true);
+
+    zeroArray(SIZE, b);
+    printDesc("cpu sort (std::sort)");
+    StreamCompaction::CPU::sort(SIZE, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(SIZE, b, true);
+
+    zeroArray(SIZE, c);
+    printDesc("radix sort");
+    StreamCompaction::Radix::sort(SIZE, c, a);
+    printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(SIZE, c, false);
+    printCmpResult(SIZE, b, c);
+ 
 }
