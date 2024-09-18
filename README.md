@@ -6,15 +6,42 @@
 
 ## CUDA Scan and Stream Compaction
 
-This stream compaction method will remove `0`s from an array of `int`s.
+Scan operation for this codebase refers to prefix sums implemented as reduction on an array of `n` elements using binary associative operator of addition.
+This may refer to both exclusive and inclusive scans, but unless otherwise stated inside specific code segments, you may assume we are generally referring to the exclusive scan.
+
+Stream compaction refers to the process of, given an array of elements, creating a new array with elements that meet a certain criteria while preserving the initial order.
+For our implementations, the stream compaction method will remove `0`s from an array of `int`s.
+This functionality can be extended for uses in path tracing, collision detection, sparse matrix compression, and so on.
+
+The parallel algorithms are based on [GPU Gems 3](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda), with some known errors and bugs fixed.
 
 ### CPU Implementation
 
+CPU scan is very straight forward. We linearly loop through every element in the array and track a running sum as we iterate.
 
+CPU compaction without scan is also very simple. We linearly loop through every element in the input array and only write to the output array's next available index if the current index passes the given criteria, which for our purposes is non-zero.
+
+CPU compaction with scan is broken down into three steps. We firstly create a binary mask (`bidata`) on the entire input data (`idata`) where each entry is true if the original input array at that index is non zero, and false otherwise. We then run our exclusive scan (`bodata`) on this binary array. Lastly, we loop through every element in the binary array, where if an entry is `true`, we write the corresponding value from the original input array into the output array (`odata`) at the index specified by the result of the exclusive scan. That is, `if (bidata[i]) odata[bodata[i]] = idata[i];`. This step is called *scatter*.
 
 ### Naive CUDA Parallelization
 
+![](writeup/inclusive_scan.jpg)
+
+The naive parallelization on CUDA involves recursively summing element pairs at some offset apart. Above diagram showcases this idea for an inclusive scan implementation, though our implementation converts this to exclusive scan by push every element to right by one index and inserting a zero at the beginning. Observe that this approach performs O(nlog2(n)) additions and has an algorithmic complexity of O(log2(n)) where n is the length of the array.
+
 ### Work-Efficient CUDA Parallelization
+
+The work-efficient parallelization scheme utilizes a balanced binary tree structure. The algorithm is split into two sections: *up-sweep* (which utilizes parallel reduction) and *down-sweep*.
+
+The up-sweep stage is exactly the same as the in-place reduction scheme where we sum some pairs of elements at specified offsets at each iteration.
+
+![](writeup/up-sweep.JPG)
+
+The down-sweep traverses back down the tree using partial sums to build the scan in-place. We first set the "root" node to zero, which is the last element of the array. Then, at each pass, a node passes its value to its left child, and sets the right child to the sum of the previous left child’s value and its value.
+
+![](writeup/down-sweep.JPG)
+
+Observe that this method involves O(n) adds and O(n) swaps.
 
 ### Thrust Library
 
@@ -61,29 +88,61 @@ Note that there may be illegal memory accesses for those implementations that co
 
 It should be noted that due to the randomness of array generation (the distribution of random numbers generated), the main program was ran *five* times, each time saving the recorded clock time for all configurations. The five runs were then averaged to be used for plotting of data below. The raw data stored in an excel file can be found at `writeup/rawdata.xlsx`.
 
+Due to the nature of the array sizes being too big to fit in a regular independent axis scale, the array sizes are presented in the logarithmic scale with base 2.
+
+Note that for every plot presented below, *the lower the value, the better the performance is*.
+
 * Roughly optimize the block sizes of each of your implementations for minimal
   run time on your GPU.
 
-The block size for each implementation was optimized to array size `1 << 20` (or 2^20). The relationships observed in the following analysis may be subject to change depending on the target of this optimization.
+The block size for each implementation was optimized to array size `1 << 20` (or 2^20). The relationships observed in the following analysis may be subject to change depending on the target of this optimization, though in general worse in performance unless the sizes are at either extremes.
 
 * Compare all of these GPU Scan implementations (Naive, Work-Efficient, and
   Thrust) to the serial CPU version of Scan. Plot a graph of the comparison
   (with array size on the independent axis).
-  * We wrapped up both CPU and GPU timing functions as a performance timer class for you to conveniently measure the time cost.
-    * We use `std::chrono` to provide CPU high-precision timing and CUDA event to measure the CUDA performance.
-    * For CPU, put your CPU code between `timer().startCpuTimer()` and `timer().endCpuTimer()`.
-    * For GPU, put your CUDA code between `timer().startGpuTimer()` and `timer().endGpuTimer()`. Be sure **not** to include any *initial/final* memory operations (`cudaMalloc`, `cudaMemcpy`) in your performance measurements, for comparability.
-    * Don't mix up `CpuTimer` and `GpuTimer`.
-  * To guess at what might be happening inside the Thrust implementation (e.g.
-    allocation, memory copy), take a look at the Nsight timeline for its
-    execution. Your analysis here doesn't have to be detailed, since you aren't
-    even looking at the code for the implementation.
 
+![](writeup/scan_all.png)
+
+For our scan implementations, we first present you a plot of runtime for all dataset collected. However, this is not very useful for distinguishing interesting points and extracting meaningful explanations. Therefore, we extracted a specific subrange of power-of-two array sizes and normalized them with respect performance of our CPU scan for a closer observation.
+
+![](writeup/scan_po2_relative_1.png)
+![](writeup/scan_po2_relative_2.png)
+
+This relative plot showcases that for lower array sizes (approximately up to 2^18), CPU scan implementation outperforms all other parallel schemes by a huge margin, especially at very small array sizes. However, once the array sizes become big enough that it actually takes the CPU a significant amount of time to process all entries serially, the benefit of parallelism kicks in. We can observe that from array size of 2^19 ~ 2^20 onwards, all parallel implementations out-scale the performance of CPU scan by multiple factors. Work-efficient parallelism outperforms CPU scan by more than a double (or less than halve the time taken).
+
+![](writeup/compact_all.png)
+
+We see a similar trend with our compact implementations.
+
+![](writeup/compact_extract.png)
+![](writeup/compact_relative.png)
+
+By observing the trends and intersections on the relative performance plot, we can see that although work-efficient parallelism performs initially worse. However, again, once the array size passes a certain threshold (for our test runs around array sizes of 2^18 ~ 2^19), the work-efficient compaction outscales CPU's linear compaction by 2~3 times.
+
+![](writeup/sort_all.png)
+
+The exact same pattern can be seen for radix sort, except the threshold for sorting is lower at around 2^15~2^16 elements.
+
+![](writeup/sort_extract.png)
+![](writeup/sort_relative.png)
 
 
 * Write a brief explanation of the phenomena you see here.
   * Can you find the performance bottlenecks? Is it memory I/O? Computation? Is
     it different for each implementation?
+
+All parallelization schemes were implemented using global memory only. This incurs a lot of memory I/O overheads as we are not utilizing the potential of shared memory at all. Until the sheer cost of computation exceeds the overhead of memory transfers and read/write for the GPU, the performance gain of parallelism cannot catch up to the CPU compute power. This is the cause of above patterns where CPU initially dominates in performance but once the array size is big enough we see a flip - and the parallel approaches dominate.
+
+The performance bottlenecks for our code can be observed by utilizing Nvidia Systems and Compute profiling features.
+
+We can observe from the Nsight compute profiling below that our work-efficient parallelization scheme suffers from multiple kernel invocations with extremely small grid sizes, showing terrible memory throughput. This showcases the cost of so frequently requesting global memory I/O. This can also be explained by lack of memory coalescence due to the unoptimized nature of our indexing scheme.
+
+![](writeup/nsight_compute_profile.JPG)
+
+On the other hand, we can observe from the following Nsight profile traces that `DeviceScanKernel` (the actual kernel invocation for thrust library's `exclusive_scan`) reaches theoretical occupancy limit. This means that our program is always actively trying to process the warps, but is limited by the memory throughput as shown in the low memory and cache throughput percentages.
+
+![](writeup/thrust_profile.JPG)
+![](writeup/thrust_profile_compute.JPG)
 
 * Paste the output of the test program into a triple-backtick block in your
   README.
