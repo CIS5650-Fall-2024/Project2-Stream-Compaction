@@ -139,10 +139,6 @@ As seen from the chart below, the improved appraoch consistently acheives better
 We see that as a general trend, the execution time is as follows: `CPU > Naive > Work-Efficient > Thrust`. All of the algorithms are appraoching linear growth (though at different pace) as the array size gets larger and larger.
 
 - **CPU Scan**: The CPU version is purely sequential. As the array size increases, the execution time growth dramatically, which is expected. The bottleneck is primarily **compuation**, as the sequential nature of the algorithm scales poorly.
-
-    <p align="center">
-  <img width="818" alt="image" src="https://github.com/user-attachments/assets/06d40843-0585-42a1-bb57-e5500a747128">
-  </p>
   
 - **Naive GPU Scan**: The Naive GPU version attempts to utilize parallelism, but involves unneccessary computation. **SM Warp Occupancy** is around 80%, which is not that bad, but **DRAM bandwidth** and **PCIe bandwidth** shows high peak, indicating excessive global memory access. The bottleneck is largely **memory I/O**.
   
