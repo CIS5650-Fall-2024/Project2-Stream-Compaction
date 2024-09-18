@@ -83,7 +83,7 @@ Run with 2^18 elements, this is what a sample program output looks like:
 
 ## Performance Analysis
 
-The following data was collected using a block size of 128 running in release mode and utilizing cudaTimers and std::chrono to gather timing information. Memory swapping between the CPU and GPU was excluded where possible to focus the running time analysis on the algorithm. The size of 128 blocks was chosen from many tested as on my GPU it saw the best performance.
+The following data was collected using a block size of 128 running in release mode and utilizing cudaTimers and std::chrono to gather timing information. Memory swapping between the CPU and GPU was excluded where possible to focus the running time analysis on the algorithm. The size of 128 blocks was chosen from many tested as on my GPU it saw the best performance. Any references to non power of 2 or power of 2 algorithms refer to the input size used for the algorithm. This tests whether the approach is better or worse at handling array inputs where the input is a power of 2, or the input is not a power of 2. This is prevalent with the GPU approaches since the algorithms are tree based, which often rely on having a power of 2 length to properly touch all leaves.
 
 # Charts
 
@@ -99,7 +99,11 @@ The following is a chart displaying how running time of the numerous methods cha
 
 In scan, the CPU dominated in performance over my implementations, but thrust proved to be the fastest at large array sizes, increasing much slower than other approaches. The CPU is marginally faster than thrust at small array sizes, because the parallelism is not fast enough to offset the heavier cost of transferring memory to and from the GPU. The thrust algorithm's supremacy shows that true harnessing of the GPU takes more than simply implementing an algorithm, but also smart usage of shared memory, data prefetching, and other strategies to utilize the parallel hardware. See more about the thrust algorithm at the bottom of the readme.
 
+In stream compaction, the GPU has a much better performance at larger array sizes than the CPU. Note that the power of two and non power of two CPU runs without scan cover each other due to their negligible performance difference.
+
 In scan, there is interesting behavior between the power of two and non power of two naive GPU algorithms. The non-power of two naive algorithm had an increasing difference in performance over the power of two input the larger the input became. This is likely because the overhead of padding zeroes increases as size increases. The same is not true of the compaction algorithms, likely because the main bottleneck of that algorithm is the global memory reads, which are present even if the input is a power of two. This was not present in the work efficient algorithm, which is so tight between the power of two and non power of two that the power of two line is not visible.
+
+Across all algorithms and the multiple tests there is a very pleasing linear increase in performance. This is likely due to the running time being so closely tied to the array input size, and any additional overhead being trumped by the O(n) nature of the algorithmic approaches.
 
 # Investigation of Thrust using NSight
 
