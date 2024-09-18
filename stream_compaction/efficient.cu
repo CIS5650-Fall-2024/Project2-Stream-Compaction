@@ -14,11 +14,11 @@ namespace StreamCompaction {
 
         __global__ void kernUpSweep(int n, int* A, int offset) {
             int idx = blockDim.x * blockIdx.x + threadIdx.x;
-            idx *= offset;
             if (idx >= n) {
                 return;
             }
-            A[idx + offset - 1] = A[idx + offset / 2 - 1] + A[idx + offset / 2];
+            idx *= offset;
+            A[idx + offset - 1] += A[idx + offset / 2 - 1];
         }
 
         __global__ void kernDownSweep(int n, int* A, int offset) {
@@ -37,38 +37,51 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
+
             unsigned int blockSize = 128;
-            
+
+            int padding = 1 << ilog2ceil(n);
+
             int* A;
             size_t arraySize = n * sizeof(int);
-            cudaMalloc((void**)&A, arraySize);
+            size_t paddedSize = padding * sizeof(int);
+            cudaMalloc((void**)&A, paddedSize);
             checkCUDAError("cudaMalloc A failed!");
 
             cudaMemcpy(A, idata, arraySize, cudaMemcpyHostToDevice);
             checkCUDAError("cudaMemcpy idata to A failed!");
 
+            cudaMemcpy(A + n, 0, (paddedSize - arraySize), cudaMemcpyHostToDevice);
+            checkCUDAError("cudaMemcpy idata to A failed!");
+            cudaDeviceSynchronize();
+
+            timer().startGpuTimer();
+            int numThreads = n;
+
             for (int i = 0; i < ilog2ceil(n); i++) {
-                int offset = pow(2, (i + 1));
-                blockSize /= offset;
-                dim3 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+                int offset = 1 << (i + 1);
+                numThreads /= 2;
+                dim3 fullBlocksPerGrid = ((numThreads + blockSize - 1) / blockSize);
                 kernUpSweep << <fullBlocksPerGrid, blockSize >> > (n, A, offset);
+                cudaDeviceSynchronize();
             }
 
-            A[n - 1] = 0;
-            for (int i = ilog2ceil(n) - 1; i >= 0; i++) {
-                int offset = pow(2, i + 1);
-                blockSize /= offset;
-                dim3 fullBlocksPerGrid = ((n + blockSize - 1) / blockSize);
+            // assign 0 to the root of the tree for Down-Sweep
+            cudaMemset(A + n - 1, 0, sizeof(int));
+
+            for (int i = ilog2ceil(n) - 1; i >= 0; i--) {
+                int offset = 1 << (i + 1);
+                numThreads *= 2;
+                dim3 fullBlocksPerGrid = ((numThreads + blockSize - 1) / blockSize);
                 kernDownSweep << <fullBlocksPerGrid, blockSize >> > (n, A, offset);
             }
+            timer().endGpuTimer();
+
 
             cudaMemcpy(odata, A, arraySize, cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy odata failed!");
 
             cudaFree(A);
-
-            timer().endGpuTimer();
         }
 
         /**
