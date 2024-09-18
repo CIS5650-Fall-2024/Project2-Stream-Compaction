@@ -4,8 +4,6 @@
 #include "naive.h"
 #include <device_launch_parameters.h>
 
-#define blockSize 1024
-
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;
@@ -15,27 +13,19 @@ namespace StreamCompaction {
             return timer;
         }
 
+        __device__ int pow_two(int d) {
+            return 1 << d;
+        }
+
         __global__ void scan_one_iteration(int n, int d, int* odata, const int* idata) {
             int index = (blockIdx.x * blockDim.x) + threadIdx.x;
             if (index < n) {
-                int pow_d = pow(2, d - 1);
+                int pow_d = pow_two(d - 1);
                 if (index >= pow_d) {
                     odata[index] = idata[index - pow_d] + idata[index];
                 }
                 else {
                     odata[index] = idata[index];
-                }
-            }
-        }
-
-        __global__ void shift_right(int n, int* odata, const int* idata) {
-            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
-            if (index < n) {
-                if (index == 0) {
-                    odata[index] = 0;
-                }
-                else {
-                    odata[index] = idata[index - 1];
                 }
             }
         }
@@ -64,11 +54,10 @@ namespace StreamCompaction {
                 std::swap(buffer1, buffer2);
             }
 
-            shift_right << < fullBlockPerGrid, blockSize >> > (n, buffer2, buffer1);
+            odata[0] = 0;
+            cudaMemcpy(odata + 1, buffer1, (n - 1) * sizeof(int), cudaMemcpyDeviceToHost);
 
             timer().endGpuTimer();
-
-            cudaMemcpy(odata, buffer2, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             cudaFree(buffer1);
             cudaFree(buffer2);
