@@ -13,7 +13,7 @@ namespace StreamCompaction {
             return timer;
         }
         // TODO: __global__
-        __global__ void handleNonPower(int n, int d, int* buffer) {
+        __global__ void kernHandleNonPower(int n, int d, int* buffer) {
             int index = threadIdx.x + blockIdx.x * blockDim.x;
             int pow2tod = 1 << d;
 
@@ -22,7 +22,7 @@ namespace StreamCompaction {
             buffer[pow2tod + index] += buffer[index];
         }
 
-        __global__ void naiveScanStep(int n, int d, const int* readBuffer, int* writeBuffer) {
+        __global__ void kernNaiveScanStep(int n, int d, const int* readBuffer, int* writeBuffer) {
             // compute thread index
             int index = threadIdx.x + blockIdx.x * blockDim.x;
             if (index >= n) return;
@@ -58,9 +58,9 @@ namespace StreamCompaction {
             StreamCompaction::Common::shiftArrayElements<<<fullBlocksPerGrid, blockSize>>>(n, 1, dev_buffer2, dev_buffer1);
             checkCUDAError("shiftArrayElements failed!");
             cudaDeviceSynchronize();
-            // TODO
+
             for (int d = 0; d < ilog2(n); ++d) {
-                naiveScanStep<<<fullBlocksPerGrid, blockSize>>>(n, d, dev_buffer1, dev_buffer2);
+                kernNaiveScanStep <<<fullBlocksPerGrid, blockSize>>>(n, d, dev_buffer1, dev_buffer2);
                 checkCUDAError("naiveScanStep failed!");
                 cudaDeviceSynchronize();
 
@@ -69,7 +69,7 @@ namespace StreamCompaction {
             // perform last step 
             if ((1 << ilog2(n)) != n) {
                 fullBlocksPerGrid.x = (n - (1 << ilog2(n)) + blockSize - 1) / blockSize;
-                handleNonPower<<<fullBlocksPerGrid, blockSize>>>(n, ilog2(n), dev_buffer1);
+                kernHandleNonPower<<<fullBlocksPerGrid, blockSize>>>(n, ilog2(n), dev_buffer1);
                 checkCUDAError("handleNonPower failed!");
                 cudaDeviceSynchronize();
             }
