@@ -55,7 +55,7 @@ At the end of this process, we end up with an inclusive scan of the original lis
 
 Since passes each run in parallel, we can consider them to run in constant time. Then the passes must be run serially after each other, and there are log(n) passes. This gives a runtime of O(log(n)), ignoring things like memory accesses and the like on the GPU.
 
-For more details about this implementation, see `INSTRUCTIONS.md`.
+For more details about this implementation, see `INSTRUCTION.md`.
 
 ### Work-Efficient Scan
 
@@ -73,7 +73,7 @@ Each subsequent pass does the same thing but working on twice the number of elem
 
 This works because first of all, the 0 that is always first in an exclusive scan comes from setting the last element to 0 as mentioned above, which was then swapped all the way to the left of the array. Then, for every other element of the array, each preceding block of elements was added to it in some pass of the downsweep, where each block's sum was calculated in the upsweep.
 
-For more details about this implementation, see `INSTRUCTIONS.md`.
+For more details about this implementation, see `INSTRUCTION.md`.
 
 Now even though this method has two separate phases, note the amount of work that's done in each phase. In this version, the upsweep stage 1 has n/2 operations, the next pase n/4, and so on down to 1. Adding these up gives O(n) operations _total_ for the entire upsweep. The story is the same for the downsweep. Thus we would expect this algorithm to actually run pretty quickly.
 
@@ -174,18 +174,81 @@ Now another thing that's interesting to discuss is bank conflicts. While I did n
 
 ## Compact Implementations
 
-### CPU Compact With Scan
+### CPU Compact without Scan
 
-### CPU Compact Without Scan
+In this implementation of compact, it runs on the CPU. This method does not use scan, and all it does is iterate through the original array checking the condition, if it's met, then the value is added to the output array at the end. This just repeats on loop until the entire array is calculated (the end of the output is just a pointer that's increased each time).
+
+As you can imagine, this can be pretty inefficient as it runs in linear time with the length of the array. It has to iterate through the entire original array, but we can parallelize this.
+
+### CPU Compact with Scan
+
+This implementation of compact also runs on the CPU. However, it uses scan and then a function called scatter to compute the output. Here, scan is the normal CPU Scan discussed above.
+
+It works by first taking the input and calculating an array of booleans that are 1 if the element should be in the output and otherwise 0. Then, it runs scan on this array. This output gives us an array of which index the element should go in for the output array, if it actually belongs there. Then the scatter function runs which does just this. It iterates through the original array, and if the boolean flag is true, it places it in the output array at the location specified by the scan.
+
+For more details about this algorithm, see `INSTRUCTION.md`
 
 ### Compact with Work-Efficient Scan
 
+This implementation does the same thing as CPU Compact with Scan, except that it uses the GPU and the Work-Efficient Scan method previously discussed. Here, the Work-Efficient Scan runs on the GPU, and scatter was also implemented on the GPU for this function.
+
 ### Compact with Thread Optimized Work-Efficient Scan
+
+This implementation does the same thing as the previous two compact implementations, except that it uses the GPU and the Thread Optimized Work-Efficient Scan method previously discussed. Here, scatter was also implemented on the GPU for this function.
+
+Note that I did add some test cases to compare the performance of this method with the other ones. This is implemented in the `efficient-thread-optimized.cu` file (and the corresponding header file). 
+
+It outputs the identical thing that the normal Compact with Work-Efficient Scan does, it's just implemented slightly differently. You can call it extremely similarly the other one is called, like so:
+
+```cpp
+int count = StreamCompaction::EfficientThreadOptimized::compact(SIZE, out, in);
+```
 
 ## Radix Sort (Part 6 EC 1)
 
-Mention part 6 EC 1
-Show an example how it works, show how it is called and an example of its output
+I also implemented the [Radix Sort](https://en.wikipedia.org/wiki/Radix_sort) function. This function sorts an array by going through it bit by bit (pun intended).
+
+It takes the input array where each element is represented in bits, and first looks at the least-significant (right-most) bit. It partitions the input into two halves, where the first half is all the elements where that bit was a 0 and the second half is the elements where that bit was a 1 (note that it doesn't necessarily have to be exactly half and half if the balance of elements is uneven). Within these two halves, the order is preserved.
+
+Then, it runs a second iteration but this time looking at the second bit, and moving elements in the same exact way. It then continues to do this same operation but for each bit, and at the end, we are left with a sorted array. To see more details on why this algorithm works, check out the [link above](https://en.wikipedia.org/wiki/Radix_sort) and the `INSTRUCTION.md` file.
+
+Now note that in each iteration, we can run the operation in parallel to speed it up on the GPU. However, exactly like what we had to do with the shared-memory optimizations earlier, we need to split up the input array into chunks and run Radix sort on each chunk. Finally, after each chunk is sorted, we can merge them back together.
+
+This merging was done with a parallel bitonic merge, and we are then left with the output. The actual operation in each iteration can be implemented with a combination of a scan and a specialized scatter, and for this implementation we used the Memory Optimized Work-Efficient Scan for Radix Sort.
+
+Now note that I did add some test cases check that my Radix Sort was functioning correctly, and to check it's performance. To do this, I also implemented a quick CPU Sort which is just a wrapper around `std::sort`. The test case compares the Radix Sort with the output of the CPU Sort.
+
+The Radix Sort function, along with `bitonicMerge`, is implemented in the `radix-sort.cu` file (and the corresponding header file). It outputs the sorted version of the input array, and it does not work in place.
+
+There are two methods of calling it. This is because Radix Sort depends on the number of bits of the data it stores. Thus for default integers in C++ (which are 32 bits), it will run 32 iterations. However, most of the time we know our data is capped at some value. Thus if we know this maximum cap, we can limit the number of iterations to the ceiling of the log of this maximum value. Thus we have two ways to call Radix Sort, one without knowing the limit, and one with. Here are the two methods:
+
+```cpp
+StreamCompaction::RadixSort::sort(SIZE, out, in);
+StreamCompaction::RadixSort::sort(SIZE, SORTMAXVAL, out, in);
+```
+
+The CPU Sort was implemented in the `cpu.cu` file and can be called with:
+
+```cpp
+StreamCompaction::CPU::sort(SIZE, out, in);
+```
+
+Here is an example of how to run the Radix Sort:
+
+```cpp
+int in[7] = {3, 12, 7, 5, 10, 12, 8};
+int out[7];
+
+// without knowing maximum, will perform 32 iterations
+StreamCompaction::RadixSort::sort(7, out, in);
+printArray(7, out, true);
+// [3, 5, 7, 8, 10, 12, 12]
+
+// knowing maximum, will perform ceil(log_2(12)) iterations
+StreamCompaction::RadixSort::sort(7, 12, out, in);
+printArray(7, out, true);
+// [3, 5, 7, 8, 10, 12, 12]
+```
 
 ## Scan Performance Analysis
 
@@ -201,10 +264,6 @@ For the below comparisons, they were all done in Release mode. The specs of the 
 Answer Q2 analysis part
 Answer Q3
 
-### Thrust Analysis
-
-Answer Q2 thrust part
-
 ### Optimizing Block Sizes
 
 Answer Q1
@@ -213,6 +272,7 @@ Answer Q1
 
 Here is the out from running the tests found in `main.cpp`. Note that I did add my own test cases for many of the extra methods I implemented. These include: ... mention exact tests.
 
+ALSO INCLUDE entire-report
 INCLUDE IN PR extra tests implemented, ec features, changes to cmakelists
 
 - description of project including list of features
