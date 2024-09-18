@@ -42,10 +42,10 @@ This project contains GPU parallel algorithms including Scan and Stream Compacti
    elapsed time: 54.2374ms    (CUDA Measured)
     passed
 ==== thrust scan, power-of-two ====
-   elapsed time: 97.2186ms    (CUDA Measured)
+   elapsed time: 3.2186ms    (CUDA Measured)
     passed
 ==== thrust scan, non-power-of-two ====
-   elapsed time: 97.5937ms    (CUDA Measured)
+   elapsed time: 3.5937ms    (CUDA Measured)
     passed
 
 *****************************
@@ -71,4 +71,12 @@ This project contains GPU parallel algorithms including Scan and Stream Compacti
    elapsed time: 64.1773ms    (CUDA Measured)
     passed
 ```
-    
+
+### Performance Analysis
+- The optimal BlockSize on my GPU is 256. The following chart compares my GPU naive scan algorithm and GPU efficient scan algorithm. Under the condition of adjusting the array size to 2^27, when BlockSize is equal to and larger than 64, the naive scan algorithm has an average runtime of 82 ms, while the BlockSize is equal to and larger than 256, the efficient scan algorithm has an average runtime of 44 ms, which means the optimal BlockSize on my GPU for the best runtime efficiency should be 256 while using efficient scan algorithm.
+![](images/01.png)
+- In the beginning, when the array size is less than 2^20, the CPU-based scan algorithm is far faster than any GPU-based scan algorithm. However, as the array size increases, when it hits the size of over 2^20, the difference between CPU runtime efficiency and GPU runtime efficiency starts to become observable. As in the following chart, when the array size is 2^27, the CPU-based scan algorithm runtime is 205.844 ns, while the GPU-efficient scan algorithm runtime only needs 44.1834 ns.
+![](images/03.png)
+- The interesting thing is, even though the array size is 2^27, GPU Thrust implementation needs 3.49974 ns. Therefore, I launched the Nsight System and analyzed the CUDA API execution part. I guess, maybe it's because of something about the device and host memory syncronization. Maybe inside of the Thrust Library, they have a better way to read and load data between host and device? Or maybe it's because the algorithm designer optimized the data storage based on the GPU store architecture?
+![](images/04.png)
+- 
