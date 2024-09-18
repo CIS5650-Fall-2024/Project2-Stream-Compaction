@@ -14,7 +14,7 @@
 #include <stream_compaction/sort.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 20; // feel free to change the size of array, default is 8
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -166,9 +166,8 @@ int main(int argc, char* argv[]) {
     d[6] = 1; // 001
     d[7] = 0; // 000
 
-    genArray(SIZE , a, 100);  
     printDesc("Input");
-    printArray(SIZE, a, false);
+    printArray(8, d, true);
 
     zeroArray(8, b);
     printDesc("radix sort thrust, easy case");
@@ -181,6 +180,9 @@ int main(int argc, char* argv[]) {
     printArray(8, c, false);
     printCmpResult(8, b, c);
 
+    printDesc("Input");
+    printArray(SIZE, a, true);
+
     zeroArray(SIZE, b);
     printDesc("radix sort thrust");
     StreamCompaction::Sort::radix_sort_thrust(SIZE, b, a);
@@ -188,6 +190,21 @@ int main(int argc, char* argv[]) {
     
     zeroArray(SIZE, c);
     printDesc("radix sort with work-efficient scan");
+    StreamCompaction::Sort::radix_sort(SIZE, c, a);
+    printArray(SIZE, c, true);
+    printCmpResult(SIZE, b, c);
+
+    genArray(SIZE , a, 2147483648); // 2,147,483,647 is the largest value for int32
+    printDesc("Input");
+    printArray(SIZE, a, true);
+
+    zeroArray(SIZE, b);
+    printDesc("radix sort thrust, large range");
+    StreamCompaction::Sort::radix_sort_thrust(SIZE, b, a);
+    printArray(SIZE, b, true);
+    
+    zeroArray(SIZE, c);
+    printDesc("radix sort with work-efficient scan, large range");
     StreamCompaction::Sort::radix_sort(SIZE, c, a);
     printArray(SIZE, c, true);
     printCmpResult(SIZE, b, c);

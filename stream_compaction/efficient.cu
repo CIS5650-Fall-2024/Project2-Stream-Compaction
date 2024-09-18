@@ -3,7 +3,9 @@
 #include "common.h"
 #include "efficient.h"
 
-#define blockSize 128 
+#define blockSize_slow 256
+#define blockSize_fast 256
+#define USE_FAST_UPSWEEP 1
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -27,7 +29,11 @@ namespace StreamCompaction {
             return (n > 0) && ((n & (n - 1)) == 0);
         }
 
-        __global__ void upsweep(int n, int d, int *data) {
+        __device__ int mod(int a, int b) {
+            return a - (b * (a / b));
+        }
+
+        __global__ void upsweep_slow(int n, int d, int *data) {
             int k = threadIdx.x + (blockIdx.x * blockDim.x);
 
             if (k >= n) {
@@ -38,12 +44,23 @@ namespace StreamCompaction {
             // faster than calling pow(2, n)
             int two_pow_d_plus_1 = 1 << (d + 1);
 
-            if (k % two_pow_d_plus_1 != 0) {
+            if (mod(k, two_pow_d_plus_1) != 0) {
                 return;
             }
 
             int two_pow_d = 1 << d;
+
             data[k + two_pow_d_plus_1 - 1] += data[k + two_pow_d - 1];
+        }
+
+        __global__ void upsweep(int n, int d, int *data) {
+            int k = threadIdx.x + (blockIdx.x * blockDim.x);
+
+            if (k >= n) {
+                return;
+            }
+
+            data[((k + 1) << d) - 1] += data[k * (1 << d) + (1 << (d - 1)) - 1];
         }
 
         __global__ void init_downsweep(int n, int *odata) {
@@ -65,7 +82,7 @@ namespace StreamCompaction {
             // faster than calling pow(2, n)
             int two_pow_d_plus_1 = 1 << (d + 1);
 
-            if (k % two_pow_d_plus_1 != 0) {
+            if (mod(k, two_pow_d_plus_1) != 0) {
                 return;
             }
 
@@ -79,7 +96,6 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
             int *dev_odata_local;
             // Your intermediate array sizes will need to be rounded to the next power of two.
             int rounded_n = isPowerOf2(n) ? n : 1 << ilog2ceil(n);
@@ -91,27 +107,59 @@ namespace StreamCompaction {
             cudaMemcpy(dev_odata_local, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
             // Set up the grid and block sizes
-            dim3 fullBlocksPerGrid((rounded_n + blockSize - 1) / blockSize);
+            
+            int upper_bound = ilog2ceil(rounded_n);
+            int upper_bound_minus_1 = upper_bound - 1;
 
-            // upsweep
-            for (int d = 0; d <= ilog2ceil(rounded_n) - 1; d++) {
-                upsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_odata_local);
+            if (USE_FAST_UPSWEEP) {
+                printf("Using FAST work efficient scan\n");
+
+                dim3 fullBlocksPerGrid((rounded_n + blockSize_fast - 1) / blockSize_fast);
+                int gridSize = (rounded_n / 2 + blockSize_fast - 1) / blockSize_fast;
+
+                timer().startGpuTimer();
+
+                for (int d = 1; d <= upper_bound; d++) {
+                    gridSize = ((rounded_n >> d) + blockSize_fast - 1) / blockSize_fast;
+                    upsweep << <gridSize, blockSize_fast >> >(rounded_n >> d, d, dev_odata_local);
+                }
+
+                // downsweep
+                init_downsweep << <fullBlocksPerGrid, blockSize_fast >> > (rounded_n, dev_odata_local);
+
+                for (int d = upper_bound_minus_1; d >= 0; d--) {
+                    downsweep << <fullBlocksPerGrid, blockSize_fast >> > (rounded_n, d, dev_odata_local);
+                }
+
+                timer().endGpuTimer();
             }
+            else {
+                printf("Using SLOW work efficient scan\n");
 
-            // downsweep
-            init_downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, dev_odata_local);
+                dim3 fullBlocksPerGrid((rounded_n + blockSize_slow - 1) / blockSize_slow);
 
-            for (int d = ilog2ceil(rounded_n) - 1; d >= 0; d--) {
-                downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, dev_odata_local);
+                timer().startGpuTimer();
+
+                // upsweep
+                for (int d = 0; d < upper_bound; d++) {
+                    upsweep_slow << <fullBlocksPerGrid, blockSize_slow >> > (rounded_n, d, dev_odata_local);
+                }
+
+                // downsweep
+                init_downsweep << <fullBlocksPerGrid, blockSize_slow >> > (rounded_n, dev_odata_local);
+
+                for (int d = upper_bound_minus_1; d >= 0; d--) {
+                    downsweep << <fullBlocksPerGrid, blockSize_slow >> > (rounded_n, d, dev_odata_local);
+                }
+
+                timer().endGpuTimer();
             }
-
+         
             // Copy the result back to the host
             // Note that odata is only supposed to have n elements
             cudaMemcpy(odata, dev_odata_local, n * sizeof(int), cudaMemcpyDeviceToHost);
 
             cudaFree(dev_odata_local);
-
-            timer().endGpuTimer();
         }
 
         /************************************************************************************
@@ -124,20 +172,24 @@ namespace StreamCompaction {
 
             // Your intermediate array sizes will need to be rounded to the next power of two.
             int rounded_n = isPowerOf2(n) ? n : 1 << ilog2ceil(n);
+            int upper_bound = ilog2ceil(rounded_n);
+            int upper_bound_minus_1 = upper_bound - 1;
 
             // Set up the grid and block sizes
-            dim3 fullBlocksPerGrid((rounded_n + blockSize - 1) / blockSize);
+            dim3 fullBlocksPerGrid((rounded_n + blockSize_fast - 1) / blockSize_fast);
+            int gridSize = (rounded_n / 2 + blockSize_fast - 1) / blockSize_fast; 
 
             // upsweep
-            for (int d = 0; d <= ilog2ceil(rounded_n) - 1; d++) {
-                upsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, odata);
+            for (int d = 1; d <= upper_bound; d++) {
+                gridSize = ((rounded_n >> d) + blockSize_fast - 1) / blockSize_fast;
+                upsweep << <gridSize, blockSize_fast >> >(rounded_n >> d, d, odata);
             }
 
             // downsweep
-            init_downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, odata);
+            init_downsweep << <fullBlocksPerGrid, blockSize_fast >> > (rounded_n, odata);
 
-            for (int d = ilog2ceil(rounded_n) - 1; d >= 0; d--) {
-                downsweep << <fullBlocksPerGrid, blockSize >> > (rounded_n, d, odata);
+            for (int d = upper_bound_minus_1; d >= 0; d--) {
+                downsweep << <fullBlocksPerGrid, blockSize_fast >> > (rounded_n, d, odata);
             }
         }
  
@@ -151,8 +203,6 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
-            timer().startGpuTimer();
-
             // Initialise host variables for returning
             int *scanResult = new int[n];
             
@@ -165,16 +215,20 @@ namespace StreamCompaction {
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
             // Set up the grid and block sizes
-            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
+            dim3 fullBlocksPerGrid((n + blockSize_fast - 1) / blockSize_fast);
+
+            timer().startGpuTimer();
 
             // Map idata to a 0/1 array
-            Common::kernMapToBoolean << <fullBlocksPerGrid, blockSize >> > (n, dev_bools, dev_idata);
+            Common::kernMapToBoolean << <fullBlocksPerGrid, blockSize_fast >> > (n, dev_bools, dev_idata);
 
             // Scan the boolean array
             scan_without_timer(n, dev_scanResult, dev_bools); // n will be rounded in the scan function
 
             // Perform scatter
-            Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_scanResult);
+            Common::kernScatter << <fullBlocksPerGrid, blockSize_fast >> > (n, dev_odata, dev_idata, dev_bools, dev_scanResult);
+
+            timer().endGpuTimer();
 
             cudaMemcpy(scanResult, dev_scanResult, n * sizeof(int), cudaMemcpyDeviceToHost);
             cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
@@ -187,8 +241,6 @@ namespace StreamCompaction {
             cudaFree(dev_odata);
 
             delete[] scanResult;
-
-            timer().endGpuTimer();
 
             return count;
         }

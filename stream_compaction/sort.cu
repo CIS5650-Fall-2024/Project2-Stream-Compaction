@@ -27,7 +27,6 @@ namespace StreamCompaction {
             }
 
             // Extract the bit at the given index and negate it
-            // odata[idx] = !((idata[idx] >> bit_idx) & 1);
             odata[idx] = ((idata[idx] >> bit_idx) & 1) ^ 1;
         }
         
