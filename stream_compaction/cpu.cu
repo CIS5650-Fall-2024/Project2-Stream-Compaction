@@ -19,7 +19,13 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+
+            odata[0] = 0;
+            for (int k = 1; k < n; ++k)
+            {
+                odata[k] = odata[k - 1] + idata[k - 1];
+            }
+
             timer().endCpuTimer();
         }
 
@@ -29,10 +35,21 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
+            int size = 0;
+
             timer().startCpuTimer();
-            // TODO
+            
+            for (int k = 0; k < n; ++k)
+            {
+                if (idata[k] != 0)
+                {
+                    odata[size] = idata[k];
+                    ++size;
+                }
+            }
+
             timer().endCpuTimer();
-            return -1;
+            return size;
         }
 
         /**
@@ -41,10 +58,39 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* indices = new int[n];
+            int size = 0;
+
             timer().startCpuTimer();
-            // TODO
+
+            // Compute the temporary array of pass/fail checks
+            for (int k = 0; k < n; ++k)
+            {
+                odata[k] = idata[k] != 0;
+            }
+            
+            // Scan the temporary array
+            indices[0] = 0;
+            for (int k = 1; k < n; ++k)
+            {
+                indices[k] = indices[k - 1] + odata[k - 1];
+            }
+
+            // Scatter based on the found indices
+            for (int k = 0; k < n; ++k)
+            {
+                if (odata[k] != 0)
+                {
+                    odata[indices[k]] = idata[k];
+                    ++size;
+                }
+            }
+
             timer().endCpuTimer();
-            return -1;
+
+            delete[](indices);
+
+            return size;
         }
     }
 }
