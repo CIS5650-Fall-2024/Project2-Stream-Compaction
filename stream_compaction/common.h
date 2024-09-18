@@ -15,6 +15,9 @@
 
 #define blockSize 256
 
+// Either 0 or 1
+#define ThreadReduction 0
+
 /**
  * Check for CUDA errors; print and exit if there was a problem.
  */

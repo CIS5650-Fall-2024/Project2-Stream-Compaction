@@ -17,14 +17,16 @@ namespace StreamCompaction {
 			if (index >= n) {
 				return;
 			}
-
+#if ThreadReduction == 0
 			int d1 = 1 << d;
 			int d2 = 1 << (d + 1);
 
 			if (index % d2 == 0) {
 				data[index + d2 - 1] += data[index + d1 - 1];
 			}
-
+#else
+			data[(index + 1) * (1 << (d + 1)) - 1] += data[index * (1 << (d + 1)) + (1 << d) - 1 ];
+#endif
         }
 
 		__global__ void kernDownSweep(int n, int d, int* data) {
@@ -32,7 +34,7 @@ namespace StreamCompaction {
 			if (index >= n) {
 				return;
 			}
-
+#if ThreadReduction == 0
 			int d1 = 1 << d;
 			int d2 = 1 << (d + 1);
 
@@ -41,7 +43,12 @@ namespace StreamCompaction {
 				data[index + d1 - 1] = data[index + d2 - 1];
 				data[index + d2 - 1] += t;
 			}
-
+#else
+			int stride1 = (index + 1) * (1 << (d + 1)) - 1;
+			int stride2 = index * (1 << (d + 1)) + (1 << d) - 1;
+			data[stride2] = data[stride1];
+			data[stride1] += data[stride2];
+#endif
 		}
 
         /**
@@ -65,7 +72,12 @@ namespace StreamCompaction {
 
 			// Up-Sweep
 			for (int d = 0; d <= ilog2ceil(n_powerOf2) - 1; d++) {
+#if ThreadReduction == 1
+				int numberOfThreads = n_powerOf2 / (1 << (d + 1));
+				kernUpSweep << <blocksPerGrid, blockSize >> > (numberOfThreads, d, dev_data);
+#else
 				kernUpSweep << <blocksPerGrid, blockSize >> > (n_powerOf2, d, dev_data);
+#endif
 				checkCUDAError("kernUpSweep failed!");
 			}
 
@@ -74,7 +86,12 @@ namespace StreamCompaction {
 
 			// Down-Sweep
 			for (int d = ilog2ceil(n_powerOf2) - 1; d >= 0; d--) {
+#if ThreadReduction == 1
+				int numberOfThreads = n_powerOf2 / (1 << (d + 1));
+				kernDownSweep << <blocksPerGrid, blockSize >> > (numberOfThreads, d, dev_data);
+#else
 				kernDownSweep << <blocksPerGrid, blockSize >> > (n_powerOf2, d, dev_data);
+#endif
 				checkCUDAError("kernDownSweep failed!");
 			}
 
@@ -131,7 +148,12 @@ namespace StreamCompaction {
 
 			// Up-Sweep
 			for (int d = 0; d <= ilog2ceil(n_powerOf2) - 1; d++) {
+#if ThreadReduction == 1
+				int numberOfThreads = n_powerOf2 / (1 << (d + 1));
+				kernUpSweep << <blocksPerGrid, blockSize >> > (numberOfThreads, d, dev_scanArr);
+#else
 				kernUpSweep << <blocksPerGrid, blockSize >> > (n_powerOf2, d, dev_scanArr);
+#endif
 				checkCUDAError("kernUpSweep failed!");
 			}
 
@@ -140,7 +162,12 @@ namespace StreamCompaction {
 
 			// Down-Sweep
 			for (int d = ilog2ceil(n_powerOf2) - 1; d >= 0; d--) {
+#if ThreadReduction == 1
+				int numberOfThreads = n_powerOf2 / (1 << (d + 1));
+				kernDownSweep << <blocksPerGrid, blockSize >> > (numberOfThreads, d, dev_scanArr);
+#else
 				kernDownSweep << <blocksPerGrid, blockSize >> > (n_powerOf2, d, dev_scanArr);
+#endif
 				checkCUDAError("kernDownSweep failed!");
 			}
 
