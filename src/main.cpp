@@ -14,7 +14,7 @@
 #include <stream_compaction/radix.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 6; // feel free to change the size of array
+const int SIZE = 1 << 20; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -209,13 +209,13 @@ int main(int argc, char* argv[]) {
         printDesc("radix sort, power-of-two");
         StreamCompaction::Radix::sort(SIZE, b, a);
         printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-        printArray(SIZE, b, false);
+        // printArray(SIZE, b, true);
 
         // Use std::sort to sort array a and store the result in c so we can compare against it
         std::copy(a, a + SIZE, c);
         std::sort(c, c + SIZE);
 
-        printArray(SIZE, c, false);
+        // printArray(SIZE, c, true);
 
         // Compare the sorted array from Radix sort with the sorted array from std::sort
         printCmpResult(SIZE, b, c);

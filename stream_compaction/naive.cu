@@ -12,11 +12,13 @@ namespace StreamCompaction {
             static PerformanceTimer timer;
             return timer;
         }
-        // TODO: __global__
+
+        const int MAX_BLOCK_SIZE = 256;
 
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
+
         void scan(int n, int *odata, const int *idata) {        
             int nearestPowerOfTwo = pow(2, ilog2ceil(n));
             int* outputBuf;
@@ -34,7 +36,7 @@ namespace StreamCompaction {
             timer().startGpuTimer();
 
             for (int depth = 1; depth <= ilog2ceil(nearestPowerOfTwo); ++depth) {
-                int blockSize = std::min(nearestPowerOfTwo, 1024); // cap at 1024 threads, hardware limitation.
+                int blockSize = std::min(nearestPowerOfTwo, MAX_BLOCK_SIZE); // cap at 1024 threads, hardware limitation.
                 dim3 blocksPerGrid((nearestPowerOfTwo + blockSize - 1) / blockSize); // note integer division
                 naiveScan<<<blocksPerGrid, blockSize>>>(nearestPowerOfTwo, depth, inputBuf, outputBuf);
 
@@ -42,7 +44,7 @@ namespace StreamCompaction {
             }
 
             // Convert inclusive scan to exclusive scan
-            int blockSize = std::min(n, 1024);
+            int blockSize = std::min(n, MAX_BLOCK_SIZE);
             dim3 blocksForShift((nearestPowerOfTwo + blockSize - 1) / blockSize);
             shiftRight<<<blocksForShift, blockSize>>>(n, inputBuf, outputBuf);
 

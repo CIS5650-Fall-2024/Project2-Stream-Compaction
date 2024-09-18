@@ -13,7 +13,7 @@ namespace StreamCompaction {
             return timer;
         }
 
-        const int MAX_BLOCK_SIZE = 1024; // keep this as a power of 2
+        const int MAX_BLOCK_SIZE = 512; // keep this as a power of 2. Tested and found 512 is optimal.
 
         #define LOG_NUM_BANKS 5
         #define CONFLICT_FREE_OFFSET(threadIdx) ((threadIdx) >> LOG_NUM_BANKS)
