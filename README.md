@@ -19,6 +19,10 @@ CUDA Stream Compaction
 **Optimizations made**
 - [Extra Credit +5] Optimized number of threads used in work-efficient scan. 
 
+**`CMakeLists.txt` has been edited!**
+
+Added `radix.cu` and `radix.h`.
+
 ### 2. Extra Credits
 [Extra Credit +5] **Why is My GPU Approach So Slow?**
 
