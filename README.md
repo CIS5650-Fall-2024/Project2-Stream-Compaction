@@ -7,6 +7,13 @@ CUDA Stream Compaction
   * [LinkedIn](https://www.linkedin.com/in/kyle-bauer-75bb25171/), [twitter](https://x.com/KyleBauer414346)
 * Tested on: Windows 10, i-7 12700 @ 2.1GHz 32GB, NVIDIA T1000 4GB (CETS Virtual Lab)
 
+Features
+---
+* CPU Scan and Stream Compaction
+* Naive Scan
+* Work-Efficient Scan and Stream Compaction
+* Thrust Scan Wrapper
+
 Analysis
 ---
 
