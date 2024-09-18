@@ -52,4 +52,60 @@ There is a significant decrease in time as block size increases until about 64 t
 #### Optimizations Explored:
 * Adjusted block size to optimize shared memory usage and improve the occupancy of each streaming multiprocessor.
 * Adjusted kernels to only include shifting operators instead of multiplication and division.
-* 
+
+## Output
+The follow output is from an array size of **2<sup>21</sup>**, a non-power-of-two array size of **2<sup>21</sup> - 3**, and a block size of **64**.
+```
+****************
+** SCAN TESTS **
+****************
+    [  41  47  37  30  49  44  12   6  29  14   6  13  20 ...  31   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 4.9157ms    (std::chrono Measured)
+    [   0  41  88 125 155 204 248 260 266 295 309 315 328 ... 51348803 51348834 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 3.9709ms    (std::chrono Measured)
+    [   0  41  88 125 155 204 248 260 266 295 309 315 328 ... 51348711 51348742 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 2.6129ms    (CUDA Measured)
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 1.68922ms    (CUDA Measured)
+    passed
+==== work-efficient scan, power-of-two ====
+   elapsed time: 1.79622ms    (CUDA Measured)
+    passed
+==== work-efficient scan, non-power-of-two ====
+   elapsed time: 1.00659ms    (CUDA Measured)
+    passed
+==== thrust scan, power-of-two ====
+   elapsed time: 1.1992ms    (CUDA Measured)
+    passed
+==== thrust scan, non-power-of-two ====
+   elapsed time: 0.56832ms    (CUDA Measured)
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   3   3   1   2   3   2   0   0   3   0   0   3   2 ...   1   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 5.0553ms    (std::chrono Measured)
+    [   3   3   1   2   3   2   3   3   2   2   2   3   2 ...   3   1 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 4.7574ms    (std::chrono Measured)
+    [   3   3   1   2   3   2   3   3   2   2   2   3   2 ...   3   1 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 18.7201ms    (std::chrono Measured)
+    [   3   3   1   2   3   2   3   3   2   2   2   3   2 ...   3   1 ]
+    passed
+==== work-efficient compact, power-of-two ====
+   elapsed time: 1.69056ms    (CUDA Measured)
+    passed
+==== work-efficient compact, non-power-of-two ====
+   elapsed time: 1.59232ms    (CUDA Measured)
+    passed
+```
