@@ -11,9 +11,10 @@
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
+#include <stream_compaction/radix.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 20; // feel free to change the size of array
+const int SIZE = 1 << 6; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -193,6 +194,32 @@ int main(int argc, char* argv[]) {
         printCmpLenResult(count, expectedNPOT, b, c);
     }
 
+    printf("\n");
+    printf("*****************************\n");
+    printf("** RADIX TESTS **\n");
+    printf("*****************************\n");
+
+    // Radix tests
+    genArray(SIZE - 1, a, 255);  // Leave a 0 at the end to test that edge case
+    a[SIZE - 1] = 0;
+    printArray(SIZE, a, true);
+
+    if (argc > 1 && strcmp(argv[1], "radix") == 0) { 
+        zeroArray(SIZE, b);
+        printDesc("radix sort, power-of-two");
+        StreamCompaction::Radix::sort(SIZE, b, a);
+        printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+        printArray(SIZE, b, false);
+
+        // Use std::sort to sort array a and store the result in c so we can compare against it
+        std::copy(a, a + SIZE, c);
+        std::sort(c, c + SIZE);
+
+        printArray(SIZE, c, false);
+
+        // Compare the sorted array from Radix sort with the sorted array from std::sort
+        printCmpResult(SIZE, b, c);
+    }
 
     system("pause"); // stop Win32 console from closing on exit
     delete[] a;
