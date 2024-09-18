@@ -8,8 +8,15 @@ CUDA Stream Compaction
   * [Personal Website](https://www.logancho.com/)
 * Tested on: Windows 11, 13th Gen Intel(R) Core(TM) i7-13700H, 2.40 GHz, RTX 4060 Laptop GPU
 
-### (TODO: Your README)
+# Description
 
-Include analysis, etc. (Remember, this is public, so don't put
-anything here that you don't want to share with the world.)
+# Charts
+![](images/Chart1.png)
 
+# In-Depth Performance Analysis
+ * CUDA Block Size Optimization
+   * Through trial and error, I narrowed down the optimal block sizes for each of my implementations of scan/compaction.
+     * Naive: (256, 1, 1)
+     * Efficient: (256, 1, 1)
+ * Comparison of all Scan Implementations (CPU, GPU (Naive, Efficient, Thrust)):
+   *  ![](images/Chart1.png)
