@@ -19,7 +19,11 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            odata[0] = 0;
+            for (int i = 1; i < n; i++)
+            {
+                odata[i] = idata[i - 1] + odata[i - 1];
+            }
             timer().endCpuTimer();
         }
 
@@ -30,9 +34,17 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int c = 0;
+            for (int i = 0; i < n; i++)
+            {
+                if (idata[i] != 0)
+                {
+                    odata[c] = idata[i];
+                    c++;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return c;
         }
 
         /**
@@ -42,9 +54,32 @@ namespace StreamCompaction {
          */
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int* boolArray = new int[n];
+            int* scanArray = new int[n];
+
+            for (int i = 0; i < n; i++)
+            {
+                boolArray[i] = (idata[i] != 0) ? 1 : 0;
+            }
+            
+            scanArray[0] = 0;
+            for (int i = 1; i < n; i++)
+            {
+                scanArray[i] = boolArray[i - 1] + scanArray[i - 1];
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                if (boolArray[i] == 1)
+                {
+                    odata[scanArray[i]] = idata[i];
+                }
+            }
+            int c = (boolArray[n - 1] == 1) ? scanArray[n - 1] + 1 : scanArray[n - 1];
+            delete[] boolArray;
+            delete[] scanArray;
             timer().endCpuTimer();
-            return -1;
+            return c;
         }
     }
 }
