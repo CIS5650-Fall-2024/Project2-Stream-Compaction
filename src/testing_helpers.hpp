@@ -24,7 +24,7 @@ void printDesc(const char *desc) {
 template<typename T>
 void printCmpResult(int n, T *a, T *b) {
     printf("    %s \n",
-            cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");
+            cmpArrays(n, a, b) ? "\033[31mFAIL VALUE\033[0m" : "\033[32mpassed\033[0m");
 }
 
 template<typename T>
@@ -34,7 +34,7 @@ void printCmpLenResult(int n, int expN, T *a, T *b) {
     }
     printf("    %s \n",
             (n == -1 || n != expN) ? "FAIL COUNT" :
-            cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");
+            cmpArrays(n, a, b) ? "\033[31mFAIL VALUE\033[0m" : "\033[32mpassed\033[0m");
 }
 
 void zeroArray(int n, int *a) {
