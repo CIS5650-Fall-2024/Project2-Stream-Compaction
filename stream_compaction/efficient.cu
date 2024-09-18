@@ -63,6 +63,7 @@ namespace StreamCompaction {
 
             cudaMemcpy(dev_data, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
+            const int blockSize = 256;
             dim3 gridDim((dataSize + blockSize - 1) / blockSize);
 
             timer().startGpuTimer();
@@ -126,6 +127,7 @@ namespace StreamCompaction {
 
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
+            int blockSize = 128;
             dim3 gridDim((dataSize + blockSize - 1) / blockSize);
 
             timer().startGpuTimer();

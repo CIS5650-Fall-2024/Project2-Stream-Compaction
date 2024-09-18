@@ -55,6 +55,7 @@ namespace StreamCompaction {
 
             cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
+            const int blockSize = 128;
             dim3 gridDim((n + blockSize - 1) / blockSize);
 
             // Number of levels needed for the scan
