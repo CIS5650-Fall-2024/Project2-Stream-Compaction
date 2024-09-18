@@ -11,16 +11,18 @@
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
+#include <stream_compaction/radix.h>
 #include "testing_helpers.hpp"
+#include <iostream>
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 22; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
 int *c = new int[SIZE];
 
 int main(int argc, char* argv[]) {
-    // Scan tests
+    // Scan tests --------------------------------------
 
     printf("\n");
     printf("****************\n");
@@ -100,10 +102,10 @@ int main(int argc, char* argv[]) {
     printf("** STREAM COMPACTION TESTS **\n");
     printf("*****************************\n");
 
-    // Compaction tests
+    // Compaction tests --------------------------------------
 
-    genArray(SIZE - 1, a, 4);  // Leave a 0 at the end to test that edge case
-    a[SIZE - 1] = 0;
+    genArray(SIZE - 1, a, 4);  
+    a[SIZE - 1] = 1; // Leave a 1 at the end to test that edge case
     printArray(SIZE, a, true);
 
     int count, expectedCount, expectedNPOT;
@@ -147,7 +149,123 @@ int main(int argc, char* argv[]) {
     //printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
 
-    system("pause"); // stop Win32 console from closing on exit
+
+    // radix sort tests --------------------------------------
+
+    printf("\n");
+    printf("*****************************\n");
+    printf("***** RADIX SORT TESTS ******\n");
+    printf("*****************************\n");
+
+    // pow2 test
+
+    zeroArray(8, a);
+    std::cout << " " << std::endl;
+    std::cout << "Radix Sort, hard-coded lecture example test" << std::endl;
+    std::cout << " " << std::endl;
+
+    // example from slides for debugging
+    a[0] = 4;
+    a[1] = 7;
+    a[2] = 2;
+    a[3] = 6;
+    a[4] = 3;
+    a[5] = 5;
+    a[6] = 1;
+    a[7] = 0;
+
+    printArray(8, a, true);
+
+    zeroArray(8, b);
+    printDesc("cpu sort (std::sort)");
+    StreamCompaction::CPU::sort(8, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(8, b, true);
+
+    zeroArray(8, c);
+    printDesc("radix sort");
+    StreamCompaction::Radix::sort(8, c, a);
+    printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(8, c, true);
+    printCmpResult(8, b, c);
+
+    // pow2 test
+
+    zeroArray(SIZE, a);
+    std::cout << " " << std::endl;
+    std::cout << "Radix Sort, pow2 consecutive ints" << std::endl;
+    std::cout << " " << std::endl;
+
+    for (int i = 0; i < SIZE; i++) {
+        a[i] = i;
+    }
+
+    printArray(SIZE, a, true);
+
+    zeroArray(SIZE, b);
+    printDesc("cpu sort (std::sort)");
+    StreamCompaction::CPU::sort(SIZE, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(SIZE, b, true);
+
+    zeroArray(SIZE, c);
+    printDesc("radix sort");
+    StreamCompaction::Radix::sort(SIZE, c, a);
+    printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(SIZE, c, true);
+    printCmpResult(SIZE, b, c);
+
+    // npot test
+
+    zeroArray(SIZE, a);
+    std::cout << " " << std::endl;
+    std::cout << "Radix Sort, non-pow2 consecutive ints" << std::endl;
+    std::cout << " " << std::endl;
+
+    for (int i = 0; i < NPOT; i++) {
+        a[i] = i;
+    }
+
+    printArray(NPOT, a, true);
+
+    zeroArray(NPOT, b);
+    printDesc("cpu sort (std::sort)");
+    StreamCompaction::CPU::sort(NPOT, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(NPOT, b, true);
+
+    zeroArray(NPOT, c);
+    printDesc("radix sort");
+    StreamCompaction::Radix::sort(NPOT, c, a);
+    printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(NPOT, c, true);
+    printCmpResult(NPOT, b, c);
+
+    // npot shuffled
+
+    genArray(NPOT, a, NPOT);
+    std::cout << " " << std::endl;
+    std::cout << "Radix Sort, non-pow2 shuffled ints" << std::endl;
+    std::cout << " " << std::endl;
+
+    printArray(NPOT, a, true);
+
+    zeroArray(NPOT, b);
+    printDesc("cpu sort (std::sort)");
+    StreamCompaction::CPU::sort(NPOT, b, a);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "(std::chrono Measured)");
+    printArray(NPOT, b, true);
+
+    zeroArray(NPOT, c);
+    printDesc("radix sort");
+    StreamCompaction::Radix::sort(NPOT, c, a);
+    printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+    printArray(NPOT, c, true);
+    printCmpResult(NPOT, b, c);
+
+    // END TESTS ----------------------------------------
+
+    //system("pause"); // stop Win32 console from closing on exit
     delete[] a;
     delete[] b;
     delete[] c;
