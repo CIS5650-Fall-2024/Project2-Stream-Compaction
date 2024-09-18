@@ -110,7 +110,9 @@ I optimized by dynamically launching as many thread as we need, reducing the num
 
 ```
 for (int d = 0; d < numLevels; ++d) {
-  upSweep <<<fullBlocksPerGrid, blockSize>>> (n, dev_idata, 1 << (d + 1));
+    int numThreads = powerOf2Size / (1 << (d + 1));
+    dim3 BlocksPerGrid((numThreads + blockSize - 1) / blockSize);
+    upSweep <<<BlocksPerGrid, blockSize>>> (powerOf2Size, dev_idata, 1 << (d + 1));
 }
 ```
 ```
