@@ -37,12 +37,15 @@ Three implementations of the *scan* algorithm were used for experimentation:
 #### Figure 1: Scan Implementations
 ![Scan Implementations - Array Size vs Time - Lower is Better](https://github.com/user-attachments/assets/b0f1c988-588c-4e85-b109-0b223a2ec39f)
 
-#### Figure 2: Stream Compaction Implementations
-![Stream Compact Implementations - Array Size vs Time - Lower is Better](https://github.com/user-attachments/assets/02a4c290-1069-40b5-9458-b3aaf45b5c1d)
-
 ### Explanation
 
-> TODO
+In this analysis, I have truncated the data to only show array sizes from 2^22 (4,194,304 elements) to 2^29 (536,870,912 elements). Array sizes below 2^22 were somewhat un-enlightening, since times were under one millisecond on average. It should be noted however that the CPU implementation beat all other implementations (with the exception of thrust) at lower array sizes. 
+
+To describe the results of Figure 1, at array sizes 2^22 to 2^29, the Thrust implementation performed the best, then the work-efficient GPU implementation, then the CPU implementation, and finally the naive GPU implementation, which performed the worst. 
+
+These results are to be expected, especially in the case of the worst performing implementation, GPU naive. Some reasons why GPU naive performed the worst: Firstly, the overall algorithm is the least work-efficient, performing O(n log n) addition operations, as per the GPU Gems 3 article. This is even less efficient than the sequential CPU implementation, which is an O(n) operation. In addition, the implementation of GPU naive shown here does not make use of shared memory and instead uses global memory. Extra over-head is needed as we are reading and writing to a comparitively slower memory. 
+
+In comparison, the GPU work-efficient implementation is an O(log n) algorithm, making it more efficient than the CPU and GPU naive implementations. In addition to this, the work-efficient implementation makes use of independant shared block memory, and thus is able to read and write elements faster during the algorithm. One caveat with the work-efficient implementation is that it does not mitigate bank conflicts. It would likely see better performance if shared memory was padded in such a way that reduced conflicts. 
 
 ## 📃 Output 
 ```
