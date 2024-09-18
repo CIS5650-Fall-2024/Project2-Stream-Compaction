@@ -15,7 +15,7 @@ CUDA Stream Compaction
 
 ### Performance Analysis
 
-**[Note] Block Size:** 
+**Optimizing Block Size**
 
 #### Comparison of GPU Scan Implementations
 
@@ -29,9 +29,12 @@ CUDA Stream Compaction
 
 * Can you find the performance bottlenecks? Is it memory I/O? Computation? Is it different for each implementation?
 
-#### Output of Testing
+#### Output of Testing 
+(test array) SIZE: 2^19, blockSize: 128
 
-[box here]
+```
+
+```
 
 #### Additional Feature: Radix Sort
 
