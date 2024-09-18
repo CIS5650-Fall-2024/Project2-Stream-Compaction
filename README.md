@@ -136,6 +136,8 @@ Therefore, to optimise the original work efficient scan, we need to launch a sma
 
 The runtime comparison between the original, the improved, and the cpu version can be found in Section _Analysis of the CPU, Naive, Work Efficient, and Thrust Scan_. It's clear to see that the advantage of using the improved version of the work-efficient scan starts showing when the input array size is large (i.e. above 2^18).
 
+For small input sizes, the overheads associated with GPU execution—kernel launch, memory transfer, underutilization, and synchronization—can outweigh the benefits of parallel computation. The CPU, in contrast, can handle small workloads more efficiently due to its ability to process data directly in memory with minimal overhead. Therefore, while your Work Efficient Fast implementation is optimized for larger datasets, the GPU's inherent overhead for smaller arrays results in slower performance compared to the CPU.
+
 ## Radix Sort
 The `sort.h` and `sort.cu` files are added to the `stream_compaction` directory. It's a simple version that uses the global memory and the fast version of the work-efficient scan. 
 
