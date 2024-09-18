@@ -63,7 +63,7 @@ namespace StreamCompaction {
                 int threads = new_n / step;
                 dim3 fullBlocksPerGrid((threads + block_size - 1) / block_size);
                 Upsweep_kernel << <fullBlocksPerGrid, block_size >> > (new_n, dev_data, h);
-                cudaDeviceSynchronize();
+                
             }
 
             cudaMemset(&dev_data[new_n - 1], 0, sizeof(int));
@@ -73,7 +73,7 @@ namespace StreamCompaction {
                 int threads = new_n / step;
                 dim3 fullBlocksPerGrid((threads + block_size - 1) / block_size);
                 Downsweep_kernel << <fullBlocksPerGrid, block_size >> > (new_n, dev_data, d);
-                cudaDeviceSynchronize();
+                
 
             }
 
