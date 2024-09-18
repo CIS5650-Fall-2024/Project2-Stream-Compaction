@@ -55,6 +55,9 @@ I provided an optimized version of the scan function, which utilizes more effici
     - kernDownSweepOptimized
 This optimized implementation works best at maximizing GPU performance for large datasets, further improving the already efficient work-efficient scan 
 algorithm.
+- Profile screenshots: Compare work efficient scan and optimized work efficient scan
+![](images/profile2.png)
+![](images/profile3.png)
 
 ### Feature 7: Radix Sort (Part 6 extra credit)
 The Radix Sort is implemented in the StreamCompaction::RadixSort::radixSort function and can handle arrays of varying bit sizes. Tests have been added in main to verify its correctness.
@@ -216,6 +219,5 @@ I defined the test cases for Radix Sort and Optimized Work Efficient Scan in mai
   ```
 
 ### CMake file modification
-- To solve the PTX issue, I modified the CMakeLists.txt with # Force CUDA architecture to sm_86 for RTX 3070 Ti (Ampere)
-set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES CUDA_ARCHITECTURES 86).
+- To address the PTX issue, I updated the CMakeLists.txt based on the latest commit by Shehzan (similar to the sync folk, but directly copy-pasted).
 - I added radix.cu and radix.h in stream_compaction/CMakeLists.txt.
