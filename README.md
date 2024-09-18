@@ -3,12 +3,21 @@ CUDA Stream Compaction
 
 **University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 2**
 
-* (TODO) YOUR NAME HERE
-  * (TODO) [LinkedIn](), [personal website](), [twitter](), etc.
-* Tested on: (TODO) Windows 22, i7-2222 @ 2.22GHz 22GB, GTX 222 222MB (Moore 2222 Lab)
+* Zixiao Wang
+  * [LinkedIn](https://www.linkedin.com/in/zixiao-wang-826a5a255/)
+* Tested on: Windows 11, i7-14700K @ 3.40 GHz 32GB, GTX 4070TI 12GB  4K Monitor (Personal PC)
 
-### (TODO: Your README)
+### Background
 
-Include analysis, etc. (Remember, this is public, so don't put
-anything here that you don't want to share with the world.)
+* In this project, I implemented GPU stream compaction in CUDA, from scratch. This algorithm is widely used, and will be important for accelerating path tracer. I implemented several versions of the Scan (Prefix Sum) algorithm, a critical building block for stream compaction:
+  * CPU Implementation: Begin by coding a CPU version of the Scan algorithm.
+  * GPU Implementations:
+     *  Naive Scan: Develop a straightforward GPU version that parallelizes the Scan operation.
+     *  Work-Efficient Scan: Optimize GPU implementation to make better use of parallel resources, minimizing idle threads and redundant computations.
+   
+  * GPU Stream Compaction: Utilize Scan implementations to create a GPU-based stream compaction algorithm that efficiently removes zeros from an integer array.
+* For more detail [GPU GEM](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda).
 
+### Prefix-Sum(Scan)
+
+![](images/ScanSpeed.png)
