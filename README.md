@@ -6,11 +6,11 @@
 
 ## CUDA Scan and Stream Compaction
 
-Scan operation for this codebase refers to prefix sums implemented as reduction on an array of `n` elements using binary associative operator of addition.
+Scan operation for this codebase refers to prefix sums implemented as reduction on an array of `n` elements using binary associative operator of addition.\
 This may refer to both exclusive and inclusive scans, but unless otherwise stated inside specific code segments, you may assume we are generally referring to the exclusive scan.
 
-Stream compaction refers to the process of, given an array of elements, creating a new array with elements that meet a certain criteria while preserving the initial order.
-For our implementations, the stream compaction method will remove `0`s from an array of `int`s.
+Stream compaction refers to the process of, given an array of elements, creating a new array with elements that meet a certain criteria while preserving the initial order.\
+For our implementations, the stream compaction method will remove `0`s from an array of `int`s.\
 This functionality can be extended for uses in path tracing, collision detection, sparse matrix compression, and so on.
 
 The parallel algorithms are based on [GPU Gems 3](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda), with some known errors and bugs fixed.
@@ -58,22 +58,22 @@ In practice, parallel radix sort implementation can be broken down into the foll
 
 Let us consider above diagram for conceptual understanding.
 
-For `k = 0`, we are considering the least significant bit.
-`i` array is our input array in binary representation.
-`b` array contains the true/false result of applying an appropraite bit mask (for this example `0b1`).
-`e` array is `b` array negated.
-`f` array is the exclusive scan on `e` array.
-`t` array is populated such that `t[idx] = idx - f[idx] + totalFalses`, where `totalFalses = e[n - 1] + f[n - 1]`.
-`d` array is populated using `f` if the corresponding bit mask array's entry is true, and `t` otherwise.
+For `k = 0`, we are considering the least significant bit.\
+`i` array is our input array in binary representation.\
+`b` array contains the true/false result of applying an appropraite bit mask (for this example `0b1`).\
+`e` array is `b` array negated.\
+`f` array is the exclusive scan on `e` array.\
+`t` array is populated such that `t[idx] = idx - f[idx] + totalFalses`, where `totalFalses = e[n - 1] + f[n - 1]`.\
+`d` array is populated using `f` if the corresponding bit mask array's entry is true, and `t` otherwise.\
 Lastly, the final `output` array is computed by scattering `i` array based on the destination indices stored in `d` array.
 
-Our implementation simplifies above procedure by combining multiple steps into single processes.
-`kernBitMaskNot` takes input array `i` and applies a negated bit mask to output array `e`.
-`kernScan` performs a naive parallel scan on `e` to output array `f`.
-Based on `e` and `f` arrays' last elements, we comput `totalFalses`.
+Our implementation simplifies above procedure by combining multiple steps into single processes.\
+`kernBitMaskNot` takes input array `i` and applies a negated bit mask to output array `e`.\
+`kernScan` performs a naive parallel scan on `e` to output array `f`.\
+Based on `e` and `f` arrays' last elements, we comput `totalFalses`.\
 `kernScatter` takes these intermediate results and outputs final `output` array directly.
 
-Code for above algorithm can be found inside `radix.cu`.
+Code for above algorithm can be found inside `radix.cu`.\
 A basic cpu `sort` using the STL was used to compare our implementation's comparative performance gains.
 
 ## Running the Code
