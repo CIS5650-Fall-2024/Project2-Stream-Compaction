@@ -17,10 +17,16 @@ namespace StreamCompaction {
          * For performance analysis, this is supposed to be a simple for loop.
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
          */
-        void scan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
+        void scan(int n, int *odata, const int *idata, bool time) {
+            if (time)
+                timer().startCpuTimer();
             // TODO
-            timer().endCpuTimer();
+            odata[0] = 0;
+            for (int i = 1; i < n; i++) {
+                odata[i] = odata[i - 1] + idata[i - 1];
+            }
+            if (time)
+                timer().endCpuTimer();
         }
 
         /**
@@ -31,8 +37,15 @@ namespace StreamCompaction {
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int index = 0;
+            for (int i = 0; i < n; i++) {
+                if (idata[i]) {
+                    odata[index] = idata[i];
+                    index++;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return index;
         }
 
         /**
@@ -41,10 +54,45 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
             // TODO
+            int *bidata = new int[n];
+            int *bodata = new int[n];
+
+            timer().startCpuTimer();
+
+            // map
+            for (int i = 0; i < n; i++) {
+                bidata[i] = idata[i] ? 1 : 0;
+            }
+
+            // scan
+            scan(n, bodata, bidata, false);
+
+            // scatter
+            for (int i = 0; i < n; i++) {
+                if (bidata[i]) {
+                    odata[bodata[i]] = idata[i];
+                }
+            }
+
+            int res = bodata[n - 1];
+
+            delete[] bidata;
+            delete[] bodata;
+
             timer().endCpuTimer();
-            return -1;
+            return res;
+        }
+
+        // to compare with radix sort
+        void sort(int n, int* odata, const int* idata) {
+            memcpy(odata, idata, n * sizeof(int));
+            
+            timer().startCpuTimer();
+
+            std::sort(odata, odata + n);
+
+            timer().endCpuTimer();
         }
     }
 }
