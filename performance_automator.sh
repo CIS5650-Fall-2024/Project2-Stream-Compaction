@@ -101,8 +101,9 @@ median_thrust_scan_time_npot=$(calculate_median "${thrust_scan_time_npot[@]}")
 
 # Now write the results to a csv file
 echo -e ",CPU,Naive,Efficient,Thrust\n" > performance_results.csv
-echo -e "Scan Time Power of Two,$median_cpu_scan_time_pot,$median_naive_scan_time_pot,$median_efficient_scan_time_pot,$median_thrust_scan_time_pot\n" >> performance_results.csv
-echo -e "Scan Time Non-Power of Two,$median_cpu_scan_time_npot,$median_naive_scan_time_npot,$median_efficient_scan_time_npot,$median_thrust_scan_time_npot\n" >> performance_results.csv
-echo -e "Compact Time Power of Two,$median_cpu_compact_without_scan_time_pot,,$median_efficient_compact_time_pot,\n" >> performance_results.csv
-echo -e "Compact Time Non-Power of Two,$median_cpu_compact_without_scan_time_npot,,$median_efficient_compact_time_npot,\n" >> performance_results.csv
-echo -e "(CPU) Compact Time With Scan,$median_cpu_compact_with_scan_time,,,\n" >> performance_results.csv
+echo -e "Scan Time Power of Two,$median_cpu_scan_time_pot,$median_naive_scan_time_pot,$median_efficient_scan_time_pot,$median_thrust_scan_time_pot" >> performance_results.csv
+echo -e "Scan Time Non-Power of Two,$median_cpu_scan_time_npot,$median_naive_scan_time_npot,$median_efficient_scan_time_npot,$median_thrust_scan_time_npot" >> performance_results.csv
+echo -e "Compact Time Power of Two,$median_cpu_compact_without_scan_time_pot,,$median_efficient_compact_time_pot," >> performance_results.csv
+echo -e "Compact Time Non-Power of Two,$median_cpu_compact_without_scan_time_npot,,$median_efficient_compact_time_npot," >> performance_results.csv
+echo -e "(CPU) Compact Time With Scan,$median_cpu_compact_with_scan_time,,," >> performance_results.csv
+
