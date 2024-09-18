@@ -24,7 +24,7 @@ namespace StreamCompaction {
 			if (index % d2 == 0) {
 				data[index + d2 - 1] += data[index + d1 - 1];
 			}
-#else
+#else		
 			data[(index + 1) * (1 << (d + 1)) - 1] += data[index * (1 << (d + 1)) + (1 << d) - 1 ];
 #endif
         }
@@ -43,11 +43,12 @@ namespace StreamCompaction {
 				data[index + d1 - 1] = data[index + d2 - 1];
 				data[index + d2 - 1] += t;
 			}
-#else
+#else		
 			int stride1 = (index + 1) * (1 << (d + 1)) - 1;
 			int stride2 = index * (1 << (d + 1)) + (1 << d) - 1;
+			int temp = data[stride2];
 			data[stride2] = data[stride1];
-			data[stride1] += data[stride2];
+			data[stride1] += temp;
 #endif
 		}
 
