@@ -45,6 +45,11 @@ I believe this automatically meets the requirement of Part 5 extra credits,
 since I'm avoided calling redundant threads, 
 making the GPU algorithms perform better than the CPU when the array size is large.
 
+![](img/Screenshot-nsight-eff-scan-summary.png)
+
+As you can see in the profiling, the grid sizes shrink at the later up-sweep passes and early down-sweep passes.
+This optimizes the performance a lot. However, the memory throughput is not very high, this can be further optimized.
+
 ### Stream Compaction
 
 ![](img/benchmark-compaction-power-of-2.png)
