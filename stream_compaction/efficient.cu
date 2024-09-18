@@ -6,18 +6,12 @@
 namespace StreamCompaction {
     namespace Efficient {
         using StreamCompaction::Common::PerformanceTimer;
+		#define blockSize 256
         PerformanceTimer& timer()
         {
             static PerformanceTimer timer;
             return timer;
         }
-
-		__global__ void reduction(int n, int* idata, int d) {
-			int index = threadIdx.x + (blockIdx.x * blockDim.x);
-			if (index >= n || index % (1 << (d + 1)) != 0) return;
-
-			idata[index + (1 << (d + 1)) - 1] += idata[index + (1 << d) - 1];
-		}
 
 		__global__ void kernUpSweep(int n, int* odata, int d) {
 			int index = threadIdx.x + (blockIdx.x * blockDim.x);
@@ -57,7 +51,7 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             // TODO
-			int blockSize = 128;
+			//int blockSize = 128;
 			int npower2 = 1 << ilog2ceil(n);
 			int* dev_odata;
 
@@ -108,7 +102,7 @@ namespace StreamCompaction {
 
 		int compactPower2(int n, int* odata, const int* idata) {
 			// TODO
-			int blockSize = 128;
+			//int blockSize = 128;
 
 			int* dev_tempArray;
 			int* dev_scanArray;
@@ -153,8 +147,9 @@ namespace StreamCompaction {
 			scatter << <(n + blockSize - 1) / blockSize, blockSize >> > (n, dev_odata, dev_idata, dev_tempArray, dev_scanArray);
 			checkCUDAError("scatter failed!");
 			cudaDeviceSynchronize();
-			cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 			timer().endGpuTimer();
+
+			cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
 
 			int* host_scanArray = new int[n];
 			cudaMemcpy(host_scanArray, dev_scanArray, n * sizeof(int), cudaMemcpyDeviceToHost);

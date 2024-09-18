@@ -6,6 +6,7 @@
 namespace StreamCompaction {
     namespace Naive {
         using StreamCompaction::Common::PerformanceTimer;
+		#define blockSize 1024
         PerformanceTimer& timer()
         {
             static PerformanceTimer timer;
@@ -36,7 +37,6 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             // TODO
-			int blockSize = 128;
 
 			int* dev_idata;
 			int* dev_odata;
