@@ -13,47 +13,40 @@ namespace StreamCompaction {
             return timer;
         }
 
-        __global__ void scan_global(int n, int *odata, int *idata)
+        __global__ void scan_upstream(int n, int *idata,int offset)
         {
             int thid = threadIdx.x + (blockIdx.x * blockDim.x);
             //load data in the global memory
+            int ai = offset * (2*thid + 1) - 1;
+            int bi = offset * (2*thid + 2) - 1;
            
-            for(int offset = 1; offset < n; offset*=2)
-            {                
-                int ai = offset * (2*thid + 1) - 1;
-                int bi = offset * (2*thid + 2) - 1;
-           
-                if (ai < n && bi < n)
-                {
-
-                    idata[bi] += idata[ai];                           
-                }
-                if(thid == 0)
-                    idata[n-1] =0;
-                __syncthreads();
-
-            }
-
-            for (int offset = (n/2); offset >= 1; offset /= 2) // traverse down tree & build scan 
+            if (ai < n && bi < n)
             {
 
-               int ai = offset * (2 * thid + 1) - 1;
-               int bi = offset * (2 * thid + 2) - 1;
-               if ((ai < n) && (bi < n)) {
-                   float t = idata[ai];
-                   idata[ai] = idata[bi];
-                   idata[bi] += t;
-                   }
-                   
-                   __syncthreads();
-        
+                idata[bi] += idata[ai];                           
             }
-            if (thid < n/2)
-                odata[2 * thid] = idata[2 * thid]; // write results to device memory
+            if(thid == 0)
+                idata[n-1] =0;
             __syncthreads();
-            if(thid < n/2) 
-                odata[2 * thid + 1] = idata[2 * thid + 1];
+
+        }
+
+
+
+        __global__ void scan_downstream(int n, int* idata,int offset)
+        {
+            int thid = threadIdx.x + (blockIdx.x * blockDim.x);
+            //load data in the global memory           
+            int ai = offset * (2 * thid + 1) - 1;
+            int bi = offset * (2 * thid + 2) - 1;
+            if ((ai < n) && (bi < n)) {
+                float t = idata[ai];
+                idata[ai] = idata[bi];
+                idata[bi] += t;
+                }
+                  
              __syncthreads();
+
         }
         
         /**
@@ -61,24 +54,32 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startGpuTimer();
-            // TODO
-            int *g_odata;
+
             int *g_idata;
             int zeropadded_n = pow(2, ilog2ceil(n));
-            cudaMalloc((void**)&g_odata, zeropadded_n * sizeof(int));
 
             cudaMalloc((void**)&g_idata,zeropadded_n * sizeof(int));
 
             cudaMemcpy(g_idata,idata,n*sizeof(int),cudaMemcpyHostToDevice);
 
-            int threadsPerBlock = 256;
+            int threadsPerBlock = 1024;
             int blocksPerGrid = ((zeropadded_n /2) + threadsPerBlock - 1) / threadsPerBlock;
-            scan_global << <blocksPerGrid, threadsPerBlock >> > (zeropadded_n, g_odata, g_idata);
+            int offset = 1;
+            for (int i = 0; i < ilog2ceil(n); i++)
+            {
+                scan_upstream << <blocksPerGrid, threadsPerBlock >> > (zeropadded_n, g_idata,offset);
+                offset *= 2;
+            }
+            cudaDeviceSynchronize();
+            offset = zeropadded_n / 2;
+            for (int i = 0; i < ilog2ceil(n); i++)
+            {
+                scan_downstream << <blocksPerGrid, threadsPerBlock >> > (zeropadded_n, g_idata,offset);
+                offset /= 2;
 
-            cudaMemcpy(odata,g_odata,sizeof(int)*n,cudaMemcpyDeviceToHost);
-
+            }
+            cudaMemcpy(odata,g_idata,sizeof(int)*n,cudaMemcpyDeviceToHost);
             cudaFree(g_idata);
-            cudaFree(g_odata);
             timer().endGpuTimer();
         }
 
@@ -136,9 +137,11 @@ namespace StreamCompaction {
 
             StreamCompaction::Common::kernScatter<<<blocksPerGrid,threadsPerBlock>>>(zeropadded_n, g_odata,g_idata, g_bools, indices);
             cudaMemcpy(odata,g_odata,zeropadded_n*sizeof(int),cudaMemcpyDeviceToHost);
-            cudaFree(bools);
+            cudaFree(g_bools);
             cudaFree(indices);
             cudaFree(g_odata);
+            cudaFree(g_idata);
+            free(bools);
             timer().endGpuTimer();
 
             return temp_array[zeropadded_n-1];

@@ -24,12 +24,11 @@ namespace StreamCompaction {
             thrust::host_vector<int> thrust_idata(idata, idata + n);
             thrust::host_vector<int> thrust_odata(odata, odata + n);
 
-            thrust::device_vector<int> thrust_dev_idata = thrust_idata;
-            thrust::device_vector<int> thrust_dev_odata = thrust_odata;
+            thrust::device_vector<int> thrust_dev_idata(idata,idata+n);
+            thrust::device_vector<int> thrust_dev_odata(odata,odata+n);
 
             thrust::exclusive_scan(thrust_dev_idata.begin(), thrust_dev_idata.end(), thrust_dev_odata.begin());
-            thrust::copy(thrust_dev_odata.begin(), thrust_dev_odata.end(), thrust_odata.begin());
-            std::memcpy(odata, thrust_odata.data(), n * sizeof(int));
+            thrust::copy(thrust_dev_odata.begin(), thrust_dev_odata.end(), odata);
             timer().endGpuTimer();
         }
     }
