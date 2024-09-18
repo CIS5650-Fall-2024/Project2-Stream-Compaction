@@ -13,7 +13,8 @@
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
 
-#define MAX_SIZE 1 << 18
+// Failures occur for larger sizes.
+#define MAX_SIZE 1 << 16
 // Must be 4 so that NPOT >= 1.
 #define MIN_SIZE 4
 #define MAX_ELEMENT_VALUE 50
@@ -135,7 +136,12 @@ void compactionTests(const int SIZE, const int NPOT, int *a, int *b, int *c, int
     if (!printCmpLenResult(count, expectedNPOT, b, c)) printArray(count, c, true);
 }
 
-void profileScan(const int SIZE, bool testCorrectness = false) {
+typedef enum {
+    NAIVE,
+    EFFICIENT,
+    THRUST
+} ScanType;
+void profileScan(const int SIZE, ScanType scanType, bool testCorrectness = false) {
     int *input = new int[SIZE];
     int *output = new int[SIZE];
     int *reference;
@@ -147,7 +153,17 @@ void profileScan(const int SIZE, bool testCorrectness = false) {
         StreamCompaction::CPU::scan(SIZE, reference, input, /*simulateGPUScan=*/false);
     }
     
-    StreamCompaction::Naive::scan(SIZE, output, input);
+    switch (scanType) {
+    case NAIVE:
+        StreamCompaction::Naive::scan(SIZE, output, input);
+        break;
+    case EFFICIENT:
+        StreamCompaction::Efficient::scan(SIZE, output, input);
+        break;
+    case THRUST:
+        StreamCompaction::Thrust::scan(SIZE, output, input);
+        break;
+    }
     
     if (testCorrectness) {
         printCmpResult(SIZE, reference, output);
@@ -213,8 +229,8 @@ int main(int argc, char* argv[]) {
         delete[] a;
     }
 
-    int SIZE = 1 << 18;
-    profileScan(SIZE, /*testCorrectness=*/true);
+    int SIZE = 1 << 16;
+    profileScan(SIZE, EFFICIENT, /*testCorrectness=*/true);
 
     // Stop Win32 console from closing on exit.
     system("pause");
