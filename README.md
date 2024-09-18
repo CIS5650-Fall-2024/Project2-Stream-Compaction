@@ -68,6 +68,14 @@ The thrust algorithm is the most efficient algorithm when the input size is very
 the thrust implementation uses shared-memory model and properly optimizes the use of warps and registers to make the 
 algorithm very efficient on large scale data.
 
+![Thrust Analysis](img/Nsight.png)
+
+From the Nsight System timeline, we can see that the thrust implementation has a very high SM Warp Occupancy, indicating 
+that the algorithm is very efficient in utilizing the GPU resources. There are also some DRAM read and write operations, 
+which could be the memory access operations during the up-sweep and down-sweep processes. Overall, the thrust 
+implementation looks very efficient and well optimized.
+
+
 ### Output
 This output is generated with $2^{20}$ input size and $256$ block size.
 ```
