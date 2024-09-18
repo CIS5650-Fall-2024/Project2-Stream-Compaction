@@ -263,7 +263,7 @@ Each test below was run 3 times and then averaged together to try to combat the 
 
 Additionally, all of these were run in Release mode. The specs of the computer they were run on is mentioned at the very top, and all of the raw data for these runs can be found in the `execution-data.xlsx` file [here](execution-data.xlsx), although screenshots are provided throughout for convenience.
 
-I ran each Scan algorithm on various array sizes and measured their performances. I ran tests for array sizes of 2^6=64, 2^8, 2^10, ..., 2^20, and 2^22=16777216. I chose powers of two because they provide an easy way to scale the array size up, but they shouldn't cause any performance differences compared to non-powers-of-two. I chose this minimum size because it seems like a small enough list that one might practically scan, and 2^22 because it was a very large one that might need to be scanned.
+I ran each scan algorithm on various array sizes and measured their performances. I ran tests for array sizes of 2^6=64, 2^8, 2^10, ..., 2^20, and 2^22=16777216. I chose powers of two because they provide an easy way to scale the array size up, but they shouldn't cause any performance differences compared to non-powers-of-two. I chose this minimum size because it seems like a small enough list that one might practically scan, and 2^22 because it was a very large one that might need to be scanned. The raw data for these tests can be found at the bottom in the appendix.
 
 Now here is a overall graph of the performance with time in milliseconds, in log scale (remember, lower is better!):
 
@@ -321,11 +321,139 @@ Additionally, just like how I ran Nsight Systems on the `thrust` implementation 
 
 ![nsight systems report timeline appendix](img/entire-report.jpg)
 
-Finally, here is the output from running the tests found in `main.cpp`. Note that I did add my own test cases for many of the extra methods I implemented, and they are mentioned above for each function. However, to give a brief list of extra tests, they are:
+Finally, here is the output from running the tests found in `main.cpp`. Note that I did add my own test cases for many of the extra methods I implemented, and they are mentioned above for each function. However, to give a brief list of extra tests I added, they are:
 
+Scan Tests:
+- work-efficient scan thread optimized, power-of-two
+- work-efficient scan thread optimized, non-power-of-two
+- naive scan memory optimized, power-of-two
+- naive scan memory optimized, non-power-of-two
+- work-efficient scan memory optimized, power-of-two
+- work-efficient scan memory optimized, non-power-of-two
 
-Paste the output of the test program into a triple-backtick block in your README.
-...
-ALSO INCLUDE entire-report
-INCLUDE IN PR extra tests implemented, ec features, changes to cmakelists
+Compact Tests:
+- work-efficient compact thread optimized, power-of-two
+- work-efficient compact thread optimized, non-power-of-two
 
+Sort Tests:
+- std sort, power-of-two
+- radix sort memory optimized, power-of-two
+- std sort, non-power-of-two
+- radix sort memory optimized, non-power-of-two
+
+Test output:
+
+```
+****************
+** SCAN TESTS **
+****************
+    [  11  42  20  44   5   2  11  36   9  49  16  42  41 ...  28   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 4.3458ms    (std::chrono Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487046 205487074 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 4.7294ms    (std::chrono Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487016 205487035 ]
+    passed 
+==== naive scan, power-of-two ====
+   elapsed time: 4.95194ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487046 205487074 ]
+    passed 
+==== naive scan, non-power-of-two ====
+   elapsed time: 4.66166ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ...   0   0 ]
+    passed
+==== work-efficient scan, power-of-two ====
+   elapsed time: 4.14038ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487046 205487074 ]
+    passed
+==== work-efficient scan, non-power-of-two ====
+   elapsed time: 3.90957ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487016 205487035 ]
+    passed
+==== work-efficient scan thread optimized, power-of-two ====
+   elapsed time: 2.50742ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487046 205487074 ]
+    passed
+==== work-efficient scan thread optimized, non-power-of-two ====
+   elapsed time: 2.02218ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487016 205487035 ]
+    passed
+==== thrust scan, power-of-two ====
+   elapsed time: 1.89178ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487046 205487074 ]
+    passed
+==== thrust scan, non-power-of-two ====
+   elapsed time: 0.858336ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487016 205487035 ]
+    passed
+==== naive scan memory optimized, power-of-two ====
+   elapsed time: 1.71162ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487046 205487074 ]
+    passed
+==== naive scan memory optimized, non-power-of-two ====
+   elapsed time: 1.56301ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ...   0   0 ]
+    passed
+==== work-efficient scan memory optimized, power-of-two ====
+   elapsed time: 1.9087ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487046 205487074 ]
+    passed
+==== work-efficient scan memory optimized, non-power-of-two ====
+   elapsed time: 1.83875ms    (CUDA Measured)
+    [   0  11  53  73 117 122 124 135 171 180 229 245 287 ... 205487016 205487035 ]
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   2   0   2   1   1   3   2   1   0   1   0   2   0 ...   3   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 12.7152ms    (std::chrono Measured)
+    [   2   2   1   1   3   2   1   1   2   2   2   3   3 ...   2   3 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 12.6938ms    (std::chrono Measured)
+    [   2   2   1   1   3   2   1   1   2   2   2   3   3 ...   1   1 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 25.8371ms    (std::chrono Measured)
+    [   2   2   1   1   3   2   1   1   2   2   2   3   3 ...   2   3 ]
+    passed
+==== work-efficient compact, power-of-two ====
+   elapsed time: 4.53075ms    (CUDA Measured)
+    [   2   2   1   1   3   2   1   1   2   2   2   3   3 ...   2   3 ]
+    passed
+==== work-efficient compact, non-power-of-two ====
+   elapsed time: 4.42582ms    (CUDA Measured)
+    [   2   2   1   1   3   2   1   1   2   2   2   3   3 ...   1   1 ]
+    passed 
+==== work-efficient compact thread optimized, power-of-two ====
+   elapsed time: 2.78566ms    (CUDA Measured)
+    [   2   2   1   1   3   2   1   1   2   2   2   3   3 ...   2   3 ]
+    passed
+==== work-efficient compact thread optimized, non-power-of-two ====
+   elapsed time: 2.79344ms    (CUDA Measured)
+    [   2   2   1   1   3   2   1   1   2   2   2   3   3 ...   1   1 ]
+    passed
+
+**********************
+** RADIX SORT TESTS **
+**********************
+    [ 27514 16740 10566 14189 29569 9179 23674 12109 29620 5901 9668 28686 19412 ... 28411   0 ]
+==== std sort, power-of-two ====
+   elapsed time: 357.567ms    (std::chrono Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 32767 32767 ]
+==== radix sort memory optimized, power-of-two ====
+   elapsed time: 49.1781ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 32767 32767 ]
+    passed
+==== std sort, non-power-of-two ====
+   elapsed time: 341.76ms    (std::chrono Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 32767 32767 ]
+==== radix sort memory optimized, non-power-of-two ====
+   elapsed time: 52.4414ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ... 32767 32767 ]
+    passed
+Press any key to continue . . .
+```
