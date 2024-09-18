@@ -16,22 +16,23 @@ namespace StreamCompaction {
         // Kernel for the upsweep phase of the scan
         __global__ void kern_upsweep(int* data, int offset, int n) {
             int tid = threadIdx.x + blockIdx.x * blockDim.x;
-            int index = tid * offset * 2;
+            int index = tid << (offset + 1);
 
-            if (index + offset * 2 - 1 < n) {
-                data[index + offset * 2 - 1] += data[index + offset - 1];
+            if (index + (1 << (offset + 1)) - 1 < n) {
+                data[index + (1 << (offset + 1)) - 1] += data[index + (1 << offset) - 1];
             }
+
         }
 
         // Kernel for the downsweep phase of the scan
         __global__ void kern_downsweep(int* data, int offset, int n) {
             int tid = threadIdx.x + blockIdx.x * blockDim.x;
-            int index = tid * offset * 2;
+            int index = tid << (offset + 1);
 
-            if (index + offset * 2 - 1 < n) {
-                int temp = data[index + offset - 1];
-                data[index + offset - 1] = data[index + offset * 2 - 1];
-                data[index + offset * 2 - 1] += temp;
+            if (index + (1 << (offset + 1)) - 1 < n) {
+                int temp = data[index + (1 << offset) - 1];
+                data[index + (1 << offset) - 1] = data[index + (1 << (offset + 1)) - 1];
+                data[index + (1 << (offset + 1)) - 1] += temp;
             }
         }
 
@@ -39,7 +40,8 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-            int rounded_size = pow(2, ilog2ceil(n));
+            int d = ilog2ceil(n);
+            int rounded_size = 1 << d;
 
             // Allocate memory for device input/output arrays
             int* dev_data;
@@ -58,8 +60,8 @@ namespace StreamCompaction {
             timer().startGpuTimer();
 
             // Perform the upsweep phase
-            for (int offset = 1; offset < rounded_size; offset *= 2) {
-                int numBlocks = (rounded_size / (offset * 2) + blockSize - 1) / blockSize;
+            for (int offset = 0; offset < d-1; offset++) {
+                int numBlocks = (rounded_size / (1 << (offset + 1)) + blockSize - 1) / blockSize;
                 kern_upsweep << <numBlocks, blockSize >> > (dev_data, offset, rounded_size);
                 checkCUDAError("kern_upsweep failed!");
                 cudaDeviceSynchronize();
@@ -70,8 +72,8 @@ namespace StreamCompaction {
             checkCUDAError("cudaMemset dev_data failed");
 
             // Perform the downsweep phase
-            for (int offset = rounded_size / 2; offset >= 1; offset /= 2) {
-                int numBlocks = (rounded_size / (offset * 2) + blockSize - 1) / blockSize;
+            for (int offset = d-1; offset >= 0; offset--) {
+                int numBlocks = (rounded_size / (1 << (offset + 1)) + blockSize - 1) / blockSize;
                 kern_downsweep << <numBlocks, blockSize >> > (dev_data, offset, rounded_size);
                 checkCUDAError("kern_downsweep failed!");
                 cudaDeviceSynchronize();
@@ -97,7 +99,8 @@ namespace StreamCompaction {
          * @returns      The number of elements remaining after compaction.
          */
         int compact(int n, int *odata, const int *idata) {
-            size_t paddedSize = (size_t) 1 << ilog2ceil(n);
+            int d = ilog2ceil(n);
+            size_t paddedSize = (size_t) 1 << d;
 
             int* dev_idata;
             int* dev_odata;
@@ -135,9 +138,9 @@ namespace StreamCompaction {
             // Step 2: Perform Scan on Boolean Array
             cudaMemcpy(dev_indices, dev_bools, sizeof(int) * paddedSize, cudaMemcpyDeviceToDevice);
 
-            // Up-sweep phase
-            for (int offset = 1; offset < paddedSize; offset *= 2) {
-                int numBlocks = (paddedSize / (offset * 2) + blockSize - 1) / blockSize;
+            // Perform the upsweep phase
+            for (int offset = 0; offset < d - 1; offset++) {
+                int numBlocks = (paddedSize / (1 << (offset + 1)) + blockSize - 1) / blockSize;
                 if (numBlocks > 0) { // Only run if there is work to do
                     kern_upsweep << <numBlocks, blockSize >> > (dev_indices, offset, paddedSize);
                     checkCUDAError("kern_upsweep failed!");
@@ -149,12 +152,12 @@ namespace StreamCompaction {
             cudaMemset(dev_indices + paddedSize - 1, 0, sizeof(int));
             checkCUDAError("cudaMemset failed");
 
-            // Down-sweep phase
-            for (int offset = paddedSize / 2; offset >= 1; offset /= 2) {
-                int numBlocks = (paddedSize / (offset * 2) + blockSize - 1) / blockSize;
+            // Perform the downsweep phase
+            for (int offset = d - 1; offset >= 0; offset--) {
+                int numBlocks = (paddedSize / (1 << (offset + 1)) + blockSize - 1) / blockSize;
                 if (numBlocks > 0) { // Only run if there is work to do
                     kern_downsweep << <numBlocks, blockSize >> > (dev_indices, offset, paddedSize);
-                    checkCUDAError("kern_downsweep failed");
+                    checkCUDAError("kern_downsweep failed!");
                     cudaDeviceSynchronize();
                 }
             }
