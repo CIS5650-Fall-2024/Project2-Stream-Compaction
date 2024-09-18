@@ -73,6 +73,7 @@ namespace StreamCompaction {
 
                 kernUpSweep<<<fullBlocksPerGrid, blockSize>>>(nextPowSpace, d, dev_idata);
                 checkCUDAError("kernUpSweep failed!");
+                cudaDeviceSynchronize();
             }
 
             cudaMemset(dev_idata + (nextPowSpace - 1), 0, sizeof(int));
@@ -85,6 +86,7 @@ namespace StreamCompaction {
 
                 kernDownSweep<<<fullBlocksPerGrid, blockSize>>>(nextPowSpace, d, dev_idata);
                 checkCUDAError("kernDownSweep failed!");
+                cudaDeviceSynchronize();
             }
 
             timer().endGpuTimer(); // --------------------------------
@@ -107,6 +109,7 @@ namespace StreamCompaction {
             int* dev_idata;
             int* dev_scanned; 
             int* dev_bools; 
+            int* dev_odata; 
 
             int nextPowSpace = 1 << ilog2ceil(n);
 
@@ -119,6 +122,9 @@ namespace StreamCompaction {
 
             cudaMalloc((void**)&dev_scanned, nextPowSpace * sizeof(int));
             checkCUDAError("cudaMalloc dev_scattered failed!");
+
+            cudaMalloc((void**)&dev_odata, nextPowSpace * sizeof(int));
+            checkCUDAError("cudaMalloc dev_odata failed!");
 
             dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
 
@@ -138,6 +144,7 @@ namespace StreamCompaction {
 
                 kernUpSweep << <fullBlocksPerGrid_adj, blockSize >> > (nextPowSpace, d, dev_scanned);
                 checkCUDAError("kernUpSweep failed!");
+                cudaDeviceSynchronize();
             }
 
             cudaMemset(dev_scanned + (nextPowSpace - 1), 0, sizeof(int));
@@ -150,12 +157,13 @@ namespace StreamCompaction {
 
                 kernDownSweep <<<fullBlocksPerGrid_adj, blockSize>>> (nextPowSpace, d, dev_scanned);
                 checkCUDAError("kernDownSweep failed!");
+                cudaDeviceSynchronize();
             }
 
             // end scan stuff ------------------|
 
             // scatter
-            StreamCompaction::Common::kernScatter <<<fullBlocksPerGrid, blockSize >>> (n, dev_idata, dev_idata, dev_bools, dev_scanned);
+            StreamCompaction::Common::kernScatter<<<fullBlocksPerGrid, blockSize >>> (n, dev_odata, dev_idata, dev_bools, dev_scanned);
 
             timer().endGpuTimer(); // ----------------
 
@@ -163,11 +171,12 @@ namespace StreamCompaction {
             cudaMemcpy(&count, dev_scanned + (n - 1), sizeof(int), cudaMemcpyDeviceToHost);
             count += (idata[n - 1] != 0);
 
-            cudaMemcpy(odata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
             
             cudaFree(dev_idata);
             cudaFree(dev_bools);
             cudaFree(dev_scanned);
+            cudaFree(dev_odata);
 
             return count;
         }
