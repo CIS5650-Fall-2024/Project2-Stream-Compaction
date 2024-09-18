@@ -18,7 +18,7 @@
 #include <iostream>
 #include <fstream>
 
-#define SAVE_LOG 1
+#define SAVE_LOG 0
 
 const int SIZE = 1 << 20; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
