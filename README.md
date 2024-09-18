@@ -41,13 +41,22 @@ There is a significant decrease in time as block size increases until about 64 t
 <img src="img/StreamCompactionGraph.png" width=800>
 
 #### Key Insights:
-* Naive GPU Scan: While the naive approach is simple, it suffers from inefficiencies due to its multiple kernel launches and use of global memory.
-* Work-Efficient GPU Scan: More performant than the naive version due to reduced memory bandwidth usage and in-place calculations.
-* Thrust Implementation: Fast and highly optimized due to the underlying Thrust library's optimizations, but lacks flexibility for customization.
+1. CPU Scan:
+* The CPU implementation shows a steep increase in execution time as the array size grows. For larger arrays, the CPU scan is significantly slower than the GPU implementations, making it unsuitable for large datasets
+2. Naive GPU Scan:
+* While the naive approach is simple, it suffers from inefficiencies due to its multiple kernel launches and use of global memory. The Naive GPU scan performs better than the CPU scan but still exhibits slower scaling for larger arrays compared to other GPU methods. The performance bottleneck could arise from inefficient memory access patterns and redundant computations.
+3. Work-Efficient GPU Scan:
+* The Work-Efficient GPU scan outperforms the Naive version, especially for large arrays. This suggests that it optimizes memory access and reduces unnecessary computation, improving parallel efficiency.
+4. Thrust GPU Scan:
+* The Thrust scan (from the CUDA Thrust library) is the fastest across all tested array sizes. Thrust is highly optimized for both memory management and computation, making it ideal for general use, but it lacks flexibility for customization.
 
 #### Bottlenecks Identified:
-* Global Memory Access: Naive implementations suffer from excessive global memory reads/writes, leading to slower performance.
-* Occupancy: The work-efficient algorithm shows reduced efficiency at deeper recursion levels due to reduced thread workload, limiting GPU occupancy.
+* CPU Scan: The bottleneck is the computation itself due to the lack of parallelism.
+* Naive GPU Scan: Likely suffers from inefficient memory I/O and computation, as the algorithm involves redundant work that could be avoided with more optimized approaches. The excessive amount of global memory reads/writes leads to slower performance.
+* Work-Efficient GPU Scan: More optimized but could still be limited by global memory access times, though it balances computation more effectively.
+* Thrust GPU Scan: Appears to minimize both computation and memory I/O overhead, making it the most efficient, likely because it uses optimized kernels and memory management under the hood.
+
+The differences in these bottlenecks suggest that the GPU methods are increasingly limited by memory I/O rather than raw computation, especially for large data sizes.
 
 #### Optimizations Explored:
 * Adjusted block size to optimize shared memory usage and improve the occupancy of each streaming multiprocessor.
