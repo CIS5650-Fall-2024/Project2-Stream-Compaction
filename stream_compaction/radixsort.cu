@@ -65,7 +65,7 @@ namespace StreamCompaction {
             for (int i = 0; i < sizeof(int); i++) {
                 dim3 fullBlocksPerGrid((n +blockSize - 1) / blockSize);
 
-                kernComputeBits << <fullBlocksPerGrid, blockSize >> > (n, i, dev_idata, dev_b, dev_e);
+                kernComputeBits<<<fullBlocksPerGrid, blockSize>>>(n, i, dev_idata, dev_b, dev_e);
 
                 StreamCompaction::Efficient::scan(n, dev_e, dev_f);
 
@@ -74,12 +74,12 @@ namespace StreamCompaction {
                 int total2 = 0;
                 cudaMemcpy(&total2, &dev_f[n - 1], sizeof(int), cudaMemcpyDeviceToHost);
 
-                kernComplementBits << <fullBlocksPerGrid, blockSize >> > (n, total1 + total2, dev_f, dev_t);
+                kernComplementBits<<<fullBlocksPerGrid, blockSize>>>(n, total1 + total2, dev_f, dev_t);
 
 
-                kernScatter << <fullBlocksPerGrid, blockSize >> > (int n, dev_b, dev_t, dev_f, dev_d);
+                kernScatter<<<fullBlocksPerGrid, blockSize>>>(int n, dev_b, dev_t, dev_f, dev_d);
 
-                StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, block_size >> > (n, dev_odata, dev_idata, dev_b, dev_d);
+                StreamCompaction::Common::kernScatter<<<fullBlocksPerGrid, blockSize>>>(n, dev_odata, dev_idata, dev_b, dev_d);
 
 
                 int* temp = dev_idata;
