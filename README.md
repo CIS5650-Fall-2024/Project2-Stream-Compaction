@@ -47,6 +47,8 @@ These results are to be expected, especially in the case of the worst performing
 
 In comparison, the GPU work-efficient implementation is an O(log n) algorithm, making it more efficient than the CPU and GPU naive implementations. In addition to this, the work-efficient implementation makes use of independant shared block memory, and thus is able to read and write elements faster during the algorithm. One caveat with the work-efficient implementation is that it does not mitigate bank conflicts. It would likely see better performance if shared memory was padded in such a way that reduced conflicts. 
 
+While it's difficult to speculate as to why exactly the Thrust implementation runs so much better, we can assume that it takes into account both algorithmic and GPU architecture optimizations to maximise performance. I also wonder whether it switches to a pure CPU algorithm at smaller array sizes?
+
 ## 📃 Output 
 ```
 ***** Array size: 33554432 (1 << 25) *****
