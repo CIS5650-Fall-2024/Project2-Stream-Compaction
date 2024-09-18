@@ -15,7 +15,7 @@
 #include "testing_helpers.hpp"
 #include <iostream>
 
-const int SIZE = 1 << 19; // feel free to change the size of array
+const int SIZE = 1 << 12; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];

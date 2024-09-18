@@ -5,7 +5,7 @@
 
 #include <device_launch_parameters.h>
 
-#define blockSize 128
+#define blockSize 256
 
 namespace StreamCompaction {
     namespace Efficient {
@@ -42,8 +42,7 @@ namespace StreamCompaction {
 
             if (k >= n) {
                 return;
-            }
-            else {
+            } else {
                 int t = data[k + (1 << d) - 1]; // save left child
                 data[k + (1 << d) - 1] = data[k + (1 << (d + 1)) - 1]; // set left child to this node's val
                 data[k + (1 << (d + 1)) - 1] += t; // set right child to old left val + this node's val
@@ -160,7 +159,7 @@ namespace StreamCompaction {
 
             timer().endGpuTimer(); // ----------------
 
-            int count;
+            int count = 0;
             cudaMemcpy(&count, dev_scanned + (n - 1), sizeof(int), cudaMemcpyDeviceToHost);
             count += (idata[n - 1] != 0);
 
