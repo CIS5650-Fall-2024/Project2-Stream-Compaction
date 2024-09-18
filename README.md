@@ -34,7 +34,11 @@ Three implementations of the *scan* algorithm were used for experimentation:
 
 ### Results
 
-> TODO
+#### Figure 1: Scan Implementations
+![Scan Implementations - Array Size vs Time - Lower is Better](https://github.com/user-attachments/assets/b0f1c988-588c-4e85-b109-0b223a2ec39f)
+
+#### Figure 2: Stream Compaction Implementations
+![Stream Compact Implementations - Array Size vs Time - Lower is Better](https://github.com/user-attachments/assets/02a4c290-1069-40b5-9458-b3aaf45b5c1d)
 
 ### Explanation
 
