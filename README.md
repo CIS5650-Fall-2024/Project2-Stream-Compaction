@@ -252,30 +252,80 @@ printArray(7, out, true);
 
 ## Scan Performance Analysis
 
-discuss how it was performed (average of 3)
-discuss using timers from readme
-discuss how memcpy and other operations weren't included
-when include graphs mention lower is better
+First I will discuss the method and measurements of performance used for the analysis below. All of the test cases were from running one of the above Scan algorithms on an array of a given length. The time it took for each one to run was printed in milliseconds (ms). Therefore, for the rest of the data below, lower means better since that means the algorithm ran quicker.
 
-First I will discuss the measurement of performance used for the analysis below. They are all comparing FPS (frames per second), where the time is measured by the GLFW timer. The numbers given below correspond to the average FPS over the first 10 seconds of running the program (averaged over 3 tries due to the random generation of boid positions). To find the average FPS over the first 10 seconds, first the number of frames is stored (which is how many iterations of the loop finished), divided by the total time it took to compute all those frames (so not quite 10 but very close, as this should be the total time for every frame to have been computed).
+The time each algorithm took to run was measured with the following
 
-For the below comparisons, they were all done in Release mode. The specs of the computer they were run on is mentioned at the very top. All of the raw data for these runs can be found in the `execution-data.xlsx` file [here](execution-data.xlsx), although screenshots are provided throughout for convenience.
+- `std::chrono`: to provide CPU high-precision timing for the CPU functions
+- CUDA events: to measure the CUDA performance for the GPU functions
 
-Answer Q2 analysis part
-Answer Q3
+Each test below was run 3 times and then averaged together to try to combat the natural variance in CPU/GPU timer measurements. Furthermore, none of the memory operations/allocations (such as `cudaMalloc`, `cudaMemcpy`, and `cudaFree`) were included in the performance measurements. The timers were run strictly on the portion of the code which was executing the algorithm, with no pollutants.
+
+Additionally, all of these were run in Release mode. The specs of the computer they were run on is mentioned at the very top, and all of the raw data for these runs can be found in the `execution-data.xlsx` file [here](execution-data.xlsx), although screenshots are provided throughout for convenience.
+
+I ran each Scan algorithm on various array sizes and measured their performances. I ran tests for array sizes of 2^6=64, 2^8, 2^10, ..., 2^20, and 2^22=16777216. I chose powers of two because they provide an easy way to scale the array size up, but they shouldn't cause any performance differences compared to non-powers-of-two. I chose this minimum size because it seems like a small enough list that one might practically scan, and 2^22 because it was a very large one that might need to be scanned.
+
+Now here is a overall graph of the performance with time in milliseconds, in log scale (remember, lower is better!):
+
+![execution graph](img/graph.jpg)
+
+Now there is a lot to unpack in this graph, so I will break it down for you. Let's instead first focus on the lower section of this graph where the number of elements is less than 2^18=262144:
+
+![lower execution graph](img/lower-graph.jpg)
+
+It is much easier to tell what is going on in this graph. First of all, we see that for small array sizes (up to ~100000 or so), the execution time for every algorithm is relatively constant. This makes sense because for many of these algorithms, much of the overhead and compute time comes from setting up the algorithm itself, and not from actually scanning the elements. Thus we would expect that varying the number of elements when there are few elements won't make much of a difference.
+
+Now we will mention some other interesting points. First is that the CPU Scan is outperforming every other method. Even though we implemented the parallelism with the other GPU methods, it doesn't actually help at these lower scales. This makes sense because the overhead of using the GPU isn't worth it when we don't have that many elements to scan in the first place. With such few elements, the CPU can handle running scan on them serially just fine and much quicker. Thus this result isn't too surprising.
+
+Second, note that the Thrust Scan is very slow compared to everything else. While the specific reason for this would depend on the actual implementation of `thrust`, we can make inferences. Since it's constantly above everything else, we can guess that whatever it's doing to scan the array must have a lot of overhead. This would cause it to run slower even if we had a lower number of elements.
+
+We can also see that the Memory Optimized Naive Scan is performing better than the Naive Scan as we would expect. This is because it isn't accessing global memory as much. Now even though this difference should be less pronounced at small array sizes (due to fewer global memory accesses needed in the first place), it is still a notable difference.
+
+Likewise, the Memory Optimized Work-Efficient Scan is performing better than the Work-Efficient Scan for the same reason. Something slightly surprising however is that the Work-Efficient Scan is actually performing slightly worse than the Naive Scan for small array sizes. One might be tempted to say this is because this version of the Work-Efficient Scan is still running way too many threads, so it isn't as optimal as we wish, but this is probably not the reason. This is because at such small array sizes, we aren't even running that many threads anyway. Additionally, we can compare the Thread Optimized Work-Efficient Scan to the Naive Scan, and see that it is still losing out most of the time. Thus the issue isn't the threads. One explanation could be just that for small array sizes, the overhead of having the two phase system of Work-Efficient Scan just isn't worth it. It likely doesn't make sense to have this complicated system when we only need to sort a small number of elements, so the Naive Scan is the way to go here. It could also be the global memory accesses, which I will explain briefly.
+
+However we do see that the Memory Optimized Work-Efficient Scan is outperforming the Memory Optimized Naive Scan (which contrasts the opposite relation between Work-Efficient Scan and Naive Scan). This might be because if you factor in global memory accesses, Work-Efficient Scan does more of them. Thus without removing them, it makes sense that the Work-Efficient Scan does poorer than Naive, it has to access global memory more. But when we optimized this to use shared memory, now the Memory Optimized Work-Efficient Scan can shine as intended.
+
+Now let's take a look at the upper portion of the graph (in log scale), where the number of elements is more than 2^18=262144 (remember, lower is better!).
+
+![upper execution graph](img/upper-graph.jpg)
+
+Now we see that for large array sizes (past ~100000 or so), the execution time for every algorithm starts increasing somewhat exponentially (something that appears exponential on the log-scale graph is linear, as one would find from the runtime calculations). This makes sense because for many of these algorithms, at some point once there are enough elements, whatever compute that has to be done to scan them starts taking over. Thus we would expect the asymptotic runtime here to become apparent for each algorithm.
+
+Now we will mention some other interesting points. First is that the CPU Scan is no longer outperforming the other methods. It has now dropped behind and is becoming much slower. This makes sense because for larger and larger array sizes, the serial computation makes less and less sense to do. Thus we would expect its runtime to grow very quickly.
+
+Second, now the Thrust Scan is actually beating out everything else by the time we get to the biggest array. Its growth is _much_ slower than all of the others. The specific reason for this depends on the implementation of `thrust`, but we can guess a little. It's likely that `thrust`'s implementation was made to be asymptotically very efficient so that it works quickly on large arrays. This would match our data because it is scanning large arrays in almost the same time as small arrays, but the tradeoff is that it takes a little longer to scan the smaller arrays.
+
+We can also see that the Memory Optimized Naive Scan is performing better than the Naive Scan still. Additionally, this difference is becoming more and more pronounced as the array size gets larger because there are mor and more global memory accesses needed. Thus the Memory Optimized version can improve more and more.
+
+Likewise, the Memory Optimized Work-Efficient Scan is performing better than the Work-Efficient Scan for the same reason, and we see the same improvement trend. Additionally, we also see that finally the Work-Efficient Scan is performing better than the Naive Scan, which follows what we discussed previously.
+
+Something a little surprising is that the Memory Optimized Work-Efficient Scan and the Memory Optimized Naive Scan are performing almost identically. This might be because at larger array sizes, the actual algorithm isn't what's making the difference, but rather the splitting into different chunks. Since they both rely on this same system, the optimization for scanning can't actually go that far (only up to the chunk size). Rather the time it takes to compute the block sums with scan is the same for both, so both start performing about the same.
+
+Additionally, we do see that the Thread Optimized Work-Efficient Scan is performing much better than the Work-Efficient Scan, and even more so at larger array sizes. This matches what we predicted before because there we are saving on computation by spawning less unnecessary threads.
+
+### Performance Bottlenecks
+
+The performance bottlenecks for each algorithm differ. For the Work-Efficient Scan, it is likely the fact that so many threads are being spawned and not doing anything. For both the Naive Scan and Work-Efficient Scan, the global memory reads are also big bottlenecks. For Thrust Scan, the bottleneck is probably computation-based. I'm guessing this because I assume `thrust` would be implemented as optimized as possible since it's a public library, so any bottlenecks are likely due to limitations in compute. The bottleneck for CPU Scan is also compute, and is just limited to the intrinsic speed that serial instructions can be executed. For the Memory Optimized Scans, their bottleneck is in both compute as the number of array elements is large, and also limitations of GPU resources. They both need to be split up into chunks, so they're limited by the block size and can only get so fast.
 
 ### Optimizing Block Sizes
 
-Answer Q1
+To optimize the block sizes chosen for each of the algorithms discussed previously, I ran the algorithms 3 times with each block size from 32, 64, 128, 256, 512, and 1024 on an array size of 2^20. I chose 2^20 because it offered a good spot where each algorithm starts to show its advantages/disadvantages over each other. I then averaged the 3 results for each trial and chose the block sizes that gave the best results. Note that for multiple of the algorithms, a block size of 128 and 256 performed very similarly, while all of the others were noticeably worse.
 
 ### Appendix
 
-Here is the out from running the tests found in `main.cpp`. Note that I did add my own test cases for many of the extra methods I implemented. These include: ... mention exact tests.
+Here is the raw data from running the tests. They can also be found in the `execution-data.xlsx` file [here](execution-data.xlsx).
 
+![graph data](img/data.png)
+
+Additionally, just like how I ran Nsight Systems on the `thrust` implementation of scan, I also generated a report for the entire test suite. That report can be found in the `entire-report.nsys-rep` file [here](entire-report.nsys-rep). However, here is a screenshot summary of it:
+
+![nsight systems report timeline appendix](img/entire-report.jpg)
+
+Finally, here is the output from running the tests found in `main.cpp`. Note that I did add my own test cases for many of the extra methods I implemented, and they are mentioned above for each function. However, to give a brief list of extra tests, they are:
+
+
+Paste the output of the test program into a triple-backtick block in your README.
+...
 ALSO INCLUDE entire-report
 INCLUDE IN PR extra tests implemented, ec features, changes to cmakelists
 
-- description of project including list of features
-- performance analysis
-- extra credits documented, with performance comparison, show how it works (show how radix sort is called and output)
-- paste output and explicitly mention I included my own tests
