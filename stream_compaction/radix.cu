@@ -106,19 +106,21 @@ namespace StreamCompaction {
 
             int tf; // total falses
 
-            cudaMalloc((void**)&dev_i, n * sizeof(int));
+            int nextPowSpace = 1 << ilog2ceil(n);
+
+            cudaMalloc((void**)&dev_i, nextPowSpace * sizeof(int));
             checkCUDAError("cudaMalloc dev_i failed!");
 
-            cudaMalloc((void**)&dev_b, n * sizeof(int));
+            cudaMalloc((void**)&dev_b, nextPowSpace * sizeof(int));
             checkCUDAError("cudaMalloc dev_b failed!");
 
-            cudaMalloc((void**)&dev_f, n * sizeof(int));
+            cudaMalloc((void**)&dev_f, nextPowSpace * sizeof(int));
             checkCUDAError("cudaMalloc dev_f failed!");
 
-            cudaMalloc((void**)&dev_d, n * sizeof(int));
+            cudaMalloc((void**)&dev_d, nextPowSpace * sizeof(int));
             checkCUDAError("cudaMalloc dev_d failed!");
 
-            cudaMalloc((void**)&dev_o, n * sizeof(int));
+            cudaMalloc((void**)&dev_o, nextPowSpace * sizeof(int));
             checkCUDAError("cudaMalloc dev_o failed!");
 
             cudaMemcpy(dev_i, idata, n * sizeof(int), cudaMemcpyHostToDevice);
@@ -129,33 +131,33 @@ namespace StreamCompaction {
             for (int i = 0; i < 32; i++) {
 
                 // isolate current bit to get i array
-                kernIsolateBit << <fullBlocksPerGrid, blockSize >> > (n, i, dev_i, dev_b);
+                kernIsolateBit << <fullBlocksPerGrid, blockSize >> > (nextPowSpace, i, dev_i, dev_b);
                 
                 int temp;
                 cudaMemcpy(&temp, dev_b + (n - 1), sizeof(int), cudaMemcpyDeviceToHost);
-                cudaMemcpy(dev_f, dev_b, n * sizeof(int), cudaMemcpyDeviceToDevice);
+                cudaMemcpy(dev_f, dev_b, nextPowSpace * sizeof(int), cudaMemcpyDeviceToDevice);
                 
                 // get f array by running scan on e 
 
                 // up-sweep 
                 for (int d = 0; d < ilog2ceil(n); d++) {
 
-                    int n_adj = n / (1 << (d + 1));
+                    int n_adj = nextPowSpace / (1 << (d + 1));
                     dim3 fullBlocksPerGrid_adj((n_adj + blockSize - 1) / blockSize);
 
-                    kernUpSweep << <fullBlocksPerGrid_adj, blockSize >> > (n, d, dev_f);
+                    kernUpSweep <<<fullBlocksPerGrid_adj, blockSize >>> (nextPowSpace, d, dev_f);
                     checkCUDAError("kernUpSweep failed!");
                 }
 
-                cudaMemset(dev_f + (n - 1), 0, sizeof(int));
+                cudaMemset(dev_f + (nextPowSpace - 1), 0, sizeof(int));
 
                 // down-sweep
                 for (int d = ilog2ceil(n) - 1; d >= 0; d--) {
 
-                    int n_adj = n / (1 << (d + 1));
+                    int n_adj = nextPowSpace / (1 << (d + 1));
                     dim3 fullBlocksPerGrid_adj((n_adj + blockSize - 1) / blockSize);
 
-                    kernDownSweep << <fullBlocksPerGrid_adj, blockSize >> > (n, d, dev_f);
+                    kernDownSweep << <fullBlocksPerGrid_adj, blockSize >> > (nextPowSpace, d, dev_f);
                     checkCUDAError("kernDownSweep failed!");
                 }
 
@@ -171,6 +173,8 @@ namespace StreamCompaction {
                 
                 // match indices back
                 kernReorder<<<fullBlocksPerGrid, blockSize >> > (n, dev_d, dev_i, dev_o);
+
+                cudaMemcpy(dev_i, dev_o, nextPowSpace * sizeof(int), cudaMemcpyDeviceToDevice);
             }
 
             timer().endGpuTimer(); // ----------------
