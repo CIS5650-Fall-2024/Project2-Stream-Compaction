@@ -30,8 +30,6 @@ namespace StreamCompaction {
             // Block-level scan is done in shared memory.
             extern __shared__ int blockSharedMem[];
 
-            int lastThreadIdxInBlock = (n < blockDim.x ? n : blockDim.x) - 1;
-
             int globalThreadIdx = blockIdx.x*blockDim.x + threadIdx.x;
             if (globalThreadIdx >= n) {
                 // Threads that don't correspond to actual elements in the input array pad the
@@ -46,9 +44,13 @@ namespace StreamCompaction {
 
             // Up-sweep begins.
 
-            for (int d = 0; d < ilog2ceil(n); ++d) {
-                if ((threadIdx.x + 1) % (1 << (d+1)) == 0) {
-                    int leftChildValue = blockSharedMem[threadIdx.x - (1 << d)];
+            for (int d = 0; d < ilog2ceil(blockDim.x); ++d) {
+                int delta = 1 << (d + 1);
+                // The condition detects parent nodes in the binary tree of the scan, which
+                // are the only ones that need to be updated. The second condition ensures that
+                // the left child is within the block's bounds.
+                if ((threadIdx.x + 1) % delta == 0) {
+                    int leftChildValue = blockSharedMem[threadIdx.x - (delta / 2)];
                     int rightChildValue = blockSharedMem[threadIdx.x];
                     blockSharedMem[threadIdx.x] = leftChildValue + rightChildValue;
                 }
@@ -58,15 +60,17 @@ namespace StreamCompaction {
 
             // Down-sweep begins.
 
-            if (threadIdx.x == lastThreadIdxInBlock) {
+            if (threadIdx.x == blockDim.x - 1) {
                 blockSharedMem[threadIdx.x] = 0;
             }
 
             __syncthreads();
 
-            for (int d = ilog2ceil(n) - 1; d >= 0; --d) {
-                if ((threadIdx.x + 1) % (1 << (d+1)) == 0) {
-                    int leftChildIdx = threadIdx.x - (1 << d);
+            for (int d = ilog2ceil(blockDim.x) - 1; d >= 0; --d) {
+                int delta = 1 << (d + 1);
+                // The condition detects right child nodes in the binary tree of the scan.
+                if ((threadIdx.x + 1) % delta == 0) {
+                    int leftChildIdx = threadIdx.x - (delta / 2);
                     int parentIdx = threadIdx.x;
                     int rightChildIdx = parentIdx;
                     int oldLeftChildValue = blockSharedMem[leftChildIdx];
@@ -76,13 +80,15 @@ namespace StreamCompaction {
                 __syncthreads();
             }
 
-            odata[globalThreadIdx] = blockSharedMem[threadIdx.x];
+            if (globalThreadIdx < n) {
+                odata[globalThreadIdx] = blockSharedMem[threadIdx.x];
+            }
 
             // blockSumDevice will store the final prefix sums computed by all blocks to 
             // later combine all blocks' results.
-            if (blockSumDevice != nullptr && threadIdx.x == lastThreadIdxInBlock) {
+            if (blockSumDevice != nullptr && threadIdx.x == blockDim.x - 1) {
                 // An exclusive scan doesn't include the last element, so we need to add it.
-                blockSumDevice[blockIdx.x] = blockSharedMem[lastThreadIdxInBlock] + idata[globalThreadIdx];
+                blockSumDevice[blockIdx.x] = blockSharedMem[threadIdx.x] + idata[globalThreadIdx];
             }
         }
 
@@ -101,9 +107,8 @@ namespace StreamCompaction {
             // Round up the input size to the next power of 2 to handle non-power-of-2 inputs
             // and inputs smaller than the block size. Arrays will be padded with 0s to fill
             // the extra space. Since the algorithm arranges its computations in a balanced
-            // binary tree, it's easier to have it perform extra work with the extra 0s while
-            // following a general algorithm, than to have it handle the edge cases introduced
-            // by incompatible input sizes.
+            // binary tree, it needs enough input elements; care must be taken not to needlessly
+            // process 0-padding elements.
             //
             // Padding with 0s is done in the kernel.
             int nNextPow2 = 1 << (::ilog2ceil(n));
@@ -114,19 +119,19 @@ namespace StreamCompaction {
             // No double buffering, so just one block-sized shared memory chunk is needed.
             const int blockSharedMemSize = blockSize * sizeof(int);
 
-            // TODO: block count should be just enough for n, not nNextPow2.
             // Kernel configuration for the block sum scan (all blocks' final prefix sums).
             const int blockSumBlockSize = blockCount.x;
             dim3 blockSumBlockCount = (blockCount.x + blockSumBlockSize - 1) / blockSumBlockSize;
+            blockSumBlockCount = 1;
             // No double buffering, so just one block-sized shared memory chunk is needed.
             const int blockSumSharedMemSize = blockSumBlockSize * sizeof(int);
 
             int *idataDevice = nullptr;
-            cudaMalloc(&idataDevice, nNextPow2 * sizeof(int));
+            cudaMalloc(&idataDevice, n * sizeof(int));
             checkCUDAError("failed to malloc idataDevice");
 
             int *odataDevice = nullptr;
-            cudaMalloc(&odataDevice, nNextPow2 * sizeof(int));
+            cudaMalloc(&odataDevice, n * sizeof(int));
             checkCUDAError("failed to malloc odataDevice");
 
             int *iblockSumDevice = nullptr;
@@ -148,7 +153,7 @@ namespace StreamCompaction {
 
             // Per-block exclusive scan of the original input. iblockSumDevice will store the
             // final prefix sums computed by each block.
-            exclusiveScanKernel<<<blockCount, blockSize, blockSharedMemSize>>>(nNextPow2, odataDevice, idataDevice, iblockSumDevice);
+            exclusiveScanKernel<<<blockCount, blockSize, blockSharedMemSize>>>(n, odataDevice, idataDevice, iblockSumDevice);
             cudaDeviceSynchronize();
 
             // Exclusive scan of the final prefix sums computed by each block. oblockSumDevice
@@ -157,7 +162,7 @@ namespace StreamCompaction {
             cudaDeviceSynchronize();
 
             // Add the block increments to the original scan results to obtain final results.
-            addBlockIncrementsKernel<<<blockCount, blockSize>>>(nNextPow2, odataDevice, oblockSumDevice);
+            addBlockIncrementsKernel<<<blockCount, blockSize>>>(n, odataDevice, oblockSumDevice);
             cudaDeviceSynchronize();
 
             cudaMemcpy(odata, odataDevice, n * sizeof(int), cudaMemcpyDeviceToHost);
