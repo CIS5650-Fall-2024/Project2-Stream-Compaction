@@ -16,7 +16,7 @@ I used [Chapter 39 from GPU Gems 3 ](https://developer.nvidia.com/gpugems/gpugem
 
 Three implementations of the *scan* algorithm were used for experimentation: 
 
-1. The CPU implementation of the scan algorithm. The "ground truth". 
+1. The CPU implementation of the scan algorithm.
 2. The "Naive" GPU implementation of the scan algorithm, as presented in *"Data Parallel Algorithms" by Hillis and Steele (1986)*
 3. A "Work-Efficient" GPU implementation of the scan algorithm, as presented in *"Prefix Sums and Their Applications." by Belloch (1990)*
 
@@ -26,7 +26,7 @@ Three implementations of the *scan* algorithm were used for experimentation:
 
 * ***(For Part 5)*** My Work-Efficient GPU implementation of scan runs faster than the CPU approach (at larger array sizes). See the [Results](#results) and [Output](#-output) sections below. 
 
-* ***(For Part 6.2)*** My Work-Efficient GPU scan implementation uses shared memory and an arbitrary number blocks. However, there are some caveats: 
+* ***(For Part 6.2)*** My work-Efficient GPU scan implementation uses shared memory and an arbitrary number blocks. However, there are some caveats: 
   + This was done only for the Work-efficient version. The naive implementation still uses global memory.  
   + I made no efforts to optimize for bank conflicts or occupancy.  
 
