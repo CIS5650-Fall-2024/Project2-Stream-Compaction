@@ -174,6 +174,38 @@ void profileScan(const int SIZE, ScanType scanType, bool testCorrectness = false
     free(input);
 }
 
+void scanPerformance(const int SIZE) {
+    int *input = new int[SIZE];
+    int *output = new int[SIZE];
+    int *reference = new int[SIZE];
+    genArray(SIZE - 1, input, MAX_ELEMENT_VALUE);
+    input[SIZE - 1] = 0;
+
+    zeroArray(SIZE, output);
+    StreamCompaction::CPU::scan(SIZE, reference, input, /*simulateGPUScan=*/false);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "CPU::scan");
+
+    zeroArray(SIZE, output);
+    StreamCompaction::CPU::scan(SIZE, reference, input, /*simulateGPUScan=*/true);
+    printElapsedTime(StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(), "CPU::scan, simulated GPU scan");
+
+    zeroArray(SIZE, output);
+    StreamCompaction::Naive::scan(SIZE, output, input);
+    printElapsedTime(StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation(), "Naive::scan");
+
+    zeroArray(SIZE, output);
+    StreamCompaction::Efficient::scan(SIZE, output, input);
+    printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "Efficient::scan");
+
+    zeroArray(SIZE, output);
+    StreamCompaction::Thrust::scan(SIZE, output, input);
+    printElapsedTime(StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation(), "Thrust::scan");
+
+    free(reference);
+    free(output);
+    free(input);
+}
+
 int main(int argc, char* argv[]) {
     printf("\n");
     printf("****************\n");
@@ -227,6 +259,27 @@ int main(int argc, char* argv[]) {
         delete[] c;
         delete[] b;
         delete[] a;
+    }
+
+    printf("\n");
+    printf("****************\n");
+    printf("** PERF TESTS **\n");
+    printf("****************\n");
+
+    for (int SIZE = MIN_SIZE; SIZE <= MAX_SIZE; SIZE <<= 1) {
+        const int NPOT = SIZE - 3;
+
+        printf("\n");
+        printf("***********************************************************************\n");
+        printf("**SIZE = 2^%d = %d**\n", ilog2(SIZE), SIZE);
+        printf("***********************************************************************\n");
+        scanPerformance(SIZE);
+
+        printf("\n");
+        printf("***********************************************************************\n");
+        printf("**NPOT = 2^%d-3 = %d **\n", ilog2(SIZE), NPOT);
+        printf("***********************************************************************\n");
+        scanPerformance(NPOT);
     }
 
     int SIZE = 1 << 16;
