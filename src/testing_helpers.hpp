@@ -60,6 +60,7 @@ void genArray(int n, int *a, int maxval) {
 }
 
 void printArray(int n, int *a, bool abridged = false) {
+    //printf("count: %d \n", n);
     printf("    [ ");
     for (int i = 0; i < n; i++) {
         if (abridged && i + 2 == 15 && n > 16) {

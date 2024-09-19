@@ -136,12 +136,12 @@ namespace StreamCompaction {
 			int log2_n = getLog2(n);
 			int t = ilog2ceil(n);
 			//printf("n: %d\n", n);
-			printf("log2_n: %d\n", t);
+			//printf("log2_n: %d\n", t);
 			int blockSize = 256;
 			int numBlocks = (n + blockSize - 1) / blockSize;
 			dim3 fullBlocksPerGrid(numBlocks);
-			printf("block size: %d\n", blockSize);
-			printf("numBlocks: %d\n", numBlocks);
+			//printf("block size: %d\n", blockSize);
+			//printf("numBlocks: %d\n", numBlocks);
 			// get block size and block number for scan block sum
 			int numBlocks_scan = (numBlocks + blockSize - 1) / blockSize;
 			dim3 fullBlocksPerGrid_scan(numBlocks_scan);

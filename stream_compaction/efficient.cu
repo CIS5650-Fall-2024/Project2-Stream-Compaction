@@ -3,7 +3,7 @@
 #include "common.h"
 #include "efficient.h"
 
-#define blockSize 32
+#define blockSize 256
 #define RECURSIVE_SCAN 0
 
 namespace StreamCompaction {
@@ -40,8 +40,8 @@ namespace StreamCompaction {
 #else
 			int offset = 1 << (t + 1); // 2^(d + 1)
 			int ai = index + offset - 1;
-			int bi = index + (offset / 2) - 1;
-			if (index < n && ((index) % offset) == 0) {
+			int bi = index + (offset >> 1) - 1;
+			if ((index & (offset - 1)) == 0) {
 				idata[ai] += idata[bi];
 			}
 #endif
@@ -82,8 +82,8 @@ namespace StreamCompaction {
 
 			int offset = 1 << (t + 1);
 			int ai = index + offset - 1;
-			int bi = index + (offset / 2) - 1;
-			if (index % offset == 0) {
+			int bi = index + (offset >> 1) - 1;
+			if ((index & (offset - 1)) == 0) {
 				int temp = odata[bi];
 				odata[bi] = odata[ai];
 				odata[ai] += temp;
@@ -93,8 +93,30 @@ namespace StreamCompaction {
 
 
 #endif 
-
 		}
+
+		__global__ void kernUpSweep_opt(int n, int* idata, int d) {
+			int index = threadIdx.x + (blockIdx.x * blockDim.x);
+			if (index >= n) {
+				return;
+			}
+			int offset = 1 << (d + 1);
+			index <<= (d + 1);
+			idata[index + offset - 1] += idata[index + (offset >> 1) - 1];
+		}
+
+		__global__ void kernDownSweep_opt(int n, int* idata, int d) {
+			int index = threadIdx.x + (blockIdx.x * blockDim.x);
+			if (index >= n) {
+				return;
+			}
+			int offset = 1 << (d + 1);
+			index <<= (d + 1);
+			int temp = idata[index + (offset >> 1) - 1];
+			idata[index + (offset >> 1) - 1] = idata[index + offset - 1];
+			idata[index + offset - 1] += temp;
+		}
+
 
 		// up sweep + down aweep
 		__global__ void kernScan(int n, int* odata, const int* idata, int t) {
@@ -112,8 +134,8 @@ namespace StreamCompaction {
 			for (int d = 0; d <= t; ++d) {
 				int offset = 1 << (d + 1);
 				int ai = index + offset - 1;
-				int bi = index + (offset / 2) - 1;
-				if (index < paddedSize && (index % offset) == 0) {
+				int bi = index + (offset >> 1) - 1;
+				if (index < paddedSize && ((index & (offset - 1)) == 0)) {
 					odata[ai] += odata[bi];
 				}
 
@@ -127,8 +149,8 @@ namespace StreamCompaction {
 			for (int d = t; d >= 0; --d) {
 				int offset = 1 << (d + 1);
 				int ai = index + offset - 1;
-				int bi = index + (offset / 2) - 1;
-				if (index < paddedSize && (index % offset) == 0) {
+				int bi = index + (offset >> 1) - 1;
+				if (index < paddedSize && ((index & (offset - 1)) == 0)) {
 					int temp = odata[bi];
 					odata[bi] = odata[ai];
 					odata[ai] += temp;
@@ -151,9 +173,9 @@ namespace StreamCompaction {
 			int numBlocks = (peddedSize + blockSize - 1) / blockSize;
 			dim3 fullBlocksPerGrid(numBlocks);
 			
-			printf("log2_n - 1: %d\n", t);
+			/*printf("log2_n - 1: %d\n", t);
 			printf("array size: %d; pedded size: %d\n", n, peddedSize);
-			printf("block numbers: %d\n", numBlocks);
+			printf("block numbers: %d\n", numBlocks);*/
 			// call kernel
 			int* dev_idata;
 			int* dev_odata;
@@ -175,18 +197,13 @@ namespace StreamCompaction {
 			
 			// up-sweep
 			for (int d = 0; d <= t; ++d) {
-				int offset = 1 << (d + 1);
-				//int numBlocks = (n + offset - 1) / offset;
-				//dim3 fullBlocksPerGrid(numBlocks);
 				kernUpSweep << <numBlocks, blockSize >> > (peddedSize, dev_odata, dev_idata, d);
 			}
 			// down sweep
 			// set last element to 0
+			
 			cudaMemset(dev_idata + peddedSize - 1, 0, sizeof(int));
-			for (int d = t; d >= 0; d--) {
-				int offset = 1 << (d + 1);
-				//int numBlocks = (n + offset - 1) / offset;
-				//dim3 fullBlocksPerGrid(numBlocks);				
+			for (int d = t; d >= 0; d--) {				
 				kernDownSweep << <numBlocks, blockSize >> > (peddedSize, dev_idata, dev_idata, d);
 			}
 
@@ -194,10 +211,52 @@ namespace StreamCompaction {
 			timer().endGpuTimer();
 			cudaMemcpy(odata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
 			cudaFree(dev_idata);
-			cudaFree(dev_odata);
-
-            
+			cudaFree(dev_odata);            
         }
+
+		// dynamic block number
+		void scan_opt(int n, int* odata, const int* idata) {
+			int t = ilog2ceil(n) - 1;
+			int peddedSize = 1 << (t + 1);
+			int numBlocks = (peddedSize + blockSize - 1) / blockSize;
+			dim3 fullBlocksPerGrid(numBlocks);
+
+			// call kernel
+			int* dev_idata;
+			cudaMalloc((void**)&dev_idata, peddedSize * sizeof(int));
+			cudaMemset(dev_idata, 0, peddedSize * sizeof(int));
+			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+
+			timer().startGpuTimer();
+
+			// up-sweep
+			for (int d = 0; d <= t; d++) {
+				int offset = 1 << (d + 1);
+				int activeThreads = peddedSize / offset;
+				numBlocks = (activeThreads + offset - 1) / offset;
+				dim3 fullBlocksPerGrid(numBlocks);
+				kernUpSweep_opt << <numBlocks, blockSize >> > (activeThreads, dev_idata, d);
+				cudaDeviceSynchronize();
+			}
+			// down sweep
+			// set last element to 0
+			cudaMemset(dev_idata + peddedSize - 1, 0, sizeof(int));
+			for (int d = t; d >= 0; d--) {
+				int offset = 1 << (d + 1);
+				int activeThreads = peddedSize / offset;
+				numBlocks = (activeThreads + offset - 1) / offset;
+				dim3 fullBlocksPerGrid(numBlocks);
+				kernDownSweep_opt << <numBlocks, blockSize >> > (activeThreads, dev_idata, d);
+				cudaDeviceSynchronize();
+			}
+
+			timer().endGpuTimer();
+			cudaMemcpy(odata, dev_idata, n * sizeof(int), cudaMemcpyDeviceToHost);
+			cudaFree(dev_idata);
+
+		}
+
+
 
         /**
          * Performs stream compaction on idata, storing the result into odata.
@@ -214,41 +273,25 @@ namespace StreamCompaction {
 			// compute bool array
 			int t = ilog2ceil(n) - 1;
 			int peddedSize = 1 << (t + 1);
+			int numBlocks = (peddedSize + blockSize - 1) / blockSize;
+			dim3 fullBlocksPerGrid(numBlocks);
 			int* dev_bools;
 			int* dev_idata;
 			int* dev_indices;
 			int* dev_odata;
-			int* bools = new int[n];
-			int* indices = new int[n];
-			cudaMalloc((void**)&dev_bools, n * sizeof(int));
-			cudaMalloc((void**)&dev_idata, n * sizeof(int));
-			cudaMalloc((void**)&dev_indices, n * sizeof(int));
-			cudaMalloc((void**)&dev_odata, n * sizeof(int));
+			int* bools = new int[peddedSize];
+			int* indices = new int[peddedSize];
+			cudaMalloc((void**)&dev_bools, peddedSize * sizeof(int));
+			cudaMalloc((void**)&dev_idata, peddedSize * sizeof(int));
+			cudaMalloc((void**)&dev_indices, peddedSize * sizeof(int));
+			cudaMalloc((void**)&dev_odata, peddedSize * sizeof(int));
 			cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-			cudaMemset(dev_bools, 0, n * sizeof(int));
-			StreamCompaction::Common::kernMapToBoolean << <1, n >> > (n, dev_bools, dev_idata);
+			cudaMemset(dev_bools, 0, peddedSize * sizeof(int));
+			cudaMemset(dev_indices, 0, peddedSize * sizeof(int));
+			StreamCompaction::Common::kernMapToBoolean << <numBlocks, blockSize >> > (peddedSize, dev_bools, dev_idata);
 			// scan
-			//kernScan << <1, n >> > (n, dev_indices, dev_bools, t);
-			// up-sweep
-			int* temp = new int[n];
-			temp = dev_bools;
-			for (int i = 0; i <= t; i++) {
-				int offset = 1 << (i + 1);
-				int numBlocks = (n + offset - 1) / offset;
-				dim3 fullBlocksPerGrid(numBlocks);
-				kernUpSweep << <fullBlocksPerGrid, blockSize >> > (n, temp, temp, i);
-			}
-
-			// set last element to 0
-			cudaMemset(temp + n - 1, 0, sizeof(int));
-			// down-sweep
-			for (int i = t; i >= 0; i--) {
-				int offset = 1 << (i + 1);
-				int numBlocks = (n + offset - 1) / offset;
-				dim3 fullBlocksPerGrid(numBlocks);
-				kernDownSweep << <fullBlocksPerGrid, blockSize >> > (n, temp, temp, i);
-			}
-			dev_indices = temp;
+#if 1
+			kernScan << <1, n >> > (n, dev_indices, dev_bools, t);
 			// scatter
 			StreamCompaction::Common::kernScatter << <1, n >> > (n, dev_odata, dev_idata, dev_bools, dev_indices);
 			cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
@@ -261,7 +304,45 @@ namespace StreamCompaction {
 			cudaFree(dev_odata);
 			delete[] bools;
 			delete[] indices;
+#else
+			// up-sweep
+			int* temp = new int[peddedSize];
+			dev_odata = dev_bools;
+			for (int i = 0; i <= t; i++) {
+				//int offset = 1 << (i + 1);
+				//int numBlocks = (n + offset - 1) / offset;
+				//dim3 fullBlocksPerGrid(numBlocks);
+				kernUpSweep << <fullBlocksPerGrid, blockSize >> > (peddedSize, dev_odata, dev_odata, i);
+			}
+
+			// set last element to 0
+			cudaMemset(dev_odata + peddedSize - 1, 0, sizeof(int));
+			// down-sweep
+			for (int i = t; i >= 0; i--) {
+				//int offset = 1 << (i + 1);
+				//int numBlocks = (n + offset - 1) / offset;
+				//dim3 fullBlocksPerGrid(numBlocks);
+				kernDownSweep << <fullBlocksPerGrid, blockSize >> > (peddedSize, dev_odata, dev_odata, i);
+			}
+			dev_indices = dev_odata;
+			cudaMemset(dev_odata, 0, peddedSize * sizeof(int));
+
+			// scatter
+			StreamCompaction::Common::kernScatter << <numBlocks, blockSize >> > (peddedSize, dev_odata, dev_idata, dev_bools, dev_indices);
+			cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(bools, dev_bools, n * sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(indices, dev_indices, n * sizeof(int), cudaMemcpyDeviceToHost);
+			int count = bools[n - 1] ? indices[n - 1] : indices[n - 1];
+
+			cudaFree(dev_bools);
+			cudaFree(dev_idata);
+			cudaFree(dev_indices);
+			cudaFree(dev_odata);
+			delete[] bools;
+			delete[] indices;
 			delete[] temp;
+			printf("work-efficient compact: %d\n", count);
+#endif
 
 
             //timer().endGpuTimer();
