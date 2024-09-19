@@ -10,7 +10,9 @@ template<typename T>
 int cmpArrays(int n, T *a, T *b) {
     for (int i = 0; i < n; i++) {
         if (a[i] != b[i]) {
-            printf("    a[%d] = %d, b[%d] = %d\n", i, a[i], i, b[i]);
+            printf("    a[%d] = %d, b[%d] = %d\n ", i, a[i], i, b[i]);
+            printf("    a[%d] = %d, b[%d] = %d\n ", i - 1, a[i - 1], i - 1, b[i - 1]);
+            printf("    a[%d] = %d, b[%d] = %d\n ", i +1, a[i + 1], i + 1, b[i + 1]);
             return 1;
         }
     }
@@ -58,6 +60,7 @@ void genArray(int n, int *a, int maxval) {
 }
 
 void printArray(int n, int *a, bool abridged = false) {
+    //printf("count: %d \n", n);
     printf("    [ ");
     for (int i = 0; i < n; i++) {
         if (abridged && i + 2 == 15 && n > 16) {
