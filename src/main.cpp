@@ -12,14 +12,59 @@
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
 #include "testing_helpers.hpp"
+#include <functional>
+#include <vector>
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 20; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
 int *c = new int[SIZE];
 
+void test();
+void benchmark();
+
+using scan_t = void(*)(int, int *, const int *);
+std::vector<float> benchmarkScan(size_t iterations, scan_t scan, std::function<float()> getElapsedTime);
+
 int main(int argc, char* argv[]) {
+    // test();
+    benchmark();
+}
+
+void benchmark() {
+    const int numTrials = 1000;
+    const size_t numScans = 4;
+    std::vector<scan_t> scans = {
+        StreamCompaction::CPU::scan, StreamCompaction::Naive::scan, StreamCompaction::Efficient::scan, StreamCompaction::Thrust::scan
+    };
+    std::vector<std::function<float()>> getElapsedTimes = {
+        []() {return StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation(); },
+        []() {return StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation(); },
+        []() {return StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(); },
+        []() {return StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation(); }
+    };
+    for (size_t i = 0; i < numScans; i++) {
+        auto times = benchmarkScan(numTrials, scans[i], getElapsedTimes[i]);
+        for (float time : times) {
+            std::cout << time << ",";
+        }
+        std::cout << std::endl;
+    }
+}
+
+std::vector<float> benchmarkScan(size_t iterations, scan_t scan, std::function<float()> getElapsedTime)
+{
+    std::vector<float> benchmarks;
+    for (size_t i = 0; i < iterations; i++) {
+        genArray(SIZE - 1, a, 50);
+        scan(SIZE, b, a);
+        benchmarks.push_back(getElapsedTime());
+    }
+    return std::move(benchmarks);
+}
+
+void test() {
     // Scan tests
 
     printf("\n");
