@@ -19,7 +19,7 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata, bool timed) {
             if (timed) timer().startCpuTimer();
-            // TODO
+            // TODO        
             int partialSum = 0;
             for (int i = 0; i < n; ++i) {
                 odata[i] = partialSum;

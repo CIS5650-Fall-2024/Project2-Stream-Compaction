@@ -27,9 +27,6 @@ namespace StreamCompaction {
             cudaMemcpy(dev_buffer, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 
             timer().startGpuTimer();
-            // TODO use `thrust::exclusive_scan`
-            // example: for device_vectors dv_in and dv_out:
-            // thrust::exclusive_scan(dv_in.begin(), dv_in.end(), dv_out.begin());
             thrust::exclusive_scan(dev_thrustBuffer, dev_thrustBuffer + n, dev_thrustBuffer);
             timer().endGpuTimer();
 

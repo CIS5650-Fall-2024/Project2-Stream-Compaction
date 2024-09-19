@@ -57,12 +57,12 @@ namespace StreamCompaction {
             timer().startGpuTimer();
             StreamCompaction::Common::shiftArrayElements<<<fullBlocksPerGrid, blockSize>>>(n, 1, dev_buffer2, dev_buffer1);
             checkCUDAError("shiftArrayElements failed!");
-            cudaDeviceSynchronize();
+            //cudaDeviceSynchronize();
 
             for (int d = 0; d < ilog2(n); ++d) {
                 kernNaiveScanStep <<<fullBlocksPerGrid, blockSize>>>(n, d, dev_buffer1, dev_buffer2);
                 checkCUDAError("naiveScanStep failed!");
-                cudaDeviceSynchronize();
+                //cudaDeviceSynchronize();
 
                 std::swap(dev_buffer1, dev_buffer2);
             }
