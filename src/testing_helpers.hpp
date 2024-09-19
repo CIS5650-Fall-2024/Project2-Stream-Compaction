@@ -22,19 +22,22 @@ void printDesc(const char *desc) {
 }
 
 template<typename T>
-void printCmpResult(int n, T *a, T *b) {
-    printf("    %s \n",
-            cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");
+bool printCmpResult(int n, T *a, T *b) {
+    int passed = 0 == cmpArrays(n, a, b);
+    printf("    %s \n", !passed ? "FAIL VALUE" : "passed");
+    return passed;
 }
 
 template<typename T>
-void printCmpLenResult(int n, int expN, T *a, T *b) {
+bool printCmpLenResult(int n, int expN, T *a, T *b) {
+    bool passed = n == expN && 0 == cmpArrays(n, a, b);
     if (n != expN) {
         printf("    expected %d elements, got %d\n", expN, n);
     }
     printf("    %s \n",
             (n == -1 || n != expN) ? "FAIL COUNT" :
             cmpArrays(n, a, b) ? "FAIL VALUE" : "passed");
+    return passed;
 }
 
 void zeroArray(int n, int *a) {
