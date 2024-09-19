@@ -20,6 +20,13 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            if (n <= 0) return;
+
+            odata[0] = 0;
+            for (int i = 1; i < n; i++) {
+				odata[i] = odata[i - 1] + idata[i - 1];
+			}
+
             timer().endCpuTimer();
         }
 
@@ -31,8 +38,16 @@ namespace StreamCompaction {
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int cnt = 0;
+			for (int i = 0; i < n; i++) {
+				if (idata[i] != 0) {
+					odata[cnt] = idata[i];
+					cnt++;
+				}
+			}
             timer().endCpuTimer();
-            return -1;
+
+            return cnt;
         }
 
         /**
@@ -43,8 +58,35 @@ namespace StreamCompaction {
         int compactWithScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            // Step 1 Compute temprary array containing
+			int* temp = new int[n];
+
+			for (int i = 0; i < n; i++) {
+				temp[i] = idata[i] != 0;
+			}
+
+			// Step 2 Run exclusive scan on the temp array
+			int* scanArray = new int[n];
+            scanArray[0] = 0;
+			for (int i = 1; i < n; i++)
+			{
+                scanArray[i] = scanArray[i - 1] + temp[i - 1];
+			}
+
+			// Step 3 Scatter
+			for (int i = 0; i < n; i++) {
+				if (temp[i] == 1) {
+					// the final index in odata is the value of scanArray[i]
+					odata[scanArray[i]] = idata[i];
+				}
+			}
+
             timer().endCpuTimer();
-            return -1;
+
+            int resultCount = scanArray[n - 1] + temp[n - 1];
+			delete[] temp;
+			delete[] scanArray;
+            return resultCount;
         }
     }
 }
