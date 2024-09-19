@@ -58,13 +58,15 @@ Following a similar procedure, I arrived at a block size of 256 for the work-eff
 
 The following charts compare the execution times (in milliseconds) of all the scan implementations across a range of increasing power-of-2 input sizes.
 
+![](img/perf_bars.png)
+
 We observe that the GPU Efficient implementation consistently beats the execution time of the GPU Naive implementation; interestingly enough, though, for input size 1024, GPU Naive shows lower execution time.
 
 The CPU implementation shows shorter execution times for small input sizes but eventually takes off (at about input size 1024) and increases rapidly as input size grows. On the other hand, execution time of GPU implementations fluctuate somewhat, increasing and decreasing as the input size grows. 
 
-![](img/perf_bars.png)
+One may speculate as to why the CPU version beats the GPU versions for small input size: the overhead of launching the different kernels combined with the many more instructions computed per iteration in the first scan kernel may offset the gains of parallelization.
 
-The same information is shown in the following charts, where the lower one is a close-up of the upper one for small input sizes. In them, we can appreciate how the GPU Efficient implementation beats the GPU Naive one consistently, although the difference between them in execution time appears to remain constant (not growing, as one might hope).
+The same information is shown in the following charts in different format, where the lower one is a close-up of the upper one for small input sizes. In them, we can appreciate how the GPU Efficient implementation beats the GPU Naive one consistently, although the difference between them in execution time appears to remain constant (not growing, as one might hope).
 
 ![](img/perf_lines.png)
 
@@ -72,6 +74,37 @@ It's interesting to see how execution time changes when input size delta is smal
 
 ![](img/perf_bars_npot.png)
 
+### Performance bottlenecks for scan
+
+Digging a little deeper, the **efficient scan implementation** doesn't seem to be memory bound. As reported by Nsight Compute for an input size of 32768, memory hardware units are not fully utilized by the first `exclusiveScanKernel` invocation, and memory bandwidth is only partially consumed: `Mem Busy` is at 19% and `Max Bandwith` is at 34%. The maximum throughput for memory instructions is at 34% too. This all indicates that this version of the scan is not memory bound.
+
+![](img/efficient_memory.png)
+
+The achieved warp occupancy is at 74%, though, so latency is not being hidden very well in this efficient scan implementation.
+
+![](img/efficient_occupancy.png)
+
+Furthermore, 43% of compute throughput is very poor: compute units could be utilized more to improve performances. Based on warp occupancy and compute throughput, I would say this **efficient scan implementation is compute-bound**.
+
+![](img/efficient_compute_throughput.png)
+
+Analysing the same set of metrics for the **efficient implementation**, Nsight Compute reports that it is less memory-bound than the efficient version: `Mem Busy` is only at 11% and `Max Bandwith` at 18%, which indicates that neither the memory units nor the communication bandwith within them are fully utilized.
+
+![](img/naive_memory.png)
+
+Warp occupancy is at 69%, which is lower than in the efficient implementation case (74%). I speculate that this is so because the `exclusiveScanKernel` in the naive case uses twice the amount of shared memory than in the efficient case (because it does double buffering and the efficient case doesn't). With higher memory requirements, fewer warps can be scheduled, which leads to lower occupancy.
+
+![](img/naive_occuppancy.png)
+
+Due to its low occupancy and apparent memory unit and bandwith subutilization, I would say that the **naive implementation is compute-bound**. Its lower occupancy compared to the efficient implementation might be part of the reason why the efficient implementation has a lower execution time.
+
+### Brief Thrust analysis
+
+The Thrust-based implementation launches 3 different kernels. The second one appears to prepare the data for the third kernel, which appears to the one that actually performs the scan, based on its duration.
+
+![](img/thrust_kernels.png)
+
+This version achieves an occupancy of 81%, suggesting that it carefully balances memory requirements of each block with the number an size of blocks that it divides the launch into.
 
 ### Test program output
 
