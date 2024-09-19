@@ -28,7 +28,24 @@ The chart compares the execution time (in milliseconds) of different scan implem
 * The Thrust library implementation is the fastest across all array sizes. The execution time remains almost constant even as the array size increases, which indicates very efficient scaling and use of GPU resources
 #### Summary
 Thrust is the clear winner for larger data sets, offering the best performance and scalability. For smaller arrays, the CPU implementation’s overhead isn’t as visible, but as the array size increases, the GPU’s parallel nature shows a dramatic improvement in running time. The Work-Efficient scan addresses some of the Naive algorithm's computational inefficiencies by reducing the number of redundant calculations and focusing on better parallelization techniques. However, memory I/O remains a limiting factor because it relies on frequent reads and writes to global memory.
+### Extra Feature
+#### Optimized Work Efficient Approach
+![](img/Upsweep.png)
 
+As the Up Sweep Phase Picture shown, it is obvious the number of threads needed for different depths is not fixed. Most threads become idle as only a few elements need to be processed. For example, at level d, only N / 2^d threads are doing useful work out of the total threads launched. Adjust the number of threads and blocks launched at each level based on the workload as follows:
+```
+int step = 1 << (d + 1);
+int threads = new_n / step;
+dim3 fullBlocksPerGrid((threads + block_size - 1) / block_size);
+```
+However, once these value are not fixed, the calculation of index in the Kernel also need to be modified as follow:
+```
+int k = (blockIdx.x * blockDim.x) + threadIdx.x;
+int step = 1 << (d + 1);
+int index = k * step + (step - 1);
+```
+
+#### Implement the Radix Sort
 ### test result
 test on size 1<<22 and block size 128
 ```bash
@@ -85,5 +102,6 @@ test on size 1<<22 and block size 128
    elapsed time: 0.521216ms    (CUDA Measured)
     passed
 ```
-### Extra Feature
-#### Optimized Work Efficient Approach
+### Modification to CmakeList
+Add `radixsort.cu` and `radixsort.h` and add entry for them in Cmakelist
+
