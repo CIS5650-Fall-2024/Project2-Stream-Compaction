@@ -14,7 +14,7 @@ namespace StreamCompaction {
 
         __global__ void kernUpSweep(int n, int* A, int offset) {
             int idx = blockDim.x * blockIdx.x + threadIdx.x;
-            if (idx >= n) {
+            if (idx >= n / offset) {
                 return;
             }
             idx *= offset;
@@ -23,7 +23,7 @@ namespace StreamCompaction {
 
         __global__ void kernDownSweep(int n, int* A, int offset) {
             int idx = blockDim.x * blockIdx.x + threadIdx.x;
-            if (idx >= n) {
+            if (idx >= n/offset) {
                 return;
             }
             idx *= offset;
@@ -63,6 +63,7 @@ namespace StreamCompaction {
             for (int i = 0; i < ilog2ceil(n); i++) {
                 int offset = 1 << (i + 1);
                 numThreads /= 2;
+                
                 dim3 fullBlocksPerGrid = ((numThreads + blockSize - 1) / blockSize);
                 kernUpSweep << <fullBlocksPerGrid, blockSize >> > (padding, dev_odata, offset);
                 cudaDeviceSynchronize();
