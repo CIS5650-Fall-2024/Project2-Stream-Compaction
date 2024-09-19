@@ -2,6 +2,7 @@
 #include "cpu.h"
 
 #include "common.h"
+#include <iostream>
 
 namespace StreamCompaction {
     namespace CPU {
@@ -20,6 +21,18 @@ namespace StreamCompaction {
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            if (n == 0) return;
+
+            
+            odata[0] = 0;
+
+            
+            for (int i = 1; i <=n; i++) {
+                odata[i] = odata[i - 1] + idata[i - 1];
+                
+           
+            }
+            
             timer().endCpuTimer();
         }
 
@@ -31,8 +44,16 @@ namespace StreamCompaction {
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
             // TODO
+            int count = 0;
+
+            for (int i = 0; i < n; i++) {
+                if (idata[i] != 0) {
+                    odata[count] = idata[i];
+                    count++;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return count;
         }
 
         /**
@@ -41,10 +62,43 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* flag = new int[n];
+            int* scannedFlag = new int[n];
+            
+            
             timer().startCpuTimer();
             // TODO
+            for (int i = 0; i < n; i++) {
+                flag[i] = (idata[i] != 0)? 1:0;
+
+            }
+            
+
+
+            scannedFlag[0] = 0;
+
+
+            for (int i = 1; i < n; i++) {
+                scannedFlag[i] = scannedFlag[i - 1] + flag[i - 1];
+            }
+           
+
+            int count = 0;
+
+            for (int i = 0; i < n; i++) {
+                if (flag[i] == 1) {
+                    if (scannedFlag[i] < n) {
+                        odata[scannedFlag[i]] = idata[i];
+                    }
+                    
+                    count++;
+                }
+            }
+            
             timer().endCpuTimer();
-            return -1;
+            delete[] flag;
+            delete[] scannedFlag;
+            return count;
         }
     }
 }
