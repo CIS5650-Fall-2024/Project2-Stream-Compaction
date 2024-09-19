@@ -48,8 +48,6 @@ int k = (blockIdx.x * blockDim.x) + threadIdx.x;
 int step = 1 << (d + 1);
 int index = k * step + (step - 1);
 ```
-
-#### Implement the Radix Sort
 ### test result
 test on size 1<<22 and block size 128
 ```bash
