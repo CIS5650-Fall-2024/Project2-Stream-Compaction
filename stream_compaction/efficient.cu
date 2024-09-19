@@ -42,19 +42,19 @@ namespace StreamCompaction {
 
             int padding = 1 << ilog2ceil(n);
 
-            int* A;
+            int* dev_odata;
             size_t arraySize = n * sizeof(int);
             size_t paddedSize = padding * sizeof(int);
-            cudaMalloc((void**)&A, paddedSize);
-            checkCUDAError("cudaMalloc A failed!");
+            cudaMalloc((void**)&dev_odata, paddedSize);
+            checkCUDAError("cudaMalloc dev_odata failed!");
 
-            cudaMemcpy(A, idata, arraySize, cudaMemcpyHostToDevice);
+            cudaMemcpy(dev_odata, idata, arraySize, cudaMemcpyHostToDevice);
             cudaDeviceSynchronize();
-            checkCUDAError("cudaMemcpy idata to A failed!");
+            checkCUDAError("cudaMemcpy idata to dev_odata failed!");
 
-            cudaMemset(A + n, 0, (paddedSize - arraySize));
+            cudaMemset(dev_odata + n, 0, (paddedSize - arraySize));
             cudaDeviceSynchronize();
-            checkCUDAError("cudaMemcpy padding A failed!");
+            checkCUDAError("cudaMemcpy padding dev_odata failed!");
 
             int numThreads = padding;
 
@@ -64,31 +64,31 @@ namespace StreamCompaction {
                 int offset = 1 << (i + 1);
                 numThreads /= 2;
                 dim3 fullBlocksPerGrid = ((numThreads + blockSize - 1) / blockSize);
-                kernUpSweep << <fullBlocksPerGrid, blockSize >> > (padding, A, offset);
+                kernUpSweep << <fullBlocksPerGrid, blockSize >> > (padding, dev_odata, offset);
                 cudaDeviceSynchronize();
                 checkCUDAError("kernUpSweep failed!");
             }
 
             // assign 0 to the root of the tree for Down-Sweep
-            cudaMemset(A + n - 1, 0, sizeof(int));
+            cudaMemset(dev_odata + padding - 1, 0, sizeof(int));
             cudaDeviceSynchronize();
-            checkCUDAError("cudaMemset to A failed!");
+            checkCUDAError("cudaMemset to dev_odata failed!");
 
             for (int i = ilog2ceil(n) - 1; i >= 0; i--) {
                 int offset = 1 << (i + 1);
                 numThreads *= 2;
                 dim3 fullBlocksPerGrid = ((numThreads + blockSize - 1) / blockSize);
-                kernDownSweep << <fullBlocksPerGrid, blockSize >> > (padding, A, offset);
+                kernDownSweep << <fullBlocksPerGrid, blockSize >> > (padding, dev_odata, offset);
                 checkCUDAError("kernDownSweep failed!");
             }
             if (timeFlag)
                 timer().endGpuTimer();
 
-            cudaMemcpy(odata, A, arraySize, cudaMemcpyDeviceToHost);
+            cudaMemcpy(odata, dev_odata, arraySize, cudaMemcpyDeviceToHost);
             cudaDeviceSynchronize();
-            checkCUDAError("cudaMemcpy A to odata failed!");
+            checkCUDAError("cudaMemcpy dev_odata to odata failed!");
 
-            cudaFree(A);
+            cudaFree(dev_odata);
         }
 
         /**
