@@ -14,6 +14,8 @@ namespace StreamCompaction {
 
         __global__ void kernUpSweep(int n, int* A, int offset) {
             int idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+            // Dividing the input into groups each of offset size
             if (idx >= n / offset) {
                 return;
             }
@@ -49,11 +51,9 @@ namespace StreamCompaction {
             checkCUDAError("cudaMalloc dev_odata failed!");
 
             cudaMemcpy(dev_odata, idata, arraySize, cudaMemcpyHostToDevice);
-            cudaDeviceSynchronize();
             checkCUDAError("cudaMemcpy idata to dev_odata failed!");
 
             cudaMemset(dev_odata + n, 0, (paddedSize - arraySize));
-            cudaDeviceSynchronize();
             checkCUDAError("cudaMemcpy padding dev_odata failed!");
 
             int numThreads = padding;
@@ -103,33 +103,36 @@ namespace StreamCompaction {
          */
         int compact(int n, int* odata, const int* idata) {
 
-            unsigned int blockSize = 128;
-            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
-
             // Create device arrays
             int* dev_idata;
             int* dev_odata;
             int* dev_bools;
             int* dev_indices;
-            int padLen = 1 << ilog2ceil(n);
+            int padding = 1 << ilog2ceil(n);
             size_t arraySize = n * sizeof(int);
-            size_t paddedSize = padLen * sizeof(int);
+            size_t paddedSize = padding * sizeof(int);
 
             cudaMalloc((void**)&dev_idata, arraySize);
+            cudaDeviceSynchronize();
+            checkCUDAError("cudaMalloc1 failed!");
+
             cudaMalloc((void**)&dev_bools, paddedSize);
+            cudaDeviceSynchronize();
+            checkCUDAError("cudaMalloc2 failed!");
+
             cudaMalloc((void**)&dev_indices, paddedSize);
             cudaMalloc((void**)&dev_odata, arraySize);
             cudaDeviceSynchronize();
             checkCUDAError("cudaMalloc failed!");
 
             cudaMemcpy(dev_idata, idata, arraySize, cudaMemcpyHostToDevice);
-            cudaDeviceSynchronize();
             checkCUDAError("cudaMemcpy idata failed!");
 
             cudaMemset(dev_bools + n, 0, (paddedSize - arraySize));
-            cudaDeviceSynchronize();
             checkCUDAError("cudaMemset dev_bools failed!");
 
+            unsigned int blockSize = 128;
+            dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
 
             timer().startGpuTimer();
 
@@ -138,20 +141,28 @@ namespace StreamCompaction {
             scan(n, dev_indices, dev_bools, 0);
             StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> > (n, dev_odata, dev_idata, dev_bools, dev_indices);
             cudaDeviceSynchronize();
+            checkCUDAError("kernel calls failed!");
 
             timer().endGpuTimer();
             cudaMemcpy(odata, dev_odata, arraySize, cudaMemcpyDeviceToHost);
-            checkCUDAError("cudaMemcpy dev_odata to data failed!");
+            checkCUDAError("cudaMemcpy dev_odata to odata failed!");
 
-            int compactLen = 0;
-            cudaMemcpy(&compactLen, dev_indices + padLen - 1, sizeof(int), cudaMemcpyHostToDevice);
+            // check if last element of idata is valid, by checking dev_bools. 
+            // If yes, then its index is compactLen - 1. If not, its index is compactLen.
+            int isLastElemValid;
+            cudaMemcpy(&isLastElemValid, dev_bools + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+
+            int lastElemIdx;
+            cudaMemcpy(&lastElemIdx, dev_indices + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+
+            int compactLen = (isLastElemValid) ? lastElemIdx + 1 : lastElemIdx;
 
             cudaFree(dev_bools);
             cudaFree(dev_indices);
             cudaFree(dev_idata);
             cudaFree(dev_odata);
 
-            return compactLen;
+            return (compactLen) ? compactLen : -1;
         }
     }
 }
