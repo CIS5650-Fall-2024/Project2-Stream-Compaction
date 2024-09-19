@@ -8,7 +8,7 @@ Project 2 Stream Compaction
 
 ## Scan and Stream Compaction
 
-Scan is an algorithm that outputs an array in which all previous elemnts of the input array have been summed up (https://en.wikipedia.org/wiki/Prefix_sum).
+Scan is an algorithm that outputs an array in which all previous elements of the input array have been summed up (https://en.wikipedia.org/wiki/Prefix_sum).
 Stream compaction outputs an array that contains only those elements of the input that fulfill some predicate (in this project being non-zero).
 The parallel implementation of stream compaction in this project will make use of the scan algorithm.
 
@@ -18,13 +18,14 @@ This project contains 4 implementations of the scan algorithm:
 * work-efficient implementation on the GPU (GPU efficient)
 * implementation using the thrust library (GPU thrust)
 
-The stream compatction algorithm is implememented in 3 variants:
+The stream compaction algorithm is implemented in 3 variants:
 * straight-forward implementation on the CPU (CPU)
 * scan based implementation on the CPU
 * work-efficient scan based implementation on the GPU (GPU)
 
-These cases are labeled in the following graphs by the identifiers given in parantheses.
+These cases are labeled in the following graphs by the identifiers given in parentheses.
 All implementations were tested on array lengths that are powers of 2 and on array lengths that are not powers of 2.
+As far as I understand Part 5, Extra Credit, I implemented the alluded optimization by starting only as many threads as are needed (up to the block size) in every round of the algorithm.
 
 ## Performance Analysis
 
@@ -35,7 +36,6 @@ All implementations were tested on array lengths that are powers of 2 and on arr
 Surprisingly, the CPU implementation is quicker than both of my GPU implementations.
 This is despite the fact, that for both GPU implementations, I am launching kernels only with as many threads as are needed (up to the block size).
 This prevents starting many threads that will not be active after a first if-condition.
-As far as I understand this is what Part 5, Extra Credit is alluding to.
 This result might be due to the usage of a CETS machine.
 
 Unfortunately, I haven't been able to make a detailed performance analysis using the Nsight suite, but obviously the memory access pattern is suboptimal.
@@ -57,13 +57,13 @@ Interestingly, for smaller arrays the thrust implementation is quite a bit quick
 
 For the compacting algorithm, the GPU implementation is actually faster for large array sizes.
 Here, only the straight-forward CPU implementation is used, as it is faster than the scan based algorithm.
-I would have expected bigeer differences between the two GPU and the CPU implementation, but again, the surprisingly short CPU runtime could stem from the fact that I am using a CETS machine.
+I would have expected bigger differences between the two GPU and the CPU implementation, but again, the surprisingly short CPU runtime could stem from the fact that I am using a CETS machine.
 There is not a big difference between the arrays with power of 2 lengths and those with non-power of 2 lengths.
 
 
 ## Console Output
 
-This is the console ouput after running the project with an array size of $2^{20} = 1048576$.
+This is the console output after running the project with an array size of $2^{20} = 1048576$.
 I removed the numeric outputs for clarity.
 
 ```
