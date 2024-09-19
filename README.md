@@ -28,8 +28,6 @@ The primary goal was to implement several versions of the scan (prefix sum) algo
  * Stream Compaction without Scan: Removed zero elements from an array without using scan.
  * Stream Compaction with Scan: Used the scan result to efficiently compact an array by mapping, scanning, and scattering.
 
-
-
 ### Naive GPU Scan Algorithm
  * Implemented the naive scan algorithm on the GPU based on a straightforward parallel prefix sum approach.
  * Used global memory and multiple kernel launches for each step of the algorithm.
@@ -69,8 +67,27 @@ Implemented GPU-based stream compaction using the work-efficient scan, including
 
 ## Performance Analysis
 ### Block Size Opimization for each Implementation
+![](img/compare2.png)
+
+From the graph, we observe that the Naïve algorithm shows significant performance improvements as the block size increases from 32 to 128, reaching its optimal performance at a block size of 64. However, further increases in block size do not result in any additional performance gains for this algorithm.
+
+On the other hand, the Work Efficient algorithm continues to improve as the block size increases, achieving its best performance at 512 threads per block. The Thrust algorithm consistently outperforms both custom implementations across all block sizes, with relatively stable performance. Notably, a block size of 1024 does not yield ideal results for any of the algorithms, likely due to the excessive block size reducing GPU parallelism and leaving computational resources underutilized.
 
 ### CPU & GPU Scan Implementations Comparasion
+
+![](img/compare1.png)
+
+The test is set on with power of 2 array size, block size of 256, threads reduction opitmization on. 
+
+The Naïve algorithm exhibits steady performance improvements for smaller array sizes, but as the array size increases beyond 
+**2<sup>25</sup>**
+ , its performance starts to degrade more rapidly. This degradation is likely due to the algorithm's inefficient use of GPU resources, particularly in handling global memory. In the Naïve approach, each iteration operates independently, which results in poor memory access patterns and a lack of synchronization optimization. As array sizes increase, the amount of memory access grows, and this inefficiency becomes more pronounced, leading to slower runtimes.
+
+The Work Efficient algorithm, on the other hand, significantly improves upon the Naïve implementation by optimizing memory access and parallelism. It better utilizes memory access within each block, which reduces the overhead caused by global memory access. This allows for more efficient data exchange between threads, especially in larger array sizes. However, while this algorithm performs better than Naïve for most cases, it still experiences a noticeable performance increase beyond 
+**2<sup>25</sup>**
+ . This is likely due to the constant thread allocation across iterations, which causes unnecessary thread activity during certain phases of the scan (e.g., up-sweep and down-sweep phases). Idle threads could create overhead, contributing to the performance slowdown.
+
+In comparison, Thrust performs consistently across all array sizes, likely due to its sophisticated memory management and internal optimizations such as dynamically adapting thread usage or leveraging efficient data transfers. However, without diving deeper into the implementation or utilizing tools like Nsight to investigate specific execution timelines, the exact reasons behind its superior performance remain speculative.
 
 ### Bottlenecks
 
