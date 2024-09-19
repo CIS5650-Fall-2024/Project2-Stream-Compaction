@@ -73,7 +73,7 @@ From the graph, we observe that the Naïve algorithm shows significant performan
 
 On the other hand, the Work Efficient algorithm continues to improve as the block size increases, achieving its best performance at 512 threads per block. The Thrust algorithm consistently outperforms both custom implementations across all block sizes, with relatively stable performance. Notably, a block size of 1024 does not yield ideal results for any of the algorithms, likely due to the excessive block size reducing GPU parallelism and leaving computational resources underutilized.
 
-### CPU & GPU Scan Implementations Comparasion
+### Scan Implementations Comparasion Bottlenecks
 
 ![](img/compare1.png)
 
@@ -89,7 +89,13 @@ The Work Efficient algorithm, on the other hand, significantly improves upon the
 
 In comparison, Thrust performs consistently across all array sizes, likely due to its sophisticated memory management and internal optimizations such as dynamically adapting thread usage or leveraging efficient data transfers. However, without diving deeper into the implementation or utilizing tools like Nsight to investigate specific execution timelines, the exact reasons behind its superior performance remain speculative.
 
-### Bottlenecks
+### Analysis with Nsight Compute
+
+<img src="img/compute.jpg" width="800px">
+
+The above Nsight Compute result highlights the performance profiling of the work-efficient scan algorithm, focusing on the upsweep and downsweep phases. The upsweep phase consumes the majority of the execution time, averaging 28.38 ms per kernel execution. One of the main bottlenecks identified is SM workload imbalance, where some Streaming Multiprocessors (SMs) are underutilized by as much as 43.66%, leading to inefficient use of GPU resources. Additionally, the high memory throughput indicates non-optimal memory access patterns, which further hinders performance during this phase.
+
+In contrast, the downsweep phase is shorter, averaging 20.26 ms, but shows lower compute and memory throughput. While workload imbalance is still present, it is less severe than in the upsweep phase. The lack of full GPU resource utilization, especially in terms of active threads, contributes to lower performance in this stage. This analysis suggests potential optimizations like balancing the SM workload and improving memory access efficiency to enhance overall algorithm performance.
 
 ### Output Results
 The following tests were ran on：
