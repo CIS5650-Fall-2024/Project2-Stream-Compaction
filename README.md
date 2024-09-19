@@ -18,7 +18,7 @@ The primary goal was to implement several versions of the scan (prefix sum) algo
  * **Naive GPU Scan**: A straightforward GPU implementation using global memory.
  * **Work-Efficient GPU Scan and Stream Compaction**: An optimized GPU implementation that reduces redundant computations.
  * **Thrust Scan**: Utilizing NVIDIA's Thrust library for comparison.
- * **Optimizations**(Extra): Investigated and optimized performance bottlenecks in the GPU implementations.
+ * **Optimizations**: Investigated and optimized fast GPU implementations.
 
 
 ## Descripitions 
@@ -64,6 +64,8 @@ Simply used the thrust::exclusive_scan(first, last, result) function from the Th
 
 ### Stream Compaction
 Implemented GPU-based stream compaction using the work-efficient scan, including mapping to booleans and scattering.
+
+![](img/compaction.png)
 
 ## Performance Analysis
 ### Block Size Opimization for each Implementation
