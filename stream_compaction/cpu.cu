@@ -19,8 +19,20 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int curr_sum = 0;
+            for(int i = 0; i < n; ++i){
+                odata[i] = curr_sum;
+                curr_sum += idata[i];
+            }
             timer().endCpuTimer();
+        }
+
+        void scanNoTimer(int n, int *odata, const int *idata) {
+            int curr_sum = 0;
+            for(int i = 0; i < n; ++i){
+                odata[i] = curr_sum;
+                curr_sum += idata[i];
+            }
         }
 
         /**
@@ -30,9 +42,15 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int curr_index = 0;
+            for(int i = 0; i < n; ++i){
+                if(idata[i] != 0){
+                    odata[curr_index] = idata[i];
+                    curr_index += 1;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return curr_index;
         }
 
         /**
@@ -41,10 +59,24 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* boolCheck = new int[n];
+            int* intPos = new int[n];
+
             timer().startCpuTimer();
-            // TODO
+
+            for(int i = 0; i < n; ++i){
+                boolCheck[i] = (int)(idata[i] != 0);
+            }
+            scanNoTimer(n, intPos, boolCheck);
+            int numPos = intPos[n-1] + boolCheck[n-1]; // get total positives 
+
+            for(int i = 0; i < n; ++i){
+                if(boolCheck[i]){
+                    odata[intPos[i]] = idata[i];
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return numPos;
         }
     }
 }
