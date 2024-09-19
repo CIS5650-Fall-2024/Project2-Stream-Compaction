@@ -1,5 +1,6 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <iostream>
 #include "common.h"
 #include "naive.h"
 
@@ -12,93 +13,68 @@ namespace StreamCompaction {
             return timer;
         }
 
-        int* dev_idata; // input data
-        int* dev_odata; // output data
-        int* dev_tdata; // temp data
-
-        // Define the blockSize
-        int blockSize = 128;
-
-        // DONE: __global__
-        __global__ void naiveParallelScanKernel(int n, int *odata, const int *idata, const int offset)
+        // TODO: __global__
+        __global__ void kernelNaiveScan(int n, int offset, int* idata, int* odata) 
         {
             // Using the Naive algorithm from GPU Gems 3, Section 39.2.1.
-            int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-            
-            if(idx >= n)
-            {
-                return;
-            }
+            int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-            if (idx >= offset)
-            {
-                odata[idx] = idata[idx - offset] + idata[idx];
-            }
-            else
-            {
-                odata[idx] = idata[idx];
-            }
-        }
+            if (index >= n) return;
 
-        // Insert the identity and shift right
-        __global__ void makeExclusive(int n, int* odata, int* idata) {
-            int index = threadIdx.x + (blockIdx.x * blockDim.x);
-            if (index >= n) {
-                return;
-            }
-            if (index == 0) {
-                odata[index] = 0;
+            if (index >= offset) {
+                odata[index] = idata[index] + idata[index - offset];
             }
             else {
-                odata[index] = idata[index - 1];
+                odata[index] = idata[index];
             }
         }
 
         /**
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
-        void scan(int n, int *odata, const int *idata) {
-            // DONE
-
-            // Memory allocation for input data
-            cudaMalloc((void**)&dev_idata, n * sizeof(int));
-            checkCUDAErrorFn("cudaMalloc dev_idata failed!");
-            
-            // Memory allocation for output data
-            cudaMalloc((void**)&dev_odata, n * sizeof(int));
-            checkCUDAErrorFn("cudaMalloc dev_odata failed!");
-
-            // Copy from host input data to device input data
-            cudaMemcpy(dev_idata, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-            checkCUDAErrorFn("cudaMemcpy to device failed!");
-
+        void scan(int n, int* odata, const int* idata) {
+            int* bufferA, * bufferB;
             dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
 
-            // ilog2ceil(x): computes the ceiling of log2(x) as an integer
-            int numLevels = ilog2ceil(n);
-            int offset;
+            cudaMalloc((void**)&bufferA, n * sizeof(int));
+            checkCUDAError("cudaMalloc bufferA failed!");
+            cudaMalloc((void**)&bufferB, n * sizeof(int));
+            checkCUDAError("cudaMalloc bufferB failed!");
+
+            // Copy from host input data to device input data
+            cudaMemcpy(bufferA, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
 
             timer().startGpuTimer();
 
-            for (int d = 1; d <= numLevels; ++d)
-            {
-                offset = 1 << (d - 1);
-                naiveParallelScanKernel<<<fullBlocksPerGrid, blockSize>>> (n, offset, dev_odata, dev_idata);
-                std::swap(dev_idata, dev_odata);
-            }
+            // DONE
 
-            // Insert the identity and shift to the right to make exclusive
-            makeExclusive<<<fullBlocksPerGrid, blockSize>>> (n, dev_odata, dev_idata);
+            // Calculate number of levels
+            int numLevels = ilog2ceil(n);
+            int offset;
+
+            for(int d = 1; d <= numLevels; d++) {
+                
+                offset = 1 << (d - 1);
+
+                kernelNaiveScan << <fullBlocksPerGrid, blockSize >> > (n, offset, bufferA, bufferB);
+                checkCUDAError("kernelNaiveScan failed!");
+                
+                // Sync threads before swapping
+                cudaDeviceSynchronize();
+                std::swap(bufferA, bufferB);
+            }
 
             timer().endGpuTimer();
 
-            cudaMemcpy(odata, dev_odata, n * sizeof(int), cudaMemcpyDeviceToHost);
-            checkCUDAErrorFn("cudaMempcy to host failed!");
-            
-            // Free the dev data
-            cudaFree(dev_idata);
-            cudaFree(dev_odata);
-            checkCUDAErrorFn("cudaFree failed!");
+            // Insert identity and shift right to make exclusive
+            // Copy result from device back to host
+            odata[0] = 0;
+            cudaMemcpy(odata + 1, bufferA, sizeof(int) * n, cudaMemcpyDeviceToHost);
+            checkCUDAError("cudaMemcpy from bufferA to odata failed!");
+
+            // Free bufferA and bufferB memory
+            cudaFree(bufferA);
+            cudaFree(bufferB);
         }
     }
 }
