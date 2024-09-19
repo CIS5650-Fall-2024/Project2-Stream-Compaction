@@ -114,7 +114,6 @@ namespace StreamCompaction {
             size_t arraySize = n * sizeof(int);
             size_t paddedSize = padLen * sizeof(int);
 
-            printf("Hello");
             cudaMalloc((void**)&dev_idata, arraySize);
             cudaMalloc((void**)&dev_bools, paddedSize);
             cudaMalloc((void**)&dev_indices, paddedSize);
