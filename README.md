@@ -63,10 +63,61 @@ The major performance bottleneck here is the global memory I/O for all parallel 
 by utilising the shared memory as the size of shared memory is dynamic and is related to the block size. This overhead is overcome
 at arrays of larger sizes when the Work-Efficient and Thrust Scan run faster than the CPU Scan.
 
-### (TODO: Your README)
+```
+****************
+** SCAN TESTS **
+****************
+    [  10  32  23  43  28  33  17   0  35  37  44   0  23 ...  33   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 1.7358ms    (std::chrono Measured)
+    [   0  10  42  65 108 136 169 186 186 221 258 302 302 ... 25672547 25672580 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 1.7335ms    (std::chrono Measured)
+    [   0  10  42  65 108 136 169 186 186 221 258 302 302 ... 25672508 25672513 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 1.57238ms    (CUDA Measured)
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 1.51142ms    (CUDA Measured)
+    passed
+==== work-efficient scan, power-of-two ====
+   elapsed time: 1.42707ms    (CUDA Measured)
+    passed
+==== work-efficient scan, non-power-of-two ====
+   elapsed time: 1.36602ms    (CUDA Measured)
+    passed
+==== thrust scan, power-of-two ====
+   elapsed time: 0.596ms    (CUDA Measured)
+    passed
+==== thrust scan, non-power-of-two ====
+   elapsed time: 0.176128ms    (CUDA Measured)
+    passed
 
-Include analysis, etc. (Remember, this is public, so don't put
-anything here that you don't want to share with the world.)
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   3   1   1   2   2   0   1   3   1   1   0   0   0 ...   0   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 2.146ms    (std::chrono Measured)
+    [   3   1   1   2   2   1   3   1   1   3   3   2   1 ...   3   3 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 2.171ms    (std::chrono Measured)
+    [   3   1   1   2   2   1   3   1   1   3   3   2   1 ...   1   3 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 5.0626ms    (std::chrono Measured)
+    [   3   1   1   2   2   1   3   1   1   3   3   2   1 ...   3   3 ]
+    passed
+==== work-efficient compact, power-of-two ====
+   elapsed time: 2.25693ms    (CUDA Measured)
+    passed
+==== work-efficient compact, non-power-of-two ====
+   elapsed time: 1.92234ms    (CUDA Measured)
+    passed
+Press any key to continue . . .
+```
 
 ### References
 
