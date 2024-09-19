@@ -17,7 +17,7 @@
  * Check for CUDA errors; print and exit if there was a problem.
  */
 void checkCUDAErrorFn(const char *msg, const char *file = NULL, int line = -1);
-const int blockSize = 128;
+const int blockSize = 512;
 
 inline int ilog2(int x) {
     int lg = 0;
