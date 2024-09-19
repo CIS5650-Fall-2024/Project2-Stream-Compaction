@@ -1,6 +1,6 @@
 #include "common.h"
 
-void checkCUDAErrorFn(const char *msg, const char *file, int line) {
+void checkCUDAErrorFn(const char* msg, const char* file, int line) {
     cudaError_t err = cudaGetLastError();
     if (cudaSuccess == err) {
         return;
@@ -22,17 +22,29 @@ namespace StreamCompaction {
          * Maps an array to an array of 0s and 1s for stream compaction. Elements
          * which map to 0 will be removed, and elements which map to 1 will be kept.
          */
-        __global__ void kernMapToBoolean(int n, int *bools, const int *idata) {
+        __global__ void kernMapToBoolean(int n, int* bools, const int* idata) {
             // TODO
+            int idx = blockDim.x * blockIdx.x + threadIdx.x;
+            if (idx >= n) {
+                return;
+            }
+            bools[idx] = (idata[idx]) ? 1 : 0;
         }
 
         /**
          * Performs scatter on an array. That is, for each element in idata,
          * if bools[idx] == 1, it copies idata[idx] to odata[indices[idx]].
          */
-        __global__ void kernScatter(int n, int *odata,
-                const int *idata, const int *bools, const int *indices) {
+        __global__ void kernScatter(int n, int* odata,
+            const int* idata, const int* bools, const int* indices) {
             // TODO
+            int idx = blockDim.x * blockIdx.x + threadIdx.x;
+            if (idx >= n) {
+                return;
+            }
+            if (bools[idx]) {
+                odata[indices[idx]] = idata[idx];
+            }
         }
 
     }

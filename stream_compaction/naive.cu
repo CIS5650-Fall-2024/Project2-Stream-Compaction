@@ -58,9 +58,9 @@ namespace StreamCompaction {
                 std::swap(B, A);
             }
 
-            odata[0] = 0;
             timer().endGpuTimer();
 
+            odata[0] = 0;
             cudaMemcpy(odata + 1, A, arraySize, cudaMemcpyDeviceToHost);
             checkCUDAError("cudaMemcpy odata failed!");
 
