@@ -35,30 +35,41 @@ The optimal block size was found to be 512 for Naive parallel scan and 128 for W
 We compare the various implementations of Scan (Naive, Work-Efficient and Thrust) with respect to the CPU Scan algorithm.
 Thrust is a C++ template library for CUDA based on the Standard Template Library (STL) and it allows you 
 to implement high performance parallel applications. 
-bas
+
 Both GPU and CPU timing functions were wrapped up as a performance timer class. We have used 
-`std::chrono` to provide CPU provide CPU high-precision timing and CUDA event to measure the CUDA performance.
+`std::chrono` to provide CPU high-precision timing and CUDA event to measure the CUDA performance.
 
 The power-of-two inputs and non-power-of-two inputs have been analyzed separately for better
 comparability of the CPU, GPU and Thrust implementations.
+
+
 ![](img/scan_pot.png)
 ![](img/perfpot.png)
 
+Analysis for NPOT arrays follows:
 ![](img/scan_npot.png)
 ![](img/perfnpot.png)
 
 Clearly, the CPU implementation is faster for shorter input lengths until around an array size
-of 2^13^. Following this, the CPU Scan is slightly slower than Naive Parallel Scan but still faster than Work-Efficient Parallel Scan
+of 2^13. Following this, the CPU Scan is slightly slower than Naive Parallel Scan but still faster than Work-Efficient Parallel Scan
 until an array size of 2^20. However, the Thrust scan always has the
 fastest performance among all the GPU algorithms and the CPU scan beyond 2^13.
 
-The Work-Efficient scan has been optimized for thread usage such that it only launches the
-required number of threads so that no unused thread have to wait for other threads to terminate. This
+The *Work-Efficient scan has been optimized for thread usage* such that it only launches the
+required number of threads and no unused thread have to wait for other threads to terminate. This
 is why it is faster than all but the Thrust Scan algorithm at arrays of large lengths.
 
-The major performance bottleneck here is the global memory I/O for all parallel algorithms. This can be improved upon
+The major *performance bottleneck* here is the global memory I/O for all parallel algorithms. This can be improved upon
 by utilising the shared memory as the size of shared memory is dynamic and is related to the block size. This overhead is overcome
 at arrays of larger sizes when the Work-Efficient and Thrust Scan run faster than the CPU Scan.
+
+The *Thrust* library's performance through `exclusive_scan()` shows remarkable consistency as the input size increases upto 
+2^17, following which there is a marginal increase in performance time. The possible explanation is optimal memory management
+by Thrust, avoiding possible global memory I/O overheads. The slower performance at larger array sizes could be because of
+memory allocation and copying latency between the host and the device.
+
+
+### Stream Compaction Performance
 
 Here, we show a comparison of the stream compaction algorithms implemented through CPU (With and Without Scan) and through the Work-Efficient Algorithm.
 ![](img/compact_perf.png).
@@ -121,6 +132,4 @@ thread usage for the efficient-algorithm produces improved performance.
     passed
 Press any key to continue . . .
 ```
-
-### References
 
