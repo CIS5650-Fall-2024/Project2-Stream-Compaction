@@ -17,10 +17,15 @@ namespace StreamCompaction {
          * For performance analysis, this is supposed to be a simple for loop.
          * (Optional) For better understanding before starting moving to GPU, you can simulate your GPU scan in this function first.
          */
-        void scan(int n, int *odata, const int *idata) {
-            timer().startCpuTimer();
-            // TODO
-            timer().endCpuTimer();
+        void scan(int n, int *odata, const int *idata, bool timed) {
+            if (timed) timer().startCpuTimer();
+            // TODO        
+            int partialSum = 0;
+            for (int i = 0; i < n; ++i) {
+                odata[i] = partialSum;
+                partialSum += idata[i];
+            }
+            if (timed) timer().endCpuTimer();
         }
 
         /**
@@ -30,9 +35,20 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int numElements = 0;
+            for (int i = 0; i < n; ++i) {
+                if (idata[i]) odata[numElements++] = idata[i];
+            }
             timer().endCpuTimer();
-            return -1;
+            return numElements;
+        }
+
+        int scatter(int n, int* odata, const int* bdata, const int* idata) {
+            int numElements = 0;
+            for (int i = 0; i < n; ++i) {
+                if (bdata[i])  odata[numElements++] = idata[i];
+            }
+            return numElements;
         }
 
         /**
@@ -41,10 +57,20 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* buffer = new int[n];
             timer().startCpuTimer();
-            // TODO
+            // Create boolean mask
+            for (int i = 0; i < n; ++i) {
+                buffer[i] = (idata[i] != 0);
+            }
+
+            scan(n, odata, idata, 0);
+
+            int numElements = scatter(n, odata, buffer, idata);
+
             timer().endCpuTimer();
-            return -1;
+            delete[] buffer;
+            return numElements;
         }
     }
 }
