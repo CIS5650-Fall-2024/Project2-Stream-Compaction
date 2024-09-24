@@ -31,7 +31,7 @@ namespace StreamCompaction {
         __global__ void downSweep(int n, int d, int* x) {
             int idx = blockDim.x * blockIdx.x + threadIdx.x;
             if (idx >= n) return;
-            if (idx % twoPow(d + 1) != 0) return;
+            if ((idx % (twoPow(d + 1) )) == 0) return;
 
             int tmp = x[idx + twoPow(d) - 1];
             x[idx + twoPow(d) - 1] = x[idx + twoPow(d + 1) - 1];
