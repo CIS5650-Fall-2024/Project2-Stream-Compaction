@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
+#include "device_launch_parameters.h"
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define checkCUDAError(msg) checkCUDAErrorFn(msg, FILENAME, __LINE__)
@@ -29,6 +30,7 @@ inline int ilog2(int x) {
 inline int ilog2ceil(int x) {
     return x == 1 ? 0 : ilog2(x - 1) + 1;
 }
+const int blockSize = 128;
 
 namespace StreamCompaction {
     namespace Common {
