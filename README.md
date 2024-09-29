@@ -1,7 +1,7 @@
 CUDA Stream Compaction
 ======================
 
-**University of Pennsylvania, CIS 565: GPU Programming and Architecture, Project 2 - Stream Compaction**
+**University of Pennsylvania, CIS 5650: GPU Programming and Architecture, Project 2 - Stream Compaction**
 
 - Jordan Hochman
   - [LinkedIn](https://www.linkedin.com/in/jhochman24), [Personal Website](https://jordanh.xyz), [GitHub](https://github.com/JHawk0224)
