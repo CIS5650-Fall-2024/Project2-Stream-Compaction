@@ -19,7 +19,11 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int total = 0;
+            for (int i = 0; i < n; i++) {
+                odata[i] = total;
+                total += idata[i];
+            }
             timer().endCpuTimer();
         }
 
@@ -30,9 +34,26 @@ namespace StreamCompaction {
          */
         int compactWithoutScan(int n, int *odata, const int *idata) {
             timer().startCpuTimer();
-            // TODO
+            int numElements = 0;
+            for (int i = 0; i < n; i++) {
+                int value = idata[i];
+                if (value != 0) {
+                    odata[numElements++] = value;
+                }
+            }
             timer().endCpuTimer();
-            return -1;
+            return numElements;
+        }
+
+        int scatter(int n, int *odata, const int *idata, const int *bools, const int *indices) {
+            int numElements = 0;
+            for (int i = 0; i < n; i++) {
+                if (bools[i] == 1) {
+                    odata[indices[i]] = idata[i];
+                    numElements++;
+                }
+            }
+            return numElements;
         }
 
         /**
@@ -41,10 +62,32 @@ namespace StreamCompaction {
          * @returns the number of elements remaining after compaction.
          */
         int compactWithScan(int n, int *odata, const int *idata) {
+            int* bools = new int[n];
+            int* scanResult = new int[n];
             timer().startCpuTimer();
-            // TODO
+            for (int i = 0; i < n; i++) {
+                bools[i] = idata[i] != 0 ? 1 : 0;
+            }
+
+            // NOTE: not calling scan() because don't want to double call timer().startCpuTimer()
+            int total = 0;
+            for (int i = 0; i < n; i++) {
+                scanResult[i] = total;
+                total += bools[i];
+            }
+            
+            int numElements = scatter(n, odata, idata, bools, scanResult);
             timer().endCpuTimer();
-            return -1;
+            delete[] bools;
+            delete[] scanResult;
+            return numElements;
+        }
+
+        void sort(int n, int *odata, const int *idata) {
+            std::copy(idata, idata + n, odata);
+            timer().startCpuTimer();
+            std::sort(odata, odata + n);
+            timer().endCpuTimer();
         }
     }
 }
