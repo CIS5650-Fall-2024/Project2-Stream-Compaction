@@ -1,0 +1,2 @@
+N,CPU(ms),Naive(ms),Efficient(ms),Thrust(ms)
+1048576,1.3921,0.996192,1.72554,0.310272

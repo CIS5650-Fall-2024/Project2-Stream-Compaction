@@ -1,0 +1,2 @@
+N,CPU_NoScan(ms),CPU_WithScan(ms),GPU_Efficient(ms),placeholder
+1048576,1.8459,1.8084,1.89664,0
